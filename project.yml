@@ -14,14 +14,15 @@ targets:
     type: application
     platform: iOS
     sources:
-      - SoHoaDon
+      - SoHoaDonApp.swift
+      - ContentView.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon
-        INFOPLIST_FILE: SoHoaDon/Info.plist
-        CODE_SIGN_ENTITLEMENTS: SoHoaDon/SoHoaDon.entitlements
+        INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: SoHoaDon.entitlements
     entitlements:
-      path: SoHoaDon/SoHoaDon.entitlements
+      path: SoHoaDon.entitlements
       properties:
         com.apple.developer.icloud-container-identifiers:
           - iCloud.com.nje.sohoadon
@@ -29,7 +30,7 @@ targets:
           - CloudKit
         com.apple.developer.ubiquity-kvstore-identifier: "$(TeamIdentifierPrefix)$(CFBundleIdentifier)"
     info:
-      path: SoHoaDon/Info.plist
+      path: Info.plist
       properties:
         CFBundleDisplayName: "Sổ Hóa Đơn"
         CFBundleName: "Sổ Hóa Đơn"
