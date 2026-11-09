@@ -1,37 +1,27 @@
 import SwiftUI
 import LocalAuthentication
-import CloudKit
 import UIKit
 import UniformTypeIdentifiers
 
-/// IPA TEST SỐ 0 — không phải app thật.
-/// Mục đích duy nhất: kiểm chứng trên iPhone thật của anh, sau khi ký bằng
-/// chứng thư của anh, 3 việc: (1) app cài/mở được, (2) Face ID dùng được,
-/// (3) iCloud (CloudKit) có chạy với cách ký này không.
 struct ContentView: View {
     @State private var faceIDStatus = "Chưa kiểm tra"
-    @State private var icloudStatus = "Chưa kiểm tra"
-    @State private var icloudWriteStatus = "Chưa kiểm tra"
     @State private var filesStatus = "Chưa kiểm tra"
     @State private var showFolderPicker = false
-
-    private let container = CKContainer(identifier: "iCloud.com.nje.sohoadon")
 
     var body: some View {
         NavigationStack {
             List {
                 Section("Bài test số 0") {
-                    Text("App tạm này chỉ để kiểm tra trước khi xây app thật: ký bằng chứng thư của anh có cài được không, Face ID có dùng được không, và iCloud có chạy với cách ký này không. Anh bấm 2 nút kiểm tra rồi chụp màn hình này gửi lại là đủ.")
+                    Text("App tạm này chỉ để kiểm tra trước khi xây app thật: ký bằng chứng thư của anh có cài/mở được không, Face ID có dùng được không, và app có tự ghi được vào thư mục trong app Files không. Anh bấm 2 nút kiểm tra rồi chụp màn hình này gửi lại là đủ.")
                         .font(.callout)
                 }
                 Section("1. Face ID") {
                     Text(faceIDStatus)
                     Button("Kiểm tra Face ID") { checkFaceID() }
                 }
-                Section("2. iCloud") {
-                    Text("Tài khoản: \(icloudStatus)")
-                    Text("Ghi thử: \(icloudWriteStatus)")
-                    Button("Kiểm tra iCloud") { checkICloud() }
+                Section("2. iCloud / CloudKit") {
+                    Text("ĐÃ LOẠI — bản test trước chết ngay khi chạm vào CloudKit dưới cách ký này (có log crash làm bằng chứng). App thật không dùng CloudKit: dữ liệu nằm trên máy và tự lưu bản sao vào thư mục anh chọn trong app Files — kiểm tra ở mục 3.")
+                        .font(.callout)
                 }
                 Section("3. Thư mục trong app Files") {
                     Text(filesStatus)
@@ -95,45 +85,6 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 faceIDStatus = ok ? "\(kind): MỞ KHOÁ THÀNH CÔNG ✓"
                                   : "\(kind): thất bại — \(error?.localizedDescription ?? "")"
-            }
-        }
-    }
-
-    private func checkICloud() {
-        icloudStatus = "Đang kiểm tra..."
-        icloudWriteStatus = "Đang kiểm tra..."
-        container.accountStatus { status, error in
-            DispatchQueue.main.async {
-                switch status {
-                case .available: icloudStatus = "Đã đăng nhập ✓"
-                case .noAccount: icloudStatus = "Máy chưa đăng nhập iCloud"
-                case .restricted: icloudStatus = "iCloud bị giới hạn trên máy này"
-                case .couldNotDetermine: icloudStatus = "Không xác định được"
-                case .temporarilyUnavailable: icloudStatus = "iCloud tạm thời không dùng được"
-                @unknown default: icloudStatus = "Trạng thái lạ: \(status.rawValue)"
-                }
-                if let error { icloudStatus += " — Lỗi: \(error.localizedDescription)" }
-            }
-            guard status == .available else { return }
-            // Ghi thử 1 record rồi xoá — đây là phép thử quyết định:
-            // nếu entitlement/container không sống sót qua việc ký lại,
-            // bước này sẽ báo lỗi và ta biết phải đi đường khác cho iCloud.
-            let db = container.privateCloudDatabase
-            let rec = CKRecord(recordType: "TestPing")
-            rec["ts"] = Date() as CKRecordValue
-            db.save(rec) { saved, saveError in
-                if let saveError {
-                    DispatchQueue.main.async {
-                        icloudWriteStatus = "GHI THẤT BẠI — \(saveError.localizedDescription)"
-                    }
-                    return
-                }
-                guard let saved else { return }
-                db.delete(withRecordID: saved.recordID) { _, _ in
-                    DispatchQueue.main.async {
-                        icloudWriteStatus = "GHI + ĐỌC + XOÁ THÀNH CÔNG ✓ (iCloud chạy được với cách ký này)"
-                    }
-                }
             }
         }
     }
