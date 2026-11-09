@@ -1,6 +1,7 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-09 12:40 CST (ca trực sohoadon-build2-247;
-WP2 bước 1 — model dữ liệu — đã chuẩn bị tới cổng, xem WP2-GATE.md)
+Cập nhật lần cuối: 2026-11-09 14:40 CST (ca trực sohoadon-build2-247;
+WP2 bước 2 — nối dây lúc lưu — đã chuẩn bị xong; toàn WP2 đã tới cổng,
+xem WP2-GATE.md mục "WP2 BƯỚC 2").
 
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
@@ -63,8 +64,28 @@ WP2 bước 1 — model dữ liệu — đã chuẩn bị tới cổng, xem WP2-
   (di trú nhẹ theo thiết kế). Đủ 3 chữ ký nội bộ — văn bản cổng:
   `WP2-GATE.md`. **CHƯA đẩy code ở bất kỳ nhánh nào** (đúng luật ca
   trực); biên dịch + di trú trên kho thật [CHƯA KIỂM CHỨNG] (môi trường
-  ca không có compiler). **WP2 CHƯA đóng:** còn bước 2 nối dây lúc lưu
-  + kiểm di trú trên bản sao kho Build 1 (xem WP2-GATE.md mục cuối).
+  ca không có compiler).
+- **WP2 — BƯỚC 2 (NỐI DÂY LÚC LƯU) ĐÃ CHUẨN BỊ XONG (2026-11-09
+  14:40 CST):** `wp2-prep/ReceiptViews.swift` (so với bản WP1 trên main:
+  **+65 / −1** — dòng −1 duy nhất là dòng "Thuế" gộp được thay bằng
+  khối hiển thị có điều kiện) + `wp2-prep/ScanView.swift` (so với
+  build1: **+9 / −4**). `ReviewView.save()` nay ghi `stableID` (UUID),
+  `sourceType` (camera/photoLibrary theo đúng đường vào, qua
+  `ScanDraft`), `paymentMethod` (có thẻ → card, không → unknown,
+  KHÔNG đoán cash), `transactionRef` (chỉ tách từ `SAMS-TC-`/`TC-`),
+  `parserVersion = "build1-parser"`, và các `TaxLine` từ parser —
+  nhưng CHỈ khi tổng thuế anh duyệt còn khớp Σ dòng thuế (kiểm trên
+  đáp án Mẫu 002: 960+390=1350¢ ✓); `taxCents` đồng bộ ngược = Σ.
+  `ReceiptDetailView` hiện từng dòng thuế riêng + tổng khi có dữ
+  liệu, bản ghi cũ giữ nguyên hiển thị. Đủ 3 chữ ký nội bộ bước 2 —
+  xem WP2-GATE.md mục "WP2 BƯỚC 2". **CHƯA đẩy code ở bất kỳ nhánh
+  nào**; biên dịch [CHƯA KIỂM CHỨNG]. **WP2 ĐÃ TỚI CỔNG (cả 2
+  bước):** còn lại kiểm di trú — chỉ làm được sau khi có build chứa
+  model mới (workspace không có bản sao kho Build 1; phép kiểm tĩnh
+  di trú nhẹ đã có). Nghiệm thu: anh duyệt đẩy → build cloud → cài
+  đè lên máy đang có 2 tờ test Build 1 → 2 tờ còn nguyên, số không
+  đổi. Cố ý chưa nối ở bước này: scheduleCLine lúc lưu (WP6/WP7),
+  originalImageFileNames (WP3/WP8), reviewedAt/userEntered (WP6).
 
 ## Hàng việc (theo BUILD2-MASTER-PLAN, tuần tự tuyệt đối)
 1. ~~**WP0** — Đóng băng bộ mẫu & bảng điểm~~ **ĐÃ XONG 2026-11-09 02:41 CST**:
@@ -75,10 +96,13 @@ WP2 bước 1 — model dữ liệu — đã chuẩn bị tới cổng, xem WP2-
    anh ĐÃ duyệt đẩy 10:43 CST + code ĐÃ lên main commit `769727698d`
    10:44 CST (kiểm chứng md5 ở mục Vị trí hiện tại). Còn lại: kết quả
    build cloud → anh cài + chụp màn hình (nghiệm thu trên máy — cần anh).
-3. **WP2** — Hoàn thiện model dữ liệu: bước 1 (model) ĐÃ chuẩn bị tới cổng
-   2026-11-09 12:40 CST (xem WP2-GATE.md + wp2-prep/). Còn lại: bước 2 nối
-   dây lúc lưu (ReviewView.save ghi taxLines/sourceType/stableID…) +
-   kiểm di trú trên bản sao kho Build 1 → cổng nghiệm thu WP2.
+3. **WP2** — Hoàn thiện model dữ liệu: bước 1 (model) ĐÃ tới cổng
+   2026-11-09 12:40 CST + bước 2 (nối dây lúc lưu + Chi Tiết hiện dòng
+   thuế riêng) ĐÃ chuẩn bị xong 2026-11-09 14:40 CST (xem WP2-GATE.md
+   cả 2 mục + wp2-prep/ đủ 4 file). **WP2 ĐÃ TỚI CỔNG** — còn lại
+   (sau thẻ duyệt của anh): đẩy code → build cloud → anh cài đè +
+   kiểm di trú trên máy (2 tờ test Build 1 còn nguyên, số không đổi)
+   = nghiệm thu đóng WP2.
 4. ~~Chuẩn bị corpus: tải + kiểm chứng bộ WildReceipt/CORD/SROIE (làn lab),
    lập danh mục mẫu theo 7 loại hình (Master Plan §3.3)~~ **ĐÃ XONG phần
    không cần anh 2026-11-09 06:40 CST** (xem `corpus/CORPUS.md`): 3 bộ đã
@@ -92,13 +116,22 @@ WP2 bước 1 — model dữ liệu — đã chuẩn bị tới cổng, xem WP2-
   (anh duyệt trong chat app; commit main `769727698d`).
 - ~~WP1 build cloud + nghiệm thu trên máy~~ ĐÃ XONG 2026-11-09 10:57 CST
   (anh cài + chụp màn hình Chi Tiết mở mục "Văn bản OCR gốc" — WP1 đóng).
-- WP2 bước 1 đã tới cổng chuẩn bị (WP2-GATE.md) — khi bước 2 + kiểm di
-  trú xong, toàn WP2 sẽ trình anh một lần để duyệt đẩy (không trình lẻ).
+- **WP2 ĐÃ TỚI CỔNG (2026-11-09 14:40 CST):** chờ anh duyệt đẩy code
+  WP2 (wp2-prep/ 4 file) lên main. Sau build: anh cài đè lên máy đang
+  có 2 tờ test Build 1 và mở app — 2 tờ còn nguyên, số không đổi =
+  kiểm di trú đạt, WP2 đóng (chi tiết + quyết định thiết kế dòng thuế
+  ở WP2-GATE.md mục "WP2 BƯỚC 2").
 - Mọi lần ĐẨY CODE lên main khác (thẻ duyệt của hệ thống sẽ tới anh).
 - WP3: file PDF Sam's (chưa có) — nghiệm thu trên PDF thật khác trước, ghi chờ.
 - WP4: mẫu 002-C chụp camera thật + bản test engine iOS 26 cài trên máy anh.
 
 ## Luật ca trực
+- **LUẬT LÀM VIỆC CHUNG (anh ban hành 2026-11-09 13:09 CST): đọc và áp dụng
+  `WORKFLOW-PROMPT-IOS.md` (prompt 5 trạng thái đã lọc cho dự án này) —
+  trong gói việc chạy vòng code → kiểm chứng trên bộ mẫu cố định → tự sửa
+  LIỀN MẠCH không dừng chờ duyệt ở bước con; cổng chỉ ở cuối gói; lúc một
+  gói chờ cổng thì chuẩn bị song song việc độc lập; trước cổng tự phản
+  biện + tuyên bố trung thực 3 phần.**
 - Mỗi ca làm ĐÚNG MỘT bước cụ thể, kiểm chứng, cập nhật file này, đẩy tài liệu
   lên nhánh docs/planning (commit nhỏ, thấy được trên GitHub).
 - Chỉ nhắn anh khi: một gói tới cổng, cần anh test/quyết định, hoặc một việc

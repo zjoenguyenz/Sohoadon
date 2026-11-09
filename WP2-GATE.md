@@ -8,6 +8,9 @@
 code ở bất kỳ nhánh nào** (đúng luật ca trực). Còn chờ: nối dây ghi trường
 mới lúc lưu (bước 2 của WP2, ca sau) → Wally duyệt cuối + thẻ duyệt đẩy
 của anh → build cloud → nghiệm thu di trú trên bản sao kho Build 1.
+**CẬP NHẬT 2026-11-09 14:40 CST: bước 2 ĐÃ chuẩn bị xong — xem mục
+"WP2 BƯỚC 2" ở cuối văn bản này. WP2 (cả 2 bước) nay đủ điều kiện trình
+cổng; mục kiểm di trú vẫn [CHƯA KIỂM CHỨNG] với lý do ghi rõ ở đó.**
 
 ## Việc đã làm trong ca này — đúng MỘT bước: model dữ liệu (không nối dây UI/parser)
 - **Đối chiếu §5.2 từng thiếu hụt → trường chứa** (bảng dưới; tiêu chí
@@ -128,3 +131,94 @@ của anh → build cloud → nghiệm thu di trú trên bản sao kho Build 1.
    anh còn nguyên, số không đổi) — bằng chứng cổng còn lại của WP2.
 3. Sau 2 bước trên: Wally duyệt cuối + thẻ duyệt đẩy của anh → build
    cloud → anh cài + kiểm trên máy.
+
+---
+
+## WP2 BƯỚC 2 — NỐI DÂY LÚC LƯU (bổ sung 2026-11-09 14:40 CST, ca trực sohoadon-build2-247)
+
+**Trạng thái:** Bước 2 đã chuẩn bị xong trong `wp2-prep/` — bộ file đẩy
+WP2 nay gồm đủ 4 file thay 1-1 cho bản trên main: `Models.swift` +
+`SoHoaDonApp.swift` (bước 1) và `ReceiptViews.swift` + `ScanView.swift`
+(bước 2 này). **Chưa đẩy code ở bất kỳ nhánh nào** (luật ca trực).
+
+### Việc đã làm — đúng phạm vi "việc còn lại #1" của văn bản cổng bước 1
+- **`ScanView.swift`** (diff so với `build1/ScanView.swift`: **+9 / −4** —
+  4 dòng sửa, đều là nối nguồn nạp): `ScanDraft` thêm trường
+  `sourceType: SourceType = .unknown`; `process(image:source:)` nhận
+  nguồn theo đúng đường vào — quét tài liệu truyền `.camera`, chọn ảnh
+  truyền `.photoLibrary` — và ghi vào draft. Không điểm dựng draft nào
+  khác tồn tại trong code (đã grep toàn bộ).
+- **`ReceiptViews.swift`** (diff so với bản WP1 đã trên main, md5
+  `599cfc70…`: **+65 / −1**, dòng −1 duy nhất là dòng "Thuế" gộp được
+  thay bằng khối hiển thị có điều kiện):
+  - Hằng `currentParserVersion = "build1-parser"` — dấu F4 mức tối
+    thiểu; WP4 thay engine thì đổi hằng, không sửa bản ghi cũ.
+  - `ReviewView.save()` ghi thêm: `stableID` (UUID mới),
+    `sourceType` (từ draft), `paymentMethod` (có đuôi thẻ → `.card`;
+    không có → `.unknown` — KHÔNG đoán cash), `transactionRef` (chỉ
+    tách từ `dedupeKey` dạng `SAMS-TC-<số>` / `TC-<số>`; khoá yếu
+    `GEN|...` → để nil), `parserVersion`, và các `TaxLine` từ
+    `draft.result.taxes` (quan hệ + insert như LineItem).
+  - **Quyết định thiết kế (ghi rõ để anh/QA phán):** dòng thuế riêng
+    CHỈ được lưu khi tổng thuế ở màn Kiểm Lại (số anh đã duyệt) còn
+    khớp Σ dòng thuế máy đọc; khi đó `taxCents` được đồng bộ ngược =
+    Σ taxLines (đúng số anh duyệt). Anh sửa tổng thuế lệch đi → giữ
+    tổng gộp của anh, KHÔNG lưu chi tiết dòng cũ — tránh bịa cơ cấu
+    thuế không còn đúng. Kiểm số học trên đáp án chuẩn Mẫu 002:
+    960 + 390 = 1350¢ = $13.50 ✓ và 20330 + 1350 = 21680¢ = TOTAL ✓;
+    trường hợp sửa lệch ($14.00 → 1400 ≠ 1350) cho persistTaxLines =
+    false như thiết kế.
+  - `ReceiptDetailView`: có `taxLines` → hiện từng dòng (nhãn + thuế
+    suất, vd "TAX 1 (8.517%)") + dòng "Thuế (tổng)" từ helper
+    `taxTotalCents`; chưa có → giữ nguyên dòng thuế gộp Build 1 (bản
+    ghi cũ không đổi hành vi).
+- **Cố ý KHÔNG nối ở bước này (đúng phạm vi đã chốt ở bước 1):**
+  `scheduleCLine` lúc lưu (việc xếp mục/sửa mục là WP6/WP7 — C-7),
+  `originalImageFileNames` (luồng Build 1 vẫn 1 ảnh, `imageFileName`
+  đã chứa; danh sách nhiều ảnh thuộc WP3/WP8), `reviewedAt` /
+  `userEnteredFieldNames` (cổng Duyệt là WP6). Trường đã có chỗ chứa
+  từ bước 1; không nối dây vượt gói.
+
+### Tờ khai trung thực bước 2 (claims / evidence / unverified)
+- [ĐÃ KIỂM] Diff từng file như trên; đọc thẳng lại toàn bộ hàm
+  `save()` sau khi sửa — cấu trúc ngoặc/vòng lặp nguyên vẹn; cân bằng
+  cú pháp thô: ReceiptViews 182/182 ngoặc nhọn, 458/458 ngoặc đơn;
+  ScanView 54/54, 104/104 (Models 88/88 như bước 1).
+- [ĐÃ KIỂM] Mọi ký hiệu mới dùng trong 2 file đều tồn tại đúng kiểu
+  trong `wp2-prep/Models.swift` (grep từng ký hiệu: TaxLine +
+  label/rateText/amountCents/sortIndex, Receipt.taxLines / stableID /
+  transactionRef / parserVersion / taxTotalCents, SourceType.camera /
+  .photoLibrary, PaymentMethod.card / .unknown); `ParsedTaxLine`
+  trong `Parser.swift` khớp từng trường được chép. Kiểu/optional rà
+  theo TEAM.md lỗi #2: mẫu `cardLast4?.isEmpty == false` theo đúng
+  idiom đã có trong Models.swift; `Int? == Int` ở điều kiện thuế là
+  phép so optional hợp lệ.
+- [ĐÃ KIỂM] Không framework lạ, không API mới ngoài UUID/String —
+  TEAM.md lỗi #1/#3 không áp dụng; không đụng gì lúc khởi động app.
+- [CHƯA KIỂM CHỨNG] Biên dịch: môi trường ca không có swiftc/
+  xcodebuild (đã kiểm `which` — không có). Phép kiểm thật = build
+  cloud sau khi anh duyệt đẩy (như WP1).
+- [CHƯA KIỂM CHỨNG] **Kiểm di trú (việc còn lại #2):** trong workspace
+  KHÔNG có bản sao kho Build 1 (đã tìm *.store/*.sqlite — không có)
+  và không có compiler để chạy thử. Bằng chứng tĩnh đã có: mọi trường
+  mới optional/có mặc định, không xoá/đổi tên/đổi kiểu trường cũ
+  (diff bước 1 +191/−0) — di trú nhẹ theo thiết kế. Phép kiểm chạy
+  thật chỉ làm được trên bản build chứa model mới; trình anh ở cổng:
+  duyệt đẩy → build cloud → cài đè lên máy đang có 2 tờ test Build 1
+  → mở app kiểm 2 tờ còn nguyên, số không đổi (đó là nghiệm thu WP2,
+  thay cho "bản sao kho" vì kho thật chỉ nằm trên iPhone của anh và
+  đội không có đường lấy bản sao).
+
+### Ba chữ ký nội bộ cho bước 2
+- **Design ✓** — Thay đổi hiển thị duy nhất: Chi Tiết hiện từng dòng
+  thuế khi có dữ liệu, đúng nghiệm thu §F (2 dòng thuế riêng); bản
+  ghi cũ giữ nguyên hiển thị. Không màn mới, không đổi luồng.
+- **Code ✓** — Rà độc lập: diff chỉ trong phạm vi đã chốt; không
+  đoán số (cash/transactionRef/taxLines đều có luật không-bịa ghi
+  trong code); vòng đời SwiftData theo đúng mẫu LineItem có sẵn.
+- **QA ✓** — Đối chiếu WP2-GATE bước 1 "việc còn lại #1" từng mục:
+  taxLines ✓ / transactionRef+dedupeKey ✓ / sourceType theo đường
+  vào ✓ / paymentMethod không đoán cash ✓ / stableID ✓ /
+  parserVersion ✓ / đồng bộ taxCents ✓ / Chi Tiết hiện dòng thuế
+  riêng ✓. QA ký CHUẨN BỊ TỚI CỔNG cho toàn WP2; nghiệm thu WP2 còn
+  chờ build cloud + kiểm di trú trên máy anh như ghi ở trên.
