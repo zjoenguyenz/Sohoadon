@@ -6,8 +6,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "0.0.1"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "2"
     DEVELOPMENT_TEAM: ""
 targets:
   SoHoaDon:
@@ -15,7 +15,13 @@ targets:
     platform: iOS
     sources:
       - SoHoaDonApp.swift
+      - Models.swift
       - ContentView.swift
+      - HomeView.swift
+      - ScanView.swift
+      - ReceiptViews.swift
+      - CardsView.swift
+      - Parser.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon
@@ -25,6 +31,7 @@ targets:
       properties:
         CFBundleDisplayName: "Sổ Hóa Đơn"
         CFBundleName: "Sổ Hóa Đơn"
+        NSCameraUsageDescription: "Dùng camera để quét hoá đơn giấy."
         NSFaceIDUsageDescription: "Dùng Face ID để khoá hoá đơn của anh."
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

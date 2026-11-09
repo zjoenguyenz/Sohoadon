@@ -1,91 +1,133 @@
 import SwiftUI
+import SwiftData
 import LocalAuthentication
-import UIKit
-import UniformTypeIdentifiers
 
+/// Gốc của app: cổng khoá Face ID (nếu bật) + khung 5 tab.
+/// Khoá Face ID PHẢI fail-open: máy không có sinh trắc/mật mã, hoặc lỗi lạ
+/// -> mở app bình thường kèm thông báo, KHÔNG bao giờ khoá cứng anh ở ngoài
+/// và KHÔNG crash (bài học Test 0: đụng vào framework lạ lúc khởi động là chết app).
 struct ContentView: View {
-    @State private var faceIDStatus = "Chưa kiểm tra"
-    @State private var filesStatus = "Chưa kiểm tra"
-    @State private var showFolderPicker = false
+    @AppStorage("faceIDLockEnabled") private var lockEnabled = true
+    @State private var unlocked = false
+    @State private var lockNote: String? = nil
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Bài test số 0") {
-                    Text("App tạm này chỉ để kiểm tra trước khi xây app thật: ký bằng chứng thư của anh có cài/mở được không, Face ID có dùng được không, và app có tự ghi được vào thư mục trong app Files không. Anh bấm 2 nút kiểm tra rồi chụp màn hình này gửi lại là đủ.")
-                        .font(.callout)
-                }
-                Section("1. Face ID") {
-                    Text(faceIDStatus)
-                    Button("Kiểm tra Face ID") { checkFaceID() }
-                }
-                Section("2. iCloud / CloudKit") {
-                    Text("ĐÃ LOẠI — bản test trước chết ngay khi chạm vào CloudKit dưới cách ký này (có log crash làm bằng chứng). App thật không dùng CloudKit: dữ liệu nằm trên máy và tự lưu bản sao vào thư mục anh chọn trong app Files — kiểm tra ở mục 3.")
-                        .font(.callout)
-                }
-                Section("3. Thư mục trong app Files") {
-                    Text(filesStatus)
-                    Text("Đây là cách app thật sẽ tự lưu bản sao hoá đơn: anh chọn 1 thư mục trong app Files (nằm ở iCloud Drive hoặc Trên iPhone đều được), từ đó app tự ghi vào đó, không cần quyền iCloud riêng.")
-                        .font(.callout)
-                    Button("Chọn thư mục & ghi thử") { showFolderPicker = true }
-                }
-                Section("Máy của anh") {
-                    Text("iOS: \(UIDevice.current.systemVersion)")
-                    Text("Thiết bị: \(UIDevice.current.model)")
-                    Text("Bundle: \(Bundle.main.bundleIdentifier ?? "?")")
-                    Text("Bản: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")")
-                }
+        Group {
+            if !lockEnabled || unlocked {
+                TabShellView(lockNote: lockNote)
+            } else {
+                lockScreen
             }
-            .navigationTitle("Sổ Hóa Đơn — Test 0")
-            .fileImporter(isPresented: $showFolderPicker, allowedContentTypes: [.folder]) { result in
-                handleFolderPick(result)
+        }
+        .onAppear { authenticateIfNeeded() }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background && lockEnabled {
+                unlocked = false
+            }
+            if newPhase == .active && lockEnabled && !unlocked {
+                authenticateIfNeeded()
             }
         }
     }
 
-    private func handleFolderPick(_ result: Result<URL, Error>) {
-        switch result {
-        case .failure(let e):
-            filesStatus = "Chọn thư mục thất bại: \(e.localizedDescription)"
-        case .success(let url):
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let dir = url.appendingPathComponent("SoHoaDon-Test", isDirectory: true)
-                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let file = dir.appendingPathComponent("test.txt")
-                let body = "Sổ Hóa Đơn ghi thử lúc \(Date())"
-                try body.write(to: file, atomically: true, encoding: .utf8)
-                let back = try String(contentsOf: file, encoding: .utf8)
-                filesStatus = back == body
-                    ? "GHI + ĐỌC LẠI THÀNH CÔNG ✓ tại: \(url.lastPathComponent)/SoHoaDon-Test/test.txt"
-                    : "Ghi được nhưng đọc lại không khớp"
-            } catch {
-                filesStatus = "GHI THẤT BẠI — \(error.localizedDescription)"
+    private var lockScreen: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary)
+            Text("Sổ Hóa Đơn đang khoá")
+                .font(.title3.bold())
+            if let lockNote {
+                Text(lockNote)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
             }
+            Button("Mở khoá bằng Face ID / mật mã") { authenticateIfNeeded() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
         }
+        .padding()
     }
 
-    private func checkFaceID() {
-        let ctx = LAContext()
-        var err: NSError?
-        guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err) else {
-            faceIDStatus = "Không dùng được: \(err?.localizedDescription ?? "không rõ")"
+    private func authenticateIfNeeded() {
+        guard lockEnabled, !unlocked else { return }
+        let context = LAContext()
+        var error: NSError?
+        // .deviceOwnerAuthentication = Face ID, hỏng thì rơi về mật mã máy.
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            // Không có sinh trắc lẫn mật mã -> fail-open, không khoá người dùng ở ngoài.
+            lockNote = "Máy chưa đặt Face ID/mật mã nên app mở không khoá. Anh có thể tắt khoá hẳn trong Thẻ & Cài Đặt."
+            unlocked = true
             return
         }
-        let kind: String
-        switch ctx.biometryType {
-        case .faceID: kind = "Face ID"
-        case .touchID: kind = "Touch ID"
-        case .opticID: kind = "Optic ID"
-        default: kind = "Sinh trắc học"
-        }
-        ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
-                           localizedReason: "Kiểm tra khoá app Sổ Hóa Đơn") { ok, error in
+        context.evaluatePolicy(.deviceOwnerAuthentication,
+                               localizedReason: "Mở khoá Sổ Hóa Đơn") { success, _ in
             DispatchQueue.main.async {
-                faceIDStatus = ok ? "\(kind): MỞ KHOÁ THÀNH CÔNG ✓"
-                                  : "\(kind): thất bại — \(error?.localizedDescription ?? "")"
+                if success {
+                    unlocked = true
+                    lockNote = nil
+                } else {
+                    lockNote = "Chưa mở được — anh bấm nút dưới để thử lại (hoặc dùng mật mã máy)."
+                }
             }
         }
+    }
+}
+
+// MARK: - Khung 5 tab (BLUEPRINT mục 5)
+
+struct TabShellView: View {
+    var lockNote: String? = nil
+    @Environment(\.modelContext) private var modelContext
+    @State private var selectedTab = 0
+    @State private var seeded = false
+
+    var body: some View {
+        TabView(selection: $selectedTab) {
+            HomeView()
+                .tabItem { Label("Trang Chủ", systemImage: "house.fill") }
+                .tag(0)
+
+            ReceiptListView()
+                .tabItem { Label("Hoá Đơn", systemImage: "doc.text.fill") }
+                .tag(1)
+
+            ScanView()
+                .tabItem { Label("CHỤP", systemImage: "camera.fill") }
+                .tag(2)
+
+            ReportsView()
+                .tabItem { Label("Báo Cáo Thuế", systemImage: "chart.pie.fill") }
+                .tag(3)
+
+            CardsView()
+                .tabItem { Label("Thẻ & Cài Đặt", systemImage: "creditcard.fill") }
+                .tag(4)
+        }
+        .task { seedStarterCardIfNeeded() }
+    }
+
+    /// Nạp sẵn thẻ đã chốt với anh: Mastercard Debit •• 2586 = Business.
+    /// Chỉ nạp khi danh sách thẻ đang TRỐNG và chưa từng nạp (cờ UserDefaults),
+    /// để anh xoá/ngưng về sau không bị app tự nạp lại.
+    private func seedStarterCardIfNeeded() {
+        guard !seeded else { return }
+        seeded = true
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: "didSeedStarterCard2586") else { return }
+        let descriptor = FetchDescriptor<CardTail>()
+        let existing = (try? modelContext.fetch(descriptor)) ?? []
+        if existing.isEmpty {
+            let card = CardTail()
+            card.last4 = "2586"
+            card.brand = "Mastercard Debit"
+            card.kind = .business
+            modelContext.insert(card)
+            try? modelContext.save()
+        }
+        defaults.set(true, forKey: "didSeedStarterCard2586")
     }
 }
