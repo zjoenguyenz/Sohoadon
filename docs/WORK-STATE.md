@@ -1,5 +1,6 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-09 06:40 CST (ca trực sohoadon-build2-247)
+Cập nhật lần cuối: 2026-11-09 10:40 CST (ca trực sohoadon-build2-247; kiểm
+chứng bổ sung sau tin của anh lúc 10:43 CST trong chat app hoá đơn)
 
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
@@ -33,9 +34,18 @@ Cập nhật lần cuối: 2026-11-09 06:40 CST (ca trực sohoadon-build2-247)
   thức, cảnh báo giấy phép ở CORPUS.md A3). Danh mục thật của anh: đã có
   kho sỉ (001/002) + big-box (003); 5 loại còn trống, lớn dần theo hoá
   đơn thật anh gửi (không phải việc ca trực tự tạo được).
-- **Bước tiếp theo:** chờ anh (thẻ duyệt đẩy code WP1 → build cloud → anh
-  cài + chụp màn hình Kiểm Lại mở mục OCR gốc = nghiệm thu đóng WP1, mở
-  WP2). Chưa có phản hồi của anh thì các ca sau chỉ kiểm tra lại trạng
+- **WP1 CODE ĐÃ ĐẨY LÊN MAIN (2026-11-09 10:44 CST):** anh duyệt trong chat
+  ("Đẩy code WP1 lên build bản mới luôn") + duyệt thẻ đẩy; commit **7697276**.
+  Wally duyệt cuối trước khi đẩy: tự diff lại — đúng +39/−0, thuần cộng thêm.
+  Kiểm chứng độc lập của ca trực 10:40 trên GitHub: commit đầy đủ
+  `769727698d` (16:44:18Z); file `ReceiptViews.swift` trên main = 28.588
+  byte, md5 `599cfc70c015228acc54996ad4fd5eb7` — khớp byte-for-byte với
+  `wp1-prep/ReceiptViews.swift`, có `RawTextDisclosure`; ca trực không
+  đẩy lại để tránh trùng. Build cloud: [CHƯA KIỂM CHỨNG trong ca này —
+  connector GitHub không có công cụ xem Actions].
+  Còn lại: kết quả build cloud (anh xem Actions) → anh ký/cài → chụp màn
+  hình Kiểm Lại hoặc Chi Tiết mở mục "Văn bản OCR gốc" = nghiệm thu đóng
+  WP1, mở WP2. Chưa có phản hồi của anh thì các ca sau chỉ kiểm tra lại trạng
   thái rồi kết thúc im lặng (mục 3 đã xong phần tự làm được; không mở WP2
   sớm, không tải thêm CORD train/validation khi chưa có nhu cầu WP4).
 
@@ -44,9 +54,10 @@ Cập nhật lần cuối: 2026-11-09 06:40 CST (ca trực sohoadon-build2-247)
    SCORECARD.md tồn tại (điểm nền Build 1 theo QA-VERDICT Phụ lục B §0.3) +
    QA ✓ ký nhận thứ tự WP1→WP9 trong `WP0-QA-SIGNOFF.md`. Không cần anh.
 2. **WP1** — Cửa chẩn đoán F3 (xem văn bản OCR gốc): code ĐÃ chuẩn bị tới
-   cổng 3 chữ ký nội bộ (2026-11-09 04:40, xem WP1-GATE.md + wp1-prep/).
-   Còn lại: Wally duyệt cuối + thẻ duyệt đẩy của anh → build cloud → anh
-   cài + chụp màn hình (nghiệm thu trên máy để sau — cần anh).
+   cổng 3 chữ ký nội bộ (2026-11-09 04:40, xem WP1-GATE.md + wp1-prep/);
+   anh ĐÃ duyệt đẩy 10:43 CST + code ĐÃ lên main commit `769727698d`
+   10:44 CST (kiểm chứng md5 ở mục Vị trí hiện tại). Còn lại: kết quả
+   build cloud → anh cài + chụp màn hình (nghiệm thu trên máy — cần anh).
 3. ~~Chuẩn bị corpus: tải + kiểm chứng bộ WildReceipt/CORD/SROIE (làn lab),
    lập danh mục mẫu theo 7 loại hình (Master Plan §3.3)~~ **ĐÃ XONG phần
    không cần anh 2026-11-09 06:40 CST** (xem `corpus/CORPUS.md`): 3 bộ đã
@@ -56,9 +67,9 @@ Cập nhật lần cuối: 2026-11-09 06:40 CST (ca trực sohoadon-build2-247)
    phải có đáp án chuẩn kiểm tay mới vào bộ.
 
 ## Điểm dừng chờ anh (ghi rõ, không tự vượt)
-- **WP1: thẻ duyệt ĐẨY CODE lên main** (bản chuẩn bị ở `wp1-prep/`, văn bản
-  cổng `WP1-GATE.md`).
-- WP1 nghiệm thu trên máy (anh cài bản mới + chụp màn hình Kiểm Lại mở mục
+- ~~WP1: thẻ duyệt ĐẨY CODE lên main~~ ĐÃ XONG 2026-11-09 10:43–10:44 CST
+  (anh duyệt trong chat app; commit main `769727698d`).
+- WP1 build cloud + nghiệm thu trên máy (anh cài bản mới + chụp màn hình Kiểm Lại mở mục
   "Văn bản OCR gốc" của 1 tờ quét thật).
 - Mọi lần ĐẨY CODE lên main khác (thẻ duyệt của hệ thống sẽ tới anh).
 - WP3: file PDF Sam's (chưa có) — nghiệm thu trên PDF thật khác trước, ghi chờ.
