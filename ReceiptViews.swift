@@ -24,6 +24,28 @@ struct ClassificationBadge: View {
     }
 }
 
+// MARK: - Cửa chẩn đoán F3 (WP1): xem văn bản đọc thô — bằng chứng gốc khi đọc sai
+//
+// Một component dùng chung cho cả 2 màn (Kiểm Lại + Chi Tiết) để hành vi
+// không lệch nhau: DisclosureGroup mặc định THU GỌN (không truyền
+// isExpanded), chữ monospaced cỡ caption, chọn/copy được để anh gửi
+// nguyên văn khi báo lỗi. `title` là tham số để WP3 (đường PDF) chỉ cần
+// truyền nhãn "Văn bản trong PDF" ở 2 điểm gọi — không dựng lại viewer.
+// WP1 chỉ có đường OCR nên cả 2 điểm gọi đều dùng nhãn OCR (mặc định).
+
+struct RawTextDisclosure: View {
+    var text: String
+    var title: String = "Văn bản OCR gốc"
+
+    var body: some View {
+        DisclosureGroup(title) {
+            Text(text)
+                .font(.caption.monospaced())
+                .textSelection(.enabled)
+        }
+    }
+}
+
 // MARK: - Cờ kiểm tra lại trên 1 hoá đơn đã lưu (chỉ hiển thị, không sửa số)
 
 func receiptFlags(_ receipt: Receipt) -> [String] {
@@ -274,6 +296,13 @@ struct ReceiptDetailView: View {
                 }
             }
 
+            // F3 (WP1): văn bản OCR gốc đã lưu — chỉ hiện khi có chữ (CODE-AUDIT F3 mục 2).
+            if !receipt.ocrRawText.isEmpty {
+                Section {
+                    RawTextDisclosure(text: receipt.ocrRawText)
+                }
+            }
+
             let flags = receiptFlags(receipt)
             if !flags.isEmpty {
                 Section("Cần kiểm lại") {
@@ -428,6 +457,16 @@ struct ReviewView: View {
                             .scaledToFit()
                             .frame(maxHeight: 220)
                             .frame(maxWidth: .infinity)
+                    }
+                }
+
+                // F3 (WP1): văn bản OCR gốc ngay dưới ảnh gốc (CODE-AUDIT F3 mục 1).
+                // Draft chỉ được tạo khi OCR có dòng chữ (ScanView.process chặn
+                // lines.isEmpty) nên rawText luôn có nội dung; vẫn giữ guard
+                // rỗng cho đối xứng với màn Chi Tiết.
+                if !draft.result.rawText.isEmpty {
+                    Section {
+                        RawTextDisclosure(text: draft.result.rawText)
                     }
                 }
 
