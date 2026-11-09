@@ -20,15 +20,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon
         INFOPLIST_FILE: Info.plist
-        CODE_SIGN_ENTITLEMENTS: SoHoaDon.entitlements
-    entitlements:
-      path: SoHoaDon.entitlements
-      properties:
-        com.apple.developer.icloud-container-identifiers:
-          - iCloud.com.nje.sohoadon
-        com.apple.developer.icloud-services:
-          - CloudKit
-        com.apple.developer.ubiquity-kvstore-identifier: "$(TeamIdentifierPrefix)$(CFBundleIdentifier)"
     info:
       path: Info.plist
       properties:
