@@ -28,6 +28,13 @@ phải dùng cửa chẩn đoán F3 (WP1) để chỉ rõ số mất ở tầng 
 - **WildReceipt**: 472 tờ test — hoá đơn Mỹ chụp ngoài đời (giống Mẫu 003 nhất).
 - **CORD**: stress-test bóc tách cấp dòng (CC BY 4.0).
 - **SROIE**: test khói 4 trường tiệm/ngày/địa chỉ/tổng (điều kiện ICDAR).
+- **Trạng thái chuẩn bị (2026-11-09, ca 06:40 CST — chi tiết: corpus/CORPUS.md):**
+  WildReceipt ĐÃ TẢI toàn bộ bản MMOCR (test 472/train 1,267 tờ có nhãn,
+  72,485 hộp, sha256 ghi ở CORPUS.md) · CORD v1 ĐÃ TẢI test split (100 tờ,
+  kiểm bằng pyarrow; train/validation chưa tải, có chủ đích) · SROIE ĐÃ
+  TẢI bản cộng đồng (973 tờ = train 626/test 347, 4 trường phủ 347/347 ở
+  test; KHÔNG phải bản ICDAR chính thức — xem cảnh báo CORPUS.md A3).
+  Chưa chạy chấm engine nào trên làn lab — việc đó thuộc WP4.
 Lý do tách làn: điểm trên corpus lạ không giống điều kiện thật thì là điểm
 dối (bằng chứng 88% → 51%, TOP-APPS-RESEARCH §2.12). Ảnh dataset không nhúng
 vào app; chỉ dùng nội bộ theo giấy phép của từng bộ.
@@ -43,3 +50,6 @@ tải về (PDF Amazon/Best Buy…).
 | Ngày | Đối tượng chấm | 001 | 002 | 003 | Ghi chú |
 |---|---|---|---|---|---|
 | 2026-11-08 | Build 1 (nền) | chưa đo | tiệm✓ ngày✓ tổng✗cờ món✗ | tiệm✗không cờ ngày✓ tổng✗cờ món✗ | Điểm nền đóng băng tại WP0 |
+| 2026-11-09 | WP0 — QA ký nhận thứ tự gói | — | — | — | QA ✓ ký nhận thứ tự WP1→WP9 (Master Plan §5.0); văn bản: WP0-QA-SIGNOFF.md. WP0 qua cổng, mở WP1 |
+| 2026-11-09 | WP1 — code F3 chuẩn bị tới cổng | — | — | — | Không chấm điểm (WP1 không đổi khả năng đọc). Code ở wp1-prep/ (diff +39/−0), đủ Design ✓ / Code ✓ / QA ✓ nội bộ; chờ anh duyệt đẩy + cài máy chụp màn hình mới nghiệm thu. Văn bản: WP1-GATE.md |
+| 2026-11-09 | Corpus — chuẩn bị làn lab (mục 3 hàng việc) | — | — | — | Không chấm điểm (chuẩn bị dữ liệu, chưa chạy engine). Đã tải + kiểm chứng WildReceipt/CORD-test/SROIE với byte/sha256/số dòng đo thật; danh mục 7 loại hình hoá đơn thật lập ở corpus/CORPUS.md (đã có: kho sỉ 001/002, big-box 003; 5 loại còn trống chờ hoá đơn thật) |
