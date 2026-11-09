@@ -1,7 +1,9 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-09 14:40 CST (ca trực sohoadon-build2-247;
-WP2 bước 2 — nối dây lúc lưu — đã chuẩn bị xong; toàn WP2 đã tới cổng,
-xem WP2-GATE.md mục "WP2 BƯỚC 2").
+Cập nhật lần cuối: 2026-11-09 16:40 CST (ca trực sohoadon-build2-247;
+WP3 bước 1 — lõi đường PDF + nạp từ Files — đã chuẩn bị xong, xem
+WP3-GATE.md. WP2 code đã lên main 15:52 CST commit `d7497d8`.)
+Đẩy tài liệu ca này: xem dòng cuối mục này sau khi thử đẩy (luật chống
+treo: thử đúng 1 lần ở cuối ca).
 
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
@@ -86,6 +88,31 @@ xem WP2-GATE.md mục "WP2 BƯỚC 2").
   đè lên máy đang có 2 tờ test Build 1 → 2 tờ còn nguyên, số không
   đổi. Cố ý chưa nối ở bước này: scheduleCLine lúc lưu (WP6/WP7),
   originalImageFileNames (WP3/WP8), reviewedAt/userEntered (WP6).
+  **KẾT QUẢ SAU ĐÓ:** WP2 code ĐÃ ĐẨY MAIN 2026-11-09 15:52 CST
+  (commit `d7497d8`, 4 file wp2-prep) — kiểm di trú gộp vào bài test
+  mốc M1 theo luật mốc lớn, WP2 coi như qua cổng nội bộ.
+- **WP3 — BƯỚC 1 (LÕI ĐƯỜNG PDF + NẠP TỪ FILES) ĐÃ CHUẨN BỊ XONG
+  (2026-11-09 16:40 CST):** `wp3-prep/` 4 file trên nền WP2/main —
+  `ScanView.swift` (**+168/−3**: nút Nạp file + `fileImporter` chọn
+  NHIỀU file + hàng chờ lần lượt, trích lớp chữ PDFKit vào cùng
+  parser confidence 1.0, PDF không lớp chữ → render trang 1 ~200dpi
+  → OCR, file ảnh từ Files → OCR với `sourceType .fileImport`) +
+  `Models.swift` (**+32/−0**: `ImageStore.saveFile` lưu PDF nguyên
+  byte, `load` rẽ nhánh PDF render trang 1, thêm case
+  `SourceType.fileImport` thuần cộng thêm) + `ReceiptViews.swift`
+  (**+20/−7**: nhãn "Văn bản trong PDF" đóng F3 mục 3 ở Kiểm Lại +
+  Chi Tiết; `save()` nối `sourceFileName`/`originalImageFileNames`)
+  + `project.yml` (+7: CFBundleDocumentTypes PDF/ảnh, HandlerRank
+  Alternate). **Kiểm chứng phía mình:** fixture PDF TỰ TẠO từ văn
+  bản Mẫu 001 (`wp3-fixtures/`, SYNTHETIC — không phải PDF Sam's
+  thật): trích xuất giữ 36/36 dòng, bài §F đạt **10/10** bằng bản
+  port pattern Swift, PDF không lớp chữ cho 0 dòng → fallback đúng;
+  kết quả ở `wp3-fixtures/verify-results.txt` + dòng mới trong
+  SCORECARD.md. Đủ 3 chữ ký nội bộ BƯỚC 1 — văn bản: `WP3-GATE.md`.
+  **CHƯA đẩy code**; biên dịch + PDFKit/fileImporter trên máy thật
+  [CHƯA KIỂM CHỨNG] (gộp bài kiểm mốc M1). **WP3 chưa tới cổng:**
+  còn bước 2 — đón Share Sheet/onOpenURL (CẢNH BÁO: không đẩy riêng
+  project.yml bước 1 trước bước 2, tránh đường "Mở bằng" chết).
 
 ## Hàng việc (theo BUILD2-MASTER-PLAN, tuần tự tuyệt đối)
 1. ~~**WP0** — Đóng băng bộ mẫu & bảng điểm~~ **ĐÃ XONG 2026-11-09 02:41 CST**:
@@ -99,10 +126,9 @@ xem WP2-GATE.md mục "WP2 BƯỚC 2").
 3. **WP2** — Hoàn thiện model dữ liệu: bước 1 (model) ĐÃ tới cổng
    2026-11-09 12:40 CST + bước 2 (nối dây lúc lưu + Chi Tiết hiện dòng
    thuế riêng) ĐÃ chuẩn bị xong 2026-11-09 14:40 CST (xem WP2-GATE.md
-   cả 2 mục + wp2-prep/ đủ 4 file). **WP2 ĐÃ TỚI CỔNG** — còn lại
-   (sau thẻ duyệt của anh): đẩy code → build cloud → anh cài đè +
-   kiểm di trú trên máy (2 tờ test Build 1 còn nguyên, số không đổi)
-   = nghiệm thu đóng WP2.
+   cả 2 mục + wp2-prep/ đủ 4 file). **CODE ĐÃ ĐẨY MAIN 2026-11-09
+   15:52 CST (commit d7497d8)** — theo luật mốc lớn, anh không cài/test
+   riêng gói này; kiểm di trú gộp vào bài test Mốc M1.
 4. ~~Chuẩn bị corpus: tải + kiểm chứng bộ WildReceipt/CORD/SROIE (làn lab),
    lập danh mục mẫu theo 7 loại hình (Master Plan §3.3)~~ **ĐÃ XONG phần
    không cần anh 2026-11-09 06:40 CST** (xem `corpus/CORPUS.md`): 3 bộ đã
@@ -110,14 +136,40 @@ xem WP2-GATE.md mục "WP2 BƯỚC 2").
    lập. Phần còn lại của corpus là gom hoá đơn THẬT của anh theo loại —
    diễn ra khi anh gửi file (PDF Sam's, Best Buy… đã ở điểm chờ), mỗi mẫu
    phải có đáp án chuẩn kiểm tay mới vào bộ.
+5. **LÀN THIẾT KẾ UI — ĐÃ XONG vòng 1 (2026-11-09 16:00 CST):** thư mục
+   `design/` đủ 3 sản phẩm: UI-STUDY.md (9 hệ tham chiếu, 10 nguyên tắc
+   P1–P10, mọi khẳng định gắn nhãn đã-kiểm-chứng/suy-luận), DESIGN-
+   SYSTEM.md (hệ "Sổ": màu dark-first, khối tổng kiểu sổ có dòng đối
+   chiếu số học, nút CHỤP nổi 60pt, cảnh báo tách khỏi màu Business),
+   MOCKUP-M1.html (4 màn, dữ liệu thật 001/002/003 — Wally đã kiểm:
+   div 206/206, số $105.16/$216.80/TAX 1 8.517% khớp đáp án). Đầu vào
+   WP9. **2 điểm chờ quyết:** (i) bỏ iOS 17, chỉ iOS 26+? — đã trình
+   anh kèm đề xuất duyệt; (ii) nguyên tắc màu Personal bản sáng cho
+   chữ nhỏ ở dark (đo tương phản thật ở WP9 mới khóa).
+6. **WP3** — Đường PDF & nạp file (F1): **bước 1 (lõi PDF + nạp từ
+   Files) ĐÃ chuẩn bị xong 2026-11-09 16:40 CST** (xem WP3-GATE.md +
+   wp3-prep/ + wp3-fixtures/). **Bước tiếp theo (ca sau): WP3 bước 2**
+   — đón Share Sheet/onOpenURL + xử lý Inbox dùng chung hàng chờ nạp,
+   quyết nhãn OCR-từ-PDF, rà soát rồi chốt cổng WP3 (Wally duyệt +
+   thẻ đẩy của anh; bài kiểm máy gộp mốc M1, KHÔNG xin anh test
+   riêng). Sau WP3 mới tới WP4 (thi đấu engine) theo tuần tự.
 
 ## Điểm dừng chờ anh (ghi rõ, không tự vượt)
 - ~~WP1: thẻ duyệt ĐẨY CODE lên main~~ ĐÃ XONG 2026-11-09 10:43–10:44 CST
   (anh duyệt trong chat app; commit main `769727698d`).
 - ~~WP1 build cloud + nghiệm thu trên máy~~ ĐÃ XONG 2026-11-09 10:57 CST
   (anh cài + chụp màn hình Chi Tiết mở mục "Văn bản OCR gốc" — WP1 đóng).
-- **WP2 ĐÃ TỚI CỔNG (2026-11-09 14:40 CST):** chờ anh duyệt đẩy code
-  WP2 (wp2-prep/ 4 file) lên main. Sau build: anh cài đè lên máy đang
+- **WP2 CODE ĐÃ ĐẨY LÊN MAIN (2026-11-09 15:52 CST):** anh duyệt sau khi
+  xem hồ sơ ("cần coi tận app mới biết ra sao") — commit **d7497d8**
+  (4 file wp2-prep). Build cloud đang chạy; kết quả xanh/đỏ anh nhìn
+  Actions khi tiện, KHÔNG cần cài/test ngay (luật mốc lớn bên dưới).
+- **LUẬT MỐC LỚN (anh ban hành 2026-11-09 15:51 CST, chi tiết trong
+  WORKFLOW-PROMPT-IOS.md mục Bổ sung):** anh chỉ test ở bước lớn —
+  **M1 = WP2+WP3+WP4+WP5** (bản đọc được hoá đơn), **M2 = WP6..WP9**
+  (Build 2 hoàn chỉnh). Nghiệm thu từng gói trên máy anh BỎ; cổng gói
+  là nội bộ (3 chữ ký + Wally duyệt + build xanh + tự kiểm fixtures).
+  Ca trực KHÔNG nhắn xin anh test từng gói nữa; chỉ nhắn khi tới mốc
+  M1/M2, cần quyết định thật của anh, hoặc hỏng 2 ca liên tiếp. Sau build: anh cài đè lên máy đang
   có 2 tờ test Build 1 và mở app — 2 tờ còn nguyên, số không đổi =
   kiểm di trú đạt, WP2 đóng (chi tiết + quyết định thiết kế dòng thuế
   ở WP2-GATE.md mục "WP2 BƯỚC 2").
