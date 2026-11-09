@@ -46,6 +46,16 @@ struct RawTextDisclosure: View {
     }
 }
 
+// MARK: - WP2 bước 2: dấu phiên bản bộ đọc (ACCOUNTING-SPEC F4, mức tối thiểu)
+//
+// Mọi hoá đơn lưu qua ReviewView.save() đều đóng dấu này vào
+// Receipt.parserVersion, để sau này biết bản ghi nào do bộ đọc nào sinh ra
+// khi đối chiếu lỗi đọc. Giá trị hiện tại = bộ đọc Build 1 (ReceiptParser
+// chưa đổi ở WP2); WP4 (thi đấu engine) thắng/thua xong thì cập nhật
+// hằng này cùng lúc thay engine — không sửa ngược bản ghi cũ.
+
+let currentParserVersion = "build1-parser"
+
 // MARK: - Cờ kiểm tra lại trên 1 hoá đơn đã lưu (chỉ hiển thị, không sửa số)
 
 func receiptFlags(_ receipt: Receipt) -> [String] {
@@ -284,7 +294,20 @@ struct ReceiptDetailView: View {
                     Text(receipt.date, format: .dateTime.day().month().year().hour().minute())
                 }
                 LabeledContent("Subtotal") { moneyText(receipt.subtotalCents) }
-                LabeledContent("Thuế") { moneyText(receipt.taxCents) }
+                // WP2 bước 2: có dòng thuế riêng (taxLines) thì hiện TỪNG dòng
+                // như in trên giấy (nhãn + thuế suất) + dòng tổng thuế lấy từ
+                // helper taxTotalCents; chưa có thì giữ nguyên dòng thuế gộp
+                // của Build 1 (bản ghi cũ không đổi hành vi hiển thị).
+                if receipt.taxLines.isEmpty {
+                    LabeledContent("Thuế") { moneyText(receipt.taxCents) }
+                } else {
+                    ForEach(receipt.taxLines.sorted { $0.sortIndex < $1.sortIndex }) { line in
+                        LabeledContent(line.label + (line.rateText.map { " (\($0)%)" } ?? "")) {
+                            moneyText(line.amountCents)
+                        }
+                    }
+                    LabeledContent("Thuế (tổng)") { moneyText(receipt.taxTotalCents) }
+                }
                 LabeledContent("TỔNG") { moneyText(receipt.totalCents).bold() }
                 if let last4 = receipt.cardLast4 {
                     LabeledContent("Thẻ", value: "\(receipt.cardBrand ?? "Thẻ") •• \(last4)")
@@ -632,6 +655,34 @@ struct ReviewView: View {
         receipt.totalConfidence = draft.result.totalConfidence
         receipt.imageFileName = draft.imageFileName
         receipt.ocrRawText = draft.result.rawText
+        // --- WP2 bước 2: nối dây các trường mới (WP2-GATE, việc còn lại #1) ---
+        receipt.stableID = UUID().uuidString
+        receipt.sourceType = draft.sourceType
+        // Có đuôi thẻ đọc được -> trả bằng thẻ; không có -> .unknown.
+        // TUYỆT ĐỐI không đoán .cash: "không thấy dòng thẻ" khác hẳn "trả tiền mặt".
+        receipt.paymentMethod = (draft.result.cardLast4?.isEmpty == false) ? .card : .unknown
+        // Mã giao dịch tách khỏi khoá chống trùng: dedupeKey dạng "SAMS-TC-<số>"
+        // hoặc "TC-<số>" thì phần số chính là transactionRef; khoá yếu dạng
+        // "GEN|..." không chứa mã giao dịch -> để nil, không bịa.
+        if let key = draft.result.dedupeKey {
+            if key.hasPrefix("SAMS-TC-") {
+                receipt.transactionRef = String(key.dropFirst("SAMS-TC-".count))
+            } else if key.hasPrefix("TC-") {
+                receipt.transactionRef = String(key.dropFirst("TC-".count))
+            }
+        }
+        receipt.parserVersion = currentParserVersion
+        // Dòng thuế riêng: CHỈ lưu khi tổng thuế anh đã duyệt ở màn Kiểm Lại còn
+        // khớp Σ dòng thuế máy đọc. Anh sửa lệch đi thì giữ tổng gộp (taxCents
+        // ở trên) và KHÔNG lưu chi tiết dòng — lưu chi tiết cũ cạnh tổng mới sẽ
+        // bịa ra cơ cấu thuế không còn đúng với số anh đã chốt.
+        let persistTaxLines = !draft.result.taxes.isEmpty
+            && dollarsTextToCents(taxText) == draft.result.taxTotalCents
+        if persistTaxLines {
+            // Đồng bộ ngược chân tương thích cho màn cũ: taxCents = Σ taxLines
+            // (bằng đúng số anh đã duyệt theo điều kiện ở trên).
+            receipt.taxCents = draft.result.taxTotalCents
+        }
         // Kỷ luật Hộp Chờ: còn cảnh báo / chưa rõ loại / business thiếu mục đích
         // -> ở trạng thái chờ duyệt, chưa phải chứng từ chính thức.
         let stillNeedsReview = selectedKind == .unknown
@@ -652,6 +703,19 @@ struct ReviewView: View {
             item.sortIndex = index
             item.receipt = receipt
             modelContext.insert(item)
+        }
+        // WP2 bước 2: ghi các dòng thuế riêng (TaxLine) cùng quan hệ cascade
+        // như LineItem — chỉ khi persistTaxLines đã chốt ở trên.
+        if persistTaxLines {
+            for (index, parsedTax) in draft.result.taxes.enumerated() {
+                let line = TaxLine()
+                line.label = parsedTax.label
+                line.rateText = parsedTax.rateText
+                line.amountCents = parsedTax.amountCents
+                line.sortIndex = index
+                line.receipt = receipt
+                modelContext.insert(line)
+            }
         }
         try? modelContext.save()
         onDone()

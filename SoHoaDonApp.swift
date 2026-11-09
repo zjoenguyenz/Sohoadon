@@ -11,6 +11,6 @@ struct SoHoaDonApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [Receipt.self, LineItem.self, CardTail.self])
+        .modelContainer(for: [Receipt.self, LineItem.self, CardTail.self, TaxLine.self])
     }
 }

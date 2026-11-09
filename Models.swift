@@ -82,6 +82,66 @@ enum Categories {
     }
 }
 
+
+// MARK: - WP2: Hình thức thanh toán (ACCOUNTING-SPEC D1)
+// "unknown" là giá trị hợp lệ nhưng phải gắn cờ — phân biệt trả tiền mặt
+// với "không đọc được thẻ", hai tình trạng bằng chứng hoàn toàn khác nhau.
+
+enum PaymentMethod: String, CaseIterable {
+    case card
+    case cash
+    case check
+    case other
+    case unknown
+}
+
+// MARK: - WP2: Nguồn nạp (ACCOUNTING-SPEC F3 — provenance)
+// rawText của WP1 chỉ phân biệt được nhãn PDF khi nguồn nạp được lưu ở đây;
+// WP3 (đường PDF) sẽ ghi .pdfImport khi nạp file.
+
+enum SourceType: String, CaseIterable {
+    case camera
+    case photoLibrary
+    case pdfImport
+    case screenshot
+    case unknown
+}
+
+// MARK: - WP2: Cờ vốn hoá cho mục Thiết Bị (ACCOUNTING-SPEC E7)
+// Thiết bị KHÔNG phải chi phí thường kỳ mặc định (§263(a)); app chỉ lưu
+// trạng thái quyết định, việc chốt thuộc CPA của anh — xem WP2-GATE.md.
+
+enum CapitalizationFlag: String, CaseIterable {
+    case undecided
+    case deMinimisExpense
+    case depreciableAsset
+}
+
+// MARK: - WP2: Ánh xạ mục chi -> mã dòng Schedule C (ACCOUNTING-SPEC §3.2)
+// Mã dòng lưu KÈM nhãn dưới dạng DỮ LIỆU SỬA ĐƯỢC (Master Plan §6: anh là
+// LLC 1 thành viên -> Schedule C; hàng mua để dùng -> gợi ý Supplies).
+// Bảng này chỉ là GỢI Ý MẶC ĐỊNH lúc xếp mục; mã đã lưu trên từng hoá đơn
+// (Receipt.scheduleCLine) là snapshot và không bị bảng này ghi đè về sau.
+// Dòng Phần Mềm ghi rõ unverified như ACCOUNTING-SPEC §3.2 đã ghi.
+
+extension Categories {
+    static func scheduleCLine(forCategory category: String) -> String? {
+        switch category {
+        case "Vật Tư (Supplies)": return "Sch C line 22"
+        case "Hàng Hoá/Giá Vốn (Inventory/COGS)": return "Sch C Part III line 4 (COGS)"
+        case "Thiết Bị (Equipment)": return "Form 4562 / Sch C line 13"
+        case "Ăn Uống (Meals)": return "Sch C line 24b"
+        case "Đi Lại (Travel)": return "Sch C line 24a"
+        case "Xe & Xăng (Vehicle/Fuel)": return "Sch C line 9"
+        case "Văn Phòng (Office)": return "Sch C line 18"
+        case "Phần Mềm (Software)": return "Sch C line 18 or 27a (CPA unverified)"
+        case "Điện Nước/Internet (Utilities)": return "Sch C line 25"
+        case "Khác (Other)": return "Sch C line 27a"
+        default: return nil
+        }
+    }
+}
+
 // MARK: - Trạng thái duyệt
 
 enum ReceiptStatus: String {
@@ -123,8 +183,69 @@ final class Receipt {
     /// Toàn văn OCR — phục vụ tìm kiếm full-text và kiểm tra lại khi cần.
     var ocrRawText: String = ""
 
+    // MARK: WP2 — trường mới (ACCOUNTING-SPEC §5.2, theo thứ tự ưu tiên của
+    // chuyên gia Kế toán). MỌI trường đều có giá trị mặc định hoặc optional
+    // để kho Build 1 di trú nhẹ (lightweight) — xem WP2-GATE.md. Không
+    // trường Build 1 nào bị xoá/đổi: taxCents và imageFileName GIỮ NGUYÊN
+    // làm chân tương thích cho code hiện tại (ReceiptViews/HomeView).
+    /// C3: các dòng thuế riêng (TAX 1 / TAX 2 / SALES TAX) — quan hệ ở dưới.
+    /// C5: tiền tip nhà hàng, lưu RIÊNG — không bao giờ gộp vào total.
+    var tipAmountCents: Int? = nil
+    /// C6: tổng IN trên giấy khi cần phân biệt với số đã trả (total + tip).
+    /// Build 1/2 chuyển tiếp: totalCents vẫn là tổng in; trường này chỉ
+    /// được ghi khi bộ đọc cung cấp rõ, không tự suy ra.
+    var totalPrintedCents: Int? = nil
+    /// A2/A3: địa chỉ tiệm như in + điện thoại / mã cửa hàng.
+    var vendorAddress: String = ""
+    var vendorPhone: String? = nil
+    var storeNumber: String? = nil
+    /// A5/A6: mã giao dịch của tiệm + mã xác thực — trường riêng, tách khỏi
+    /// dedupeKey (Build 1 nhét TC# chung vào dedupeKey).
+    var transactionRef: String? = nil
+    var authCode: String? = nil
+    /// D1: hình thức thanh toán — PaymentMethod.rawValue.
+    var paymentMethodRaw: String = PaymentMethod.unknown.rawValue
+    /// F1/F2: danh sách MỌI ảnh gốc + ảnh phái sinh (tăng nét) lưu riêng.
+    /// imageFileName (Build 1) vẫn là ảnh gốc đầu tiên; danh sách này là
+    /// nguồn đầy đủ từ WP2 — helper allOriginalImageFileNames gộp cả hai.
+    var originalImageFileNames: [String] = []
+    var enhancedImageFileName: String? = nil
+    /// E3: mã dòng Schedule C snapshot kèm mục chi (sửa được, xem trên).
+    var scheduleCLine: String? = nil
+    /// E5: ăn với ai / quan hệ business (chỉ bắt buộc khi mục Meals/Travel).
+    var mealsAttendees: String = ""
+    /// E7: cờ vốn hoá khi mục là Thiết Bị — CapitalizationFlag.rawValue.
+    var capitalizationFlagRaw: String = CapitalizationFlag.undecided.rawValue
+    /// E6: năm thuế anh sửa tay; nil = suy ra từ ngày mua (helper taxYear).
+    var taxYearOverride: Int? = nil
+    /// F3: nguồn nạp — SourceType.rawValue + tên file gốc nếu có.
+    var sourceTypeRaw: String = SourceType.unknown.rawValue
+    var sourceFileName: String? = nil
+    /// F6: liên kết bản trùng — KHÔNG xoá bản trùng (điều cấm 3). stableID
+    /// rỗng ở bản ghi cũ; bản ghi mới được cấp ở bước nối dây lưu (WP2 bước
+    /// sau / WP6, nơi luật trùng được thực thi) — xem WP2-GATE.md.
+    var stableID: String = ""
+    var duplicateOfStableID: String? = nil
+    var excludedFromTotals: Bool = false
+    /// F5 (mức tối thiểu): thời điểm anh duyệt + tên các trường anh nhập
+    /// tay (phân biệt số-máy-đọc với số-anh-nhập — hai giá trị chứng minh
+    /// khác nhau theo Rev. Proc. 97-22).
+    var reviewedAt: Date? = nil
+    var userEnteredFieldNames: [String] = []
+    /// F4: phiên bản bộ đọc đã sinh ra bản ghi này.
+    var parserVersion: String = ""
+    /// F7: hạn giữ = năm thuế + 7 năm. App KHÔNG bao giờ tự xoá theo hạn
+    /// này (điều cấm 4) — trường chỉ để báo danh sách đến hạn sau này.
+    var retentionUntil: Date? = nil
+    /// V8: hoá đơn trả hàng/refund — tổng âm chỉ hợp lệ khi cờ này bật.
+    var isReturn: Bool = false
+
     @Relationship(deleteRule: .cascade, inverse: \LineItem.receipt)
     var items: [LineItem] = []
+
+    /// WP2/C3: danh sách dòng thuế riêng của hoá đơn này.
+    @Relationship(deleteRule: .cascade, inverse: \TaxLine.receipt)
+    var taxLines: [TaxLine] = []
 
     init() {}
 
@@ -135,6 +256,49 @@ final class Receipt {
     var status: ReceiptStatus {
         get { ReceiptStatus(rawValue: statusRaw) ?? .needsReview }
         set { statusRaw = newValue.rawValue }
+    }
+
+    // MARK: WP2 — helper tính từ trường mới (computed, không lưu trữ)
+
+    var paymentMethod: PaymentMethod {
+        get { PaymentMethod(rawValue: paymentMethodRaw) ?? .unknown }
+        set { paymentMethodRaw = newValue.rawValue }
+    }
+    var sourceType: SourceType {
+        get { SourceType(rawValue: sourceTypeRaw) ?? .unknown }
+        set { sourceTypeRaw = newValue.rawValue }
+    }
+    var capitalizationFlag: CapitalizationFlag {
+        get { CapitalizationFlag(rawValue: capitalizationFlagRaw) ?? .undecided }
+        set { capitalizationFlagRaw = newValue.rawValue }
+    }
+    /// C4: tổng thuế. Ưu tiên Σ taxLines khi có dòng thuế riêng; chưa có
+    /// thì dùng taxCents của Build 1. nil (chưa đọc được) và 0 (miễn thuế
+    /// thật) giữ NGUYÊN hai nghĩa khác nhau — không bao giờ gộp.
+    var taxTotalCents: Int? {
+        if !taxLines.isEmpty {
+            return taxLines.reduce(0) { $0 + $1.amountCents }
+        }
+        return taxCents
+    }
+    /// C5/C6: số đã trả thực tế = tổng in + tip. nil khi chưa có tổng in.
+    var amountPaidCents: Int? {
+        guard let printed = totalPrintedCents ?? totalCents else { return nil }
+        return printed + (tipAmountCents ?? 0)
+    }
+    /// F1: mọi ảnh gốc — gộp imageFileName (Build 1) + danh sách WP2,
+    /// giữ thứ tự, bỏ trùng và bỏ chuỗi rỗng.
+    var allOriginalImageFileNames: [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for name in [imageFileName] + originalImageFileNames {
+            if !name.isEmpty && seen.insert(name).inserted { out.append(name) }
+        }
+        return out
+    }
+    /// E6: năm thuế hiệu lực (anh sửa tay thắng suy ra từ ngày mua).
+    var taxYear: Int {
+        taxYearOverride ?? Calendar.current.component(.year, from: date)
     }
 }
 
@@ -147,6 +311,33 @@ final class LineItem {
     /// Cờ thuế cuối dòng hoá đơn (Sam's: Y / T). Chỉ là dữ kiện in trên giấy, không tự suy thuế.
     var taxFlag: String? = nil
     var itemCode: String? = nil
+    var sortIndex: Int = 0
+    /// WP2/B7: phân loại + mục Ở CẤP DÒNG — nền của tính năng tách hoá
+    /// đơn theo dòng. Mặc định .unknown / rỗng = chưa tách, hành vi cấp
+    /// hoá đơn như Build 1 giữ nguyên.
+    var classificationRaw: String = Classification.unknown.rawValue
+    var category: String = ""
+    var scheduleCLine: String? = nil
+    var receipt: Receipt? = nil
+
+    init() {}
+
+    /// WP2/B7: Classification của riêng dòng này (snapshot cấp dòng).
+    var classification: Classification {
+        get { Classification(rawValue: classificationRaw) ?? .unknown }
+        set { classificationRaw = newValue.rawValue }
+    }
+}
+
+// MARK: - WP2: Dòng thuế riêng (ACCOUNTING-SPEC C3)
+// Một dòng TAX như in trên giấy: nhãn nguyên văn + thuế suất nếu có in +
+// số tiền. Mẫu 001/002 cần 2 dòng: TAX 1 8.517% $9.60 và TAX 2 4.017% $3.90.
+
+@Model
+final class TaxLine {
+    var label: String = ""
+    var rateText: String? = nil
+    var amountCents: Int = 0
     var sortIndex: Int = 0
     var receipt: Receipt? = nil
 

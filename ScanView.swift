@@ -9,6 +9,11 @@ struct ScanDraft: Identifiable {
     let id = UUID()
     var result: ParseResult
     var imageFileName: String
+    /// WP2 bước 2: nguồn nạp (ACCOUNTING-SPEC F3) — ScanView ghi theo đúng
+    /// đường vào (.camera cho quét tài liệu, .photoLibrary cho chọn ảnh);
+    /// ReviewView.save() chép vào Receipt.sourceType lúc lưu. Mặc định
+    /// .unknown để mọi điểm dựng draft khác (nếu có) vẫn biên dịch được.
+    var sourceType: SourceType = .unknown
 }
 
 /// Màn Chụp: camera quét tài liệu của Apple (VisionKit) -> lưu ảnh gốc vào
@@ -108,7 +113,7 @@ struct ScanView: View {
                             return
                         }
                         // Build 1: xử lý trang đầu (hoá đơn dài nhiều trang -> bản sau).
-                        process(image: scan.imageOfPage(at: 0))
+                        process(image: scan.imageOfPage(at: 0), source: .camera)
                     },
                     onCancel: { showCamera = false },
                     onError: { error in
@@ -124,7 +129,7 @@ struct ScanView: View {
                 Task {
                     if let data = try? await newItem.loadTransferable(type: Data.self),
                        let image = UIImage(data: data) {
-                        process(image: image)
+                        process(image: image, source: .photoLibrary)
                     } else {
                         errorText = "Không mở được ảnh đã chọn."
                     }
@@ -139,7 +144,7 @@ struct ScanView: View {
 
     // MARK: Pipeline: lưu ảnh gốc -> OCR trên máy -> Parser -> bản nháp
 
-    private func process(image: UIImage) {
+    private func process(image: UIImage, source: SourceType) {
         guard let fileName = ImageStore.saveJPEG(image) else {
             errorText = "Không lưu được ảnh gốc vào máy — anh kiểm tra dung lượng trống giúp."
             return
@@ -157,7 +162,7 @@ struct ScanView: View {
                 }
                 let result = ReceiptParser.parse(lines: lines)
                 statusText = nil
-                draft = ScanDraft(result: result, imageFileName: fileName)
+                draft = ScanDraft(result: result, imageFileName: fileName, sourceType: source)
             }
         }
     }
