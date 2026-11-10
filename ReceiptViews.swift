@@ -67,6 +67,28 @@ struct RawTextDisclosure: View {
 
 let currentParserVersion = "build1-parser"
 
+// MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
+//
+// ParseResult.vendorSource là mã máy của identifyVendor ("tier1-exact" |
+// "tier1-fuzzy" | "tier2-anchor"); màn Kiểm Lại dịch ra chữ cho anh biết
+// tên tiệm đến từ bằng chứng nào. Giá trị lạ/không có -> nil (không hiện
+// nhãn bịa). Chỉ hiển thị — không nơi nào ghi nhãn này xuống model (model
+// WP2 không có trường nguồn tiệm; độ tin cậy đã nằm ở vendorConfidence
+// và kỷ luật Hộp Chờ đi qua warnings như cũ).
+
+func vendorSourceText(_ source: String?) -> String? {
+    switch source {
+    case "tier1-exact":
+        return "Nguồn tên tiệm: khớp tên in trên hoá đơn."
+    case "tier1-fuzzy":
+        return "Nguồn tên tiệm: khớp mờ tên in trên hoá đơn — anh kiểm tra giúp."
+    case "tier2-anchor":
+        return "Nguồn tên tiệm: nhận qua địa chỉ/số điện thoại — anh kiểm tra giúp."
+    default:
+        return nil
+    }
+}
+
 // MARK: - Cờ kiểm tra lại trên 1 hoá đơn đã lưu (chỉ hiển thị, không sửa số)
 
 func receiptFlags(_ receipt: Receipt) -> [String] {
@@ -301,6 +323,18 @@ struct ReceiptDetailView: View {
 
             Section("Thông tin") {
                 LabeledContent("Tiệm", value: receipt.vendor.isEmpty ? "—" : receipt.vendor)
+                // WP5 bước 3: bằng chứng liên hệ tiệm ĐÃ LƯU (model WP2) —
+                // chỉ hiện khi có dữ liệu; bản ghi cũ (trước WP5) để trống
+                // nên không đổi hành vi hiển thị.
+                if !receipt.vendorAddress.isEmpty {
+                    LabeledContent("Địa chỉ tiệm", value: receipt.vendorAddress)
+                }
+                if let phone = receipt.vendorPhone {
+                    LabeledContent("Điện thoại tiệm", value: phone)
+                }
+                if let store = receipt.storeNumber {
+                    LabeledContent("Mã cửa hàng", value: store)
+                }
                 LabeledContent("Ngày") {
                     Text(receipt.date, format: .dateTime.day().month().year().hour().minute())
                 }
@@ -545,6 +579,30 @@ struct ReviewView: View {
                             .font(.caption)
                             .foregroundStyle(draft.result.totalConfidence < 0.85 ? .orange : .secondary)
                     }
+                    // WP5 bước 3: nguồn tên tiệm + gợi ý nấc 3 (WP5-SPEC mục
+                    // 3/5/6) — nhãn nhỏ dưới các số tiền, KHÔNG che số; cảnh
+                    // báo chữ vẫn đi qua mục "Anh kiểm tra giúp" ở trên như
+                    // cũ, khối này chỉ cho anh thấy tên tiệm ĐẾN TỪ ĐÂU và
+                    // bằng chứng liên hệ trích được để đối chiếu khi sửa tay.
+                    if let sourceText = vendorSourceText(draft.result.vendorSource) {
+                        Text(sourceText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if draft.result.vendor == nil, let suggestion = draft.result.vendorSuggestion {
+                        Text("Chưa rõ tiệm — gợi ý từ món đặc trưng: \(suggestion) (chưa tự điền; đúng thì anh gõ vào ô Tiệm ở trên).")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    if let address = draft.result.vendorAddress {
+                        LabeledContent("Địa chỉ đọc được", value: address)
+                    }
+                    if let phone = draft.result.vendorPhone {
+                        LabeledContent("Điện thoại đọc được", value: phone)
+                    }
+                    if let store = draft.result.storeNumber {
+                        LabeledContent("Mã cửa hàng", value: store)
+                    }
                     if let last4 = draft.result.cardLast4 {
                         LabeledContent("Thẻ đọc được", value: "\(draft.result.cardBrand ?? "Thẻ") •• \(last4)")
                     } else {
@@ -699,6 +757,16 @@ struct ReviewView: View {
         receipt.sourceFileName = draft.sourceFileName
         receipt.originalImageFileNames = draft.originalFileNames
         receipt.rawTextFromPDFTextLayer = draft.rawTextIsPDFTextLayer
+        // --- WP5 bước 3: nối dây hạ cánh tiệm (WP5-SPEC mục 4) ---
+        // Địa chỉ/điện thoại/mã cửa hàng là bằng chứng TRÍCH NGUYÊN VĂN từ
+        // giấy (extractVendorContact ở Parser) — lưu đúng như đọc được,
+        // không suy từ tên tiệm anh sửa tay ở ô "Tiệm / Vendor" phía trên:
+        // anh đổi tên tiệm thì địa chỉ trên giấy vẫn là địa chỉ trên giấy.
+        // Model WP2: vendorAddress là String (mặc định "") nên nil của
+        // ParseResult hạ cánh thành ""; hai trường còn lại optional khớp.
+        receipt.vendorAddress = draft.result.vendorAddress ?? ""
+        receipt.vendorPhone = draft.result.vendorPhone
+        receipt.storeNumber = draft.result.storeNumber
         // Dòng thuế riêng: CHỈ lưu khi tổng thuế anh đã duyệt ở màn Kiểm Lại còn
         // khớp Σ dòng thuế máy đọc. Anh sửa lệch đi thì giữ tổng gộp (taxCents
         // ở trên) và KHÔNG lưu chi tiết dòng — lưu chi tiết cũ cạnh tổng mới sẽ
