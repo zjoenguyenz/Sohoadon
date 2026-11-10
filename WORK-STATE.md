@@ -1,27 +1,57 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 00:40 CST (ca trực: **WP4 BƯỚC 3 — PHẦN
-CHUẨN BỊ XONG** — bản test pipeline engine (b) iOS 26 cô lập ở
-`wp4-testb/` (5 file + workflow): RecognizeDocumentsRequest, target
-26.0/bundle riêng, API đối chiếu 2 nguồn độc lập trước khi viết
-(WWDC25 + code chạy Saidi), kiểm tĩnh đạt (ngoặc 3/3 file, ký hiệu đủ);
-thi đấu thật + QA chọn engine + chốt §5.6 + quyết HAZARD G4 chờ build
-cloud + máy ở mốc M1. Xem WP4-GATE.md mục BƯỚC 3 PHẦN CHUẨN BỊ. —
-TRƯỚC ĐÓ: **WP4 BƯỚC 2 XONG** —
-tiền xử lý ảnh phái sinh cho ứng viên (a) ở wp4-prep/ScanView.swift
-(bước 2 thuần cộng thêm +61/−0 trên nền bước 1; tổng so main +182/−16)
-+ F2b chịu tách dòng ở wp4-prep/Parser.swift MỚI (+106/−0 so build1,
-validate() nguyên văn — kiểm so byte). Kiểm chứng port Python F2b:
-**10/10 PASS** gồm §F trọn trên dòng tách (tổng + món) + hết-hạn-1-dòng
-+ hồi quy; hồi quy bước 1 vẫn 9/9. **FINDING ĐỎ:** F2b ghép LỆCH 1 nhịp
-trên dạng tiền-trước-nhãn của Mẫu 003 (fixture G4 khoá: subtotal=825,
-thuế=10516, total=None → cờ thiếu tổng giữ tờ ở Hộp Chờ) — chủ sửa là
-WP7 + quyết riêng ở cổng bước 3, xem WP4-GATE.md. WP4 chưa tới cổng:
-còn bước 3 (bản test engine (b) iOS 26 + thi đấu + QA ký chọn engine).
-Đẩy tài liệu ca trước: THÀNH CÔNG — commit docs/planning `507d5000`.
-Đẩy tài liệu ca này: THÀNH CÔNG — commit docs/planning `8adb22cd`
-(WORK-STATE.md + WP4-GATE.md + SCORECARD.md + wp4-fixtures/ f2b_port.py
-+ verify_f2b.py + verify-f2b-results.txt). Dòng ghi kết quả đẩy này sẽ
-lên GitHub cùng lần đẩy của ca sau. Code WP4 (bước 1+2) CHƯA đẩy — chờ cổng gói (bước 3).
+Cập nhật lần cuối: 2026-11-10 08:40 CST (ca trực: **TESTB ĐÃ DỰNG
+NỐT — SẴN SÀNG CHO BUỔI M1** — đúng lệnh Wally 07:52: rà soát sâu
+lại wp4-testb/ (từng dòng 3 file Swift, phái sinh khớp từng dòng với
+wp4-prep trên main, ngoặc đếm lại {3/3}·{33/33}·{21/21}, YAML sạch,
+khuôn project/workflow soi với app chính đã build xanh) + đóng gói
+**`SoHoaDon-TestB-Kit.zip`** 8.619 byte, sha256 `421ed9b5…a694`,
+giải nén đối chiếu khớp byte-for-byte; hash từng file ở
+wp4-testb/KIT-MANIFEST.txt; xem WP4-GATE.md mục BƯỚC 3 PHẦN DỰNG
+KIT. Kiểm từ xa trong ca: main vẫn `dc631b0` ✓; docs/planning vẫn
+`27b7970` → lần đẩy mơ hồ của ca 06:40 **KHÔNG lên được** (không
+trùng). **Bước tiếp theo: Wally trình anh thẻ đẩy kit TestB** (repo
+riêng/nhánh riêng, file ở gốc) → build cloud macos-26 lần đầu =
+phép kiểm biên dịch engine (b); XONG mới gọi anh cài MỘT lần (bản
+chính dc631b0 + TestB) + test lớn M1. Ca trực không tự đẩy code.)
+Cập nhật trước đó: 2026-11-10 07:52 CST (Wally: **CODE M1 ĐÃ ĐỦ TRÊN
+MAIN** — WP4 ứng viên (a) commit `122ee9b` + WP5 commit `dc631b0`, anh
+duyệt cả 2 thẻ đẩy; Wally tự diff khớp số ca báo: ScanView +182/−16,
+Parser +106/−0, ReceiptViews +68/−0. Còn thiếu cho buổi test M1: bản
+TestB engine (b) — ca trực dựng nốt từ wp4-testb/, XONG mới gọi anh
+cài MỘT lần + test lớn. Build cloud của dc631b0 Wally không xem được
+Actions — kiểm ở buổi M1.)
+Cập nhật trước đó: 2026-11-10 06:40 CST (ca trực: **WP5 BƯỚC 3 —
+NỐI DÂY + CHỐT CỔNG GÓI: WP5 ĐÃ TỚI CỔNG** — đúng bước tiếp theo
+hàng việc đã ghi: `wp5-prep/ReceiptViews.swift` MỚI (nền wp3-prep
+đã lên main, diff **+68/−0 thuần cộng thêm**): save() ghi
+vendorAddress/vendorPhone/storeNumber vào model WP2 (bằng chứng
+trích nguyên văn, không suy từ tên sửa tay); Kiểm Lại hiện nhãn
+nguồn tiệm (helper vendorSourceText) + gợi ý nấc 3 "chưa tự điền"
++ liên hệ đọc được; Chi Tiết hiện liên hệ đã lưu khi có dữ liệu.
+SCORECARD đã chấm lại (dòng 2026-11-10 bước 2+3): 003 tiệm
+✓-có-cờ ở tầng port, 002 giữ ✓. Kiểm chứng: port **19/19 + 7/7** +
+hồi quy **10/10 + 9/9** chạy lại; ngoặc 195/195 · 496/496 · 16/16.
+Đủ 3 chữ ký CỔNG GÓI — WP5-GATE.md mục BƯỚC 3 + CỔNG GÓI. Điểm mở
+trình Wally: currentParserVersion vẫn "build1-parser" (chốt nhãn
+khi trình đẩy, ca không tự đổi). **Chưa đẩy code** — chờ Wally
+trình anh duyệt thẻ đẩy ở chat chính, cùng nhịp M1. — TRƯỚC ĐÓ:
+**WP5 BƯỚC 2 — CODE SWIFT XONG** 04:40 CST (wp5-prep/Parser.swift
++323/−50; identifyVendor 3 nấc + C-11 + trích xuất; 19/19 + 7/7 +
+10/10 + 9/9 — xem WP5-GATE.md mục BƯỚC 2). — TRƯỚC ĐÓ NỮA:
+**WP5 BƯỚC 1 — ĐẶC TẢ XONG** 02:40 CST (WP5-SPEC.md + port 19/19,
+xem WP5-GATE.md mục BƯỚC 1). — TRƯỚC ĐÓ NỮA: **WP4 BƯỚC 3 — PHẦN
+CHUẨN BỊ XONG** 00:40 CST (bản test engine (b) iOS 26 cô lập ở
+wp4-testb/; thi đấu thật + QA chọn engine + chốt §5.6 + quyết
+HAZARD G4 chờ build cloud + máy ở mốc M1; xem WP4-GATE.md mục
+BƯỚC 3). — TRƯỚC ĐÓ NỮA: **WP4 BƯỚC 2 XONG** 22:40 CST 2026-11-09
+(tiền xử lý phái sinh + F2b parser, port 10/10 + hồi quy 9/9,
+FINDING ĐỎ G4 đã khoá fixture — chủ sửa WP7; xem WP4-GATE.md).
+Đẩy tài liệu: ca 06:40 thử đẩy 1 lần, kết quả không xác định —
+ca 08:40 ĐÃ KIỂM CHỨNG từ xa: nhánh docs/planning vẫn ở `27b7970`
+(06:47Z), lần đẩy đó KHÔNG lên được, không có bản trùng. Ca 08:40
+thử đẩy lại ĐÚNG 1 LẦN ở cuối ca (WORK-STATE.md, WP4-GATE.md,
+WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
+ĐẨY ở ca sau, không thử lại trong ca.
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
   viên; hàng mua để dùng → Supplies).
@@ -191,6 +221,48 @@ lên GitHub cùng lần đẩy của ca sau. Code WP4 (bước 1+2) CHƯA đẩy
   không tự vá ngoài đặc tả. Đủ 3 chữ ký nội bộ bước 2 — WP4-GATE.md
   mục BƯỚC 2. **CHƯA đẩy code**; biên dịch + Vision/CoreImage thật
   [CHƯA KIỂM CHỨNG] (bước 3/M1).
+- **WP5 — BƯỚC 1 (ĐẶC TẢ) ĐÃ XONG (2026-11-10 02:40 CST):** việc độc
+  lập làm song song lúc WP4 chờ M1. `WP5-SPEC.md` khoá: nấc 1 khớp
+  tên toàn-bộ-dòng (chuẩn hoá + exact-trước-mờ-sau, luật token chống
+  dương tính giả), nấc 2 neo phụ mạnh/yếu (seed chỉ 2 neo có bằng
+  chứng: street/ZIP Home Depot từ Mẫu 003, phone Sam's Tulsa từ Mẫu
+  001; ZIP đơn độc không đủ), nấc 3 món đặc trưng CHỈ gợi ý (seed
+  RỖNG — chưa mẫu nào khoá được), C-11 mở rộng validate() cho
+  tiệm/ngày theo mẫu ngưỡng total sẵn có; đường rơi dòng-đầu bị bỏ
+  về cấu trúc. Ghi rõ WP5 không đổi model (không rủi ro di trú).
+  Port Python `wp5-fixtures/vendor_port.py` + `verify_vendor.py`:
+  **19/19 PASS** (`verify-vendor-results.txt`) — ca thật: văn bản OCR
+  Mẫu 003 → nấc 2 ra "The Home Depot" + cờ (cap 0.5); đối chứng âm
+  slogan-không-neo → trống + cờ. Đủ 3 chữ ký nội bộ bước 1 —
+  WP5-GATE.md. **CHƯA viết Swift** (bước 2); điểm cổng thật [CHƯA
+  KIỂM CHỨNG] (bước 2 + M1).
+- **WP5 — BƯỚC 2 (CODE SWIFT) ĐÃ XONG (2026-11-10 04:40 CST):**
+  `wp5-prep/Parser.swift` (nền wp4-prep, diff **+323/−50** — 50 dòng
+  xoá đã kiểm từng dòng: isSams + khối vendor cũ + đường rơi
+  dòng-đầu): `identifyVendor` 3 nấc dịch trung thực port (chạy trước
+  rẽ nhánh, nguồn tên tiệm duy nhất), `ParseResult` +6 trường hạ
+  cánh WP2, `validate()` thêm khối C-11 tiệm/ngày (phần số học
+  nguyên văn), `extractVendorContact` trích nguyên văn địa chỉ/điện
+  thoại/mã cửa hàng. Kiểm chứng: port nhận diện **19/19** (không đổi)
+  + port trích xuất mới `wp5-fixtures/extract_port.py` **7/7** (E1
+  thật Mẫu 003: địa chỉ nguyên văn "9808 E 71ST ST TULSA OK 74133",
+  không vớ phone/store giả) + hồi quy F2b **10/10** + rowmerge
+  **9/9**; kiểm tĩnh ngoặc cân bằng 3 loại, caller ngoài chỉ dùng
+  `parse(lines:)` không đổi chữ ký. Tên chuẩn đổi "Home Depot" →
+  "The Home Depot" (theo port/đáp án; dedupeKey generic đổi theo —
+  ghi ở WP5-GATE.md mục BƯỚC 2). Đủ 3 chữ ký nội bộ bước 2.
+  **CHƯA đẩy code**; biên dịch + lookbehind regex trên iOS [CHƯA
+  KIỂM CHỨNG] (build cloud khi trình cổng / M1).
+- **WP5 — BƯỚC 3 (NỐI DÂY + CHỐT CỔNG) ĐÃ XONG (2026-11-10
+  06:40 CST) — WP5 ĐÃ TỚI CỔNG GÓI:** `wp5-prep/ReceiptViews.swift`
+  (nền wp3-prep/main, **+68/−0**): save() ghi 3 trường liên hệ tiệm
+  vào model WP2; Kiểm Lại hiện nguồn tiệm + gợi ý nấc 3 + liên hệ
+  đọc được; Chi Tiết hiện liên hệ đã lưu. SCORECARD chấm lại: 003
+  tiệm ✓-có-cờ (tầng port), 002 giữ ✓; port 19/19 + 7/7, hồi quy
+  10/10 + 9/9. Đủ 3 chữ ký cổng gói — WP5-GATE.md mục BƯỚC 3.
+  **CHƯA đẩy code**; chờ Wally trình anh duyệt thẻ đẩy ở chat chính
+  cùng nhịp M1 (WP4 còn chờ thi đấu trên máy). Điểm mở: nhãn
+  currentParserVersion — Wally chốt khi trình đẩy.
 
 ## Hàng việc (theo BUILD2-MASTER-PLAN, tuần tự tuyệt đối)
 1. ~~**WP0** — Đóng băng bộ mẫu & bảng điểm~~ **ĐÃ XONG 2026-11-09 02:41 CST**:
@@ -233,8 +305,10 @@ lên GitHub cùng lần đẩy của ca sau. Code WP4 (bước 1+2) CHƯA đẩy
    WP4 bước 2 ở Vị trí hiện tại + WP4-GATE.md mục BƯỚC 2).
    **Bước 3 — PHẦN CHUẨN BỊ ĐÃ XONG 2026-11-10 00:40 CST** (bản test
    engine (b) cô lập ở wp4-testb/ — xem mục BƯỚC 3 trong WP4-GATE.md).
-   **Bước tiếp theo:** bước 3 phần chạy — đẩy wp4-testb lên repo test
-   + build cloud (khi Wally trình cổng) → ở M1: chạy thi đấu 2 ứng
+   **Phần dựng kit ĐÃ XONG 2026-11-10 08:40 CST** (SoHoaDon-TestB-
+   Kit.zip sẵn sàng — xem mục ở đầu file + WP4-GATE mục DỰNG KIT).
+   **Bước tiếp theo:** bước 3 phần chạy — Wally trình anh thẻ đẩy kit
+   TestB lên repo test/nhánh riêng + build cloud → ở M1: chạy thi đấu 2 ứng
    viên × 2 cấu hình trên bộ mẫu + lập 002-C + QA ký chọn engine +
    loại engine thua + quyết nền tảng §5.6 (project.yml vẫn 17.0 —
    Wally xử lý khi trình cổng) + QUYẾT RIÊNG cho finding HAZARD G4
@@ -242,6 +316,17 @@ lên GitHub cùng lần đẩy của ca sau. Code WP4 (bước 1+2) CHƯA đẩy
    hạn là WP7 — WP7 không mở khi chưa có thiết kế thứ tự khối tổng
    kèm fixture G4). Trong lúc chờ M1, ca sau có thể chuẩn bị song
    song việc độc lập: đặc tả WP5 (nhận diện tiệm) theo Master Plan.
+8. **WP5** — Nhận diện tiệm & kỷ luật độ tin cậy (C-18, C-11):
+   **ĐÃ TỚI CỔNG GÓI 2026-11-10 06:40 CST** — bước 1 đặc tả +
+   bước 2 code Swift (Parser +323/−50) + bước 3 nối dây/hiển thị/
+   SCORECARD (ReceiptViews +68/−0) đều xong, đủ 3 chữ ký cổng gói
+   (WP5-GATE.md mục BƯỚC 3). **Bước tiếp theo:** Wally trình anh
+   duyệt THẺ ĐẨY CODE WP5 (2 file wp5-prep) ở chat chính, cùng nhịp
+   mốc M1 — kèm quyết nhãn currentParserVersion. Sau WP5, phần còn
+   lại của M1 là WP4 bước 3 phần chạy (thi đấu engine trên máy +
+   002-C + quyết §5.6 + quyết HAZARD G4) — việc đó cần máy/build
+   cloud, không phải việc ca trực tự chạy được. WP5 thuộc mốc M1 —
+   không xin anh test riêng gói này.
 
 ## Điểm dừng chờ anh (ghi rõ, không tự vượt)
 - ~~WP1: thẻ duyệt ĐẨY CODE lên main~~ ĐÃ XONG 2026-11-09 10:43–10:44 CST
@@ -268,6 +353,11 @@ lên GitHub cùng lần đẩy của ca sau. Code WP4 (bước 1+2) CHƯA đẩy
   code lên main là WP3 đóng, mở WP4. Kèm điểm mở để Wally xử lý khi
   trình: project.yml vẫn iOS 17.0 trong khi làn thiết kế đã chốt chỉ
   iOS 26 (17:32 CST) — quyết nền tảng gắn WP4 (§5.6).
+- **WP5 ĐÃ TỚI CỔNG NỘI BỘ (2026-11-10 06:40 CST):** chờ Wally trình
+  anh duyệt THẺ ĐẨY CODE WP5 lên main ở chat chính (2 file wp5-prep:
+  Parser.swift + ReceiptViews.swift). Theo luật mốc lớn KHÔNG kèm yêu
+  cầu cài/test; kèm điểm mở: nhãn currentParserVersion vẫn
+  "build1-parser" — Wally chốt khi trình.
 - Mọi lần ĐẨY CODE lên main khác (thẻ duyệt của hệ thống sẽ tới anh).
 - WP3: file PDF Sam's (chưa có) — nghiệm thu trên PDF thật khác trước, ghi chờ.
 - WP4: mẫu 002-C chụp camera thật + bản test engine iOS 26 cài trên máy anh.

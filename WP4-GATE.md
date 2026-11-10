@@ -252,3 +252,71 @@ gộp mốc M1 theo luật mốc lớn, KHÔNG xin anh cài/test riêng gói nà
 - QA ✓ — API có bằng chứng 2 nguồn trước khi viết (TEAM.md #4); giới
   hạn confidence-theo-dòng của (b) ghi trước trong README để văn bản
   chọn engine phải cân — không để tới lúc chấm mới phát hiện.
+
+---
+
+# WP4 — BƯỚC 3 PHẦN DỰNG KIT: TESTB ĐÃ SẴN SÀNG ĐẨY BUILD (2026-11-10 08:40 CST)
+**Việc đã làm — đúng MỘT bước theo lệnh Wally ở đầu WORK-STATE (07:52
+CST: "ca trực dựng nốt bản TestB từ wp4-testb/"):** rà soát sâu lại
+toàn bộ `wp4-testb/` như một vòng build bị chặn ở phía mình, rồi đóng
+gói kit giao được ngay — KHÔNG đẩy code (đúng luật ca trực: code trình
+Wally ở chat chính; thẻ đẩy là của anh).
+
+## Rà soát sâu (bằng chứng đo lại trong ca này, không chép số cũ)
+- Đọc lại từng dòng 3 file Swift: `EngineB.recognize` chỉ dùng thành
+  viên API trong whitelist 2 nguồn (đếm máy: recognize định nghĩa 1,
+  điểm dùng 2 ở ContentView; derivedImage định nghĩa 1, điểm dùng 1);
+  `derivedImage` đối chiếu TỪNG DÒNG với `derivedOCRImage` của
+  wp4-prep (nay đã trên main ở commit 122ee9b): cùng ngưỡng 0.5, cùng
+  thứ tự CIPerspectiveCorrection → CIColorControls (0 / 1.1 / 0), cùng
+  khoá KVC, fail-open nil — khớp hoàn toàn, kể cả mẫu
+  `(detect.results ?? [])` dùng chung với bản (a).
+- Cân bằng ngoặc đếm lại bằng script: TestBApp {3/3} · ContentView
+  {33/33} (64/64) [3/3] · EngineB {21/21} (54/54) [5/5] — khớp số ca
+  00:40 đã ghi. YAML của `project.yml` + workflow: parse sạch.
+- `project.yml` soi với khuôn app chính (ios/project.yml — bản ĐÃ
+  build xanh nhiều vòng): cùng mẫu INFOPLIST_FILE + khối info:, chỉ
+  khác tên/scheme/bundle/target 26.0. Workflow soi với workflow app
+  chính: cùng khuôn từng bước, chỉ đổi runner macos-26, scheme
+  SoHoaDonTestB, artifact SoHoaDonTestB-IPA.
+- Kiểm từ xa trong ca: main vẫn ở `dc631b0` (WP5) — khớp ghi nhận
+  07:52 của Wally; nhánh docs/planning vẫn ở `27b7970` (06:47Z) →
+  lần đẩy không xác định của ca 06:40 CST **KHÔNG lên được**, không
+  có bản trùng trên nhánh; ca này đẩy lại tài liệu ở cuối ca theo
+  luật 1 lần.
+
+## Sản phẩm giao được
+- **`SoHoaDon-TestB-Kit.zip`** (thư mục receipt-app/, 8.619 byte,
+  sha256 `421ed9b59c3a62cdfdf806cafb2224ccf815e2024c2162aa28293fe209aba694`):
+  chứa đúng 6 file của wp4-testb/ dưới thư mục `testb/` (gồm cả
+  `.github/workflows/build-ipa.yml`); đã giải nén đối chiếu
+  `diff -r`: khớp byte-for-byte với wp4-testb/ (trừ KIT-MANIFEST.txt
+  nằm ngoài zip). Hash từng file: `wp4-testb/KIT-MANIFEST.txt`.
+- Cách Wally dùng: đẩy nội dung kit thành repo riêng hoặc nhánh riêng
+  (file ở gốc repo) → Actions tự chạy (push lên main của repo đó hoặc
+  workflow_dispatch) → artifact SoHoaDonTestB-IPA → anh ký Feather +
+  cài, gộp vào buổi test M1 MỘT lần cùng bản chính dc631b0.
+
+## Tuyên bố trung thực 3 phần — PHẦN DỰNG KIT
+- **Đã chứng minh:** kit tồn tại, nguyên vẹn byte-for-byte, cấu trúc
+  soi với khuôn Test 0/app chính đã build được; thuật toán phái sinh
+  (b) ≡ (a) từng dòng; trạng thái 2 nhánh GitHub đã đọc trực tiếp
+  trong ca (main dc631b0, docs/planning 27b7970).
+- **Chưa chứng minh:** biên dịch trên runner macos-26/Xcode 26
+  [CHƯA KIỂM CHỨNG — chỉ build cloud lần đầu mới trả lời, gồm cả
+  `tables/lists` có đếm được như đã viết]; hành vi
+  RecognizeDocumentsRequest trên ảnh mẫu thật.
+- **Chưa làm (đúng phạm vi):** đẩy kit lên repo/nhánh + xem kết quả
+  build cloud (trình Wally ở chat chính — thẻ đẩy của anh); thi đấu
+  2 ứng viên + QA ký chọn engine + chốt §5.6 + quyết HAZARD G4 +
+  mẫu 002-C — tất cả ở buổi M1 trên máy anh.
+
+## Chữ ký nội bộ — PHẦN DỰNG KIT
+- Design ✓ — không đổi gì ở app test; README trong kit đã ghi cách
+  build + cách dùng ở M1.
+- Code ✓ — rà từng dòng đủ 3 file + 2 file cấu hình; không sửa dòng
+  code nào trong ca này (không có khiếm khuyết nào được chứng minh
+  bằng bằng chứng; không sửa theo suy đoán — TEAM.md #4).
+- QA ✓ — số đếm máy khớp hồ sơ cổng trước; hash kit + manifest lưu
+  kèm; kết luận từ xa đọc trực tiếp từ GitHub trong ca, không suy
+  từ biên nhận đẩy cũ.
