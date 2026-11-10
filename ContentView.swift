@@ -11,14 +11,23 @@ struct ContentView: View {
     @State private var unlocked = false
     @State private var lockNote: String? = nil
     @Environment(\.scenePhase) private var scenePhase
+    /// WP3 bước 2: file anh mở bằng "Mở bằng Sổ Hóa Đơn" / Share Sheet
+    /// (khai báo CFBundleDocumentTypes ở project.yml). URL chỉ được GIỮ
+    /// ở đây — việc đọc file diễn ra đồng bộ trong ScanView như đường
+    /// Files; app đang khoá Face ID thì URL chờ ở đây, mở khoá xong mới
+    /// truyền xuống (không đọc file khi chưa qua cổng khoá).
+    @State private var pendingImportURLs: [URL] = []
 
     var body: some View {
         Group {
             if !lockEnabled || unlocked {
-                TabShellView(lockNote: lockNote)
+                TabShellView(lockNote: lockNote, pendingImportURLs: $pendingImportURLs)
             } else {
                 lockScreen
             }
+        }
+        .onOpenURL { url in
+            pendingImportURLs.append(url)
         }
         .onAppear { authenticateIfNeeded() }
         .onChange(of: scenePhase) { _, newPhase in
@@ -81,6 +90,8 @@ struct ContentView: View {
 
 struct TabShellView: View {
     var lockNote: String? = nil
+    /// WP3 bước 2: hàng chờ file mở-từ-ngoài, truyền thẳng xuống ScanView.
+    @Binding var pendingImportURLs: [URL]
     @Environment(\.modelContext) private var modelContext
     @State private var selectedTab = 0
     @State private var seeded = false
@@ -95,7 +106,7 @@ struct TabShellView: View {
                 .tabItem { Label("Hoá Đơn", systemImage: "doc.text.fill") }
                 .tag(1)
 
-            ScanView()
+            ScanView(externalImportURLs: $pendingImportURLs)
                 .tabItem { Label("CHỤP", systemImage: "camera.fill") }
                 .tag(2)
 
@@ -108,6 +119,11 @@ struct TabShellView: View {
                 .tag(4)
         }
         .task { seedStarterCardIfNeeded() }
+        // WP3 bước 2: có file mở-từ-ngoài đang chờ -> nhảy thẳng sang
+        // tab CHỤP để ScanView hút vào hàng chờ và mở màn Kiểm Lại.
+        .onChange(of: pendingImportURLs) { _, urls in
+            if !urls.isEmpty { selectedTab = 2 }
+        }
     }
 
     /// Nạp sẵn thẻ đã chốt với anh: Mastercard Debit •• 2586 = Business.

@@ -33,6 +33,17 @@ struct ClassificationBadge: View {
 // truyền nhãn "Văn bản trong PDF" ở 2 điểm gọi — không dựng lại viewer.
 // WP1 chỉ có đường OCR nên cả 2 điểm gọi đều dùng nhãn OCR (mặc định).
 
+/// WP3 bước 2 — QUYẾT NHÃN F3 (chốt ở cổng WP3): nhãn phải nói đúng
+/// ĐƯỜNG nào sinh ra chữ (CODE-AUDIT F3 mục 3), không chỉ nguồn nạp:
+/// lớp chữ PDF -> "Văn bản trong PDF"; PDF render->OCR -> "Văn bản OCR
+/// gốc (từ PDF)"; mọi đường ảnh -> "Văn bản OCR gốc". Một helper dùng
+/// chung cho Kiểm Lại (theo draft) và Chi Tiết (theo bản ghi đã lưu).
+func rawTextTitle(sourceType: SourceType, isPDFTextLayer: Bool) -> String {
+    if isPDFTextLayer { return "Văn bản trong PDF" }
+    if sourceType == .pdfImport { return "Văn bản OCR gốc (từ PDF)" }
+    return "Văn bản OCR gốc"
+}
+
 struct RawTextDisclosure: View {
     var text: String
     var title: String = "Văn bản OCR gốc"
@@ -319,10 +330,15 @@ struct ReceiptDetailView: View {
                 }
             }
 
-            // F3 (WP1): văn bản OCR gốc đã lưu — chỉ hiện khi có chữ (CODE-AUDIT F3 mục 2).
+            // F3 (WP1): văn bản đọc thô đã lưu — chỉ hiện khi có chữ (CODE-AUDIT
+            // F3 mục 2). WP3 đóng F3 mục 3: nhãn trung thực theo nguồn —
+            // hoá đơn nạp từ PDF lớp chữ thì ghi "Văn bản trong PDF", còn
+            // lại là "Văn bản OCR gốc" (mặc định của component).
             if !receipt.ocrRawText.isEmpty {
                 Section {
-                    RawTextDisclosure(text: receipt.ocrRawText)
+                    RawTextDisclosure(text: receipt.ocrRawText,
+                                      title: rawTextTitle(sourceType: receipt.sourceType,
+                                                           isPDFTextLayer: receipt.rawTextFromPDFTextLayer))
                 }
             }
 
@@ -483,13 +499,16 @@ struct ReviewView: View {
                     }
                 }
 
-                // F3 (WP1): văn bản OCR gốc ngay dưới ảnh gốc (CODE-AUDIT F3 mục 1).
-                // Draft chỉ được tạo khi OCR có dòng chữ (ScanView.process chặn
-                // lines.isEmpty) nên rawText luôn có nội dung; vẫn giữ guard
-                // rỗng cho đối xứng với màn Chi Tiết.
+                // F3 (WP1): văn bản đọc thô ngay dưới bằng chứng gốc (CODE-AUDIT
+                // F3 mục 1). Đường OCR luôn có chữ mới tạo được draft; đường PDF
+                // lớp chữ cũng luôn có chữ (không có chữ thì đã rẽ render->OCR).
+                // Vẫn giữ guard rỗng cho đối xứng với màn Chi Tiết.
+                // WP3 đóng F3 mục 3: nhãn theo nguồn nạp như màn Chi Tiết.
                 if !draft.result.rawText.isEmpty {
                     Section {
-                        RawTextDisclosure(text: draft.result.rawText)
+                        RawTextDisclosure(text: draft.result.rawText,
+                                          title: rawTextTitle(sourceType: draft.sourceType,
+                                                               isPDFTextLayer: draft.rawTextIsPDFTextLayer))
                     }
                 }
 
@@ -672,6 +691,14 @@ struct ReviewView: View {
             }
         }
         receipt.parserVersion = currentParserVersion
+        // --- WP3: nối dây nguồn nạp file ---
+        // Tên file gốc anh đã chọn (chỉ đường Files mới có) + danh sách file
+        // bằng chứng gốc: PDF nạp vào giữ file PDF nguyên byte trong
+        // ReceiptImages và tên của nó nằm ở đây (kèm imageFileName khi lớp
+        // chữ đọc thẳng). Đường camera/Photos: cả hai để trống/nil như cũ.
+        receipt.sourceFileName = draft.sourceFileName
+        receipt.originalImageFileNames = draft.originalFileNames
+        receipt.rawTextFromPDFTextLayer = draft.rawTextIsPDFTextLayer
         // Dòng thuế riêng: CHỈ lưu khi tổng thuế anh đã duyệt ở màn Kiểm Lại còn
         // khớp Σ dòng thuế máy đọc. Anh sửa lệch đi thì giữ tổng gộp (taxCents
         // ở trên) và KHÔNG lưu chi tiết dòng — lưu chi tiết cũ cạnh tổng mới sẽ

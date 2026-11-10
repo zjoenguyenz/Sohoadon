@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import PDFKit
 
 // MARK: - Phân loại Cá nhân / Business / Chưa rõ
 
@@ -105,6 +106,11 @@ enum SourceType: String, CaseIterable {
     case pdfImport
     case screenshot
     case unknown
+    /// WP3: ảnh nạp từ app Files (không qua thư viện Photos) — tách khỏi
+    /// .photoLibrary để dấu vết nguồn nạp trung thực. Thuần cộng thêm một
+    /// case rawValue String mới: bản ghi cũ không đổi nghĩa, di trú nhẹ
+    /// không bị ảnh hưởng (xem WP3-GATE.md).
+    case fileImport
 }
 
 // MARK: - WP2: Cờ vốn hoá cho mục Thiết Bị (ACCOUNTING-SPEC E7)
@@ -221,6 +227,12 @@ final class Receipt {
     /// F3: nguồn nạp — SourceType.rawValue + tên file gốc nếu có.
     var sourceTypeRaw: String = SourceType.unknown.rawValue
     var sourceFileName: String? = nil
+    /// WP3 bước 2 (F3 mục 3): true = ocrRawText trích thẳng từ lớp chữ
+    /// PDF; false = chữ do OCR sinh ra (kể cả OCR trên ảnh render của
+    /// PDF). Thuần cộng thêm, mặc định false: bản ghi cũ đọc là false —
+    /// và chưa có bản ghi .pdfImport nào tồn tại trước WP3 nên không
+    /// bản ghi cũ nào bị nhãn sai vì trường này.
+    var rawTextFromPDFTextLayer: Bool = false
     /// F6: liên kết bản trùng — KHÔNG xoá bản trùng (điều cấm 3). stableID
     /// rỗng ở bản ghi cũ; bản ghi mới được cấp ở bước nối dây lưu (WP2 bước
     /// sau / WP6, nơi luật trùng được thực thi) — xem WP2-GATE.md.
@@ -428,9 +440,11 @@ func centsToDollarsText(_ cents: Int?) -> String {
 
 // MARK: - Kho ảnh gốc (Documents/ReceiptImages — thư mục riêng của app)
 
-/// Build 1: ảnh chỉ lưu trong thư mục của app (hiện trong Files → Trên iPhone → Sổ Hóa Đơn
-/// nhờ UIFileSharingEnabled). KHÔNG dùng fileImporter chọn thư mục ngoài — trên máy anh
+/// Bằng chứng gốc lưu trong thư mục của app (hiện trong Files → Trên iPhone → Sổ Hóa Đơn
+/// nhờ UIFileSharingEnabled). Cấm fileImporter CHỌN THƯ MỤC ngoài — trên máy anh
 /// (iOS 27.2) đường đó tự huỷ im lặng khi chọn thư mục của chính app (Test 0 đã kiểm chứng).
+/// WP3 dùng fileImporter CHỌN FILE (chế độ khác, xem ScanView) — vẫn cần bài kiểm
+/// riêng trên máy anh ở mốc M1 như ghi ở WP3-GATE.md.
 enum ImageStore {
     static var directory: URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -453,9 +467,35 @@ enum ImageStore {
         }
     }
 
+    /// WP3: lưu file gốc NGUYÊN BYTE (PDF) vào cùng thư mục bằng chứng.
+    /// Trả tên file đã lưu (UUID + đuôi) hoặc nil khi ghi lỗi — nơi gọi phải
+    /// báo lỗi thật cho anh, không giả vờ đã lưu (luật B-2).
+    static func saveFile(data: Data, fileExtension ext: String) -> String? {
+        let name = UUID().uuidString + "." + ext
+        let url = directory.appendingPathComponent(name)
+        do {
+            try data.write(to: url)
+            return name
+        } catch {
+            return nil
+        }
+    }
+
     static func load(fileName: String) -> UIImage? {
         guard !fileName.isEmpty else { return nil }
         let url = directory.appendingPathComponent(fileName)
+        if fileName.lowercased().hasSuffix(".pdf") {
+            // WP3 (CODE-AUDIT F1 mục 5): bằng chứng là PDF gốc — byte gốc giữ
+            // nguyên trong thư mục, hiển thị bằng render trang 1 (PDFKit).
+            // Mọi điểm gọi cũ (dòng danh sách / Chi Tiết / Kiểm Lại) dùng
+            // chung hàm này nên tự chạy đúng mà không phải rẽ nhánh từng nơi.
+            guard let doc = PDFDocument(url: url), let page = doc.page(at: 0) else { return nil }
+            let bounds = page.bounds(for: .cropBox)
+            guard bounds.width > 0, bounds.height > 0 else { return nil }
+            let targetWidth: CGFloat = 1240
+            let size = CGSize(width: targetWidth, height: targetWidth * bounds.height / bounds.width)
+            return page.thumbnail(of: size, for: .cropBox)
+        }
         guard let data = try? Data(contentsOf: url) else { return nil }
         return UIImage(data: data)
     }
