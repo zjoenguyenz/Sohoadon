@@ -395,7 +395,7 @@ struct ScanView: View {
         for index in 0..<doc.pageCount {
             guard let page = doc.page(at: index), let text = page.string else { continue }
             for rawLine in text.components(separatedBy: .newlines) {
-                let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+                let trimmed = rawLine.trimmingCharacters(in: CharacterSet.whitespaces)
                 if !trimmed.isEmpty {
                     lines.append(OCRLine(text: trimmed, confidence: 1.0))
                 }
@@ -580,7 +580,7 @@ struct ScanView: View {
             let mappedBox = boxTransform?(fragment.box) ?? fragment.box
             provisional.append(OCRFragment2(
                 fragmentID: index,
-                text: fragment.text.trimmingCharacters(in: .whitespaces),
+                text: fragment.text.trimmingCharacters(in: CharacterSet.whitespaces),
                 alternates: fragment.alternates,
                 confidence: fragment.confidence,
                 box: OCRFragmentMerger.clampedBox(mappedBox),
@@ -1025,7 +1025,7 @@ struct ScanView: View {
             for (index, observation) in lineObservations.enumerated() {
                 let candidates = observation.topCandidates(3)
                 guard let top = candidates.first else { continue }
-                let text = top.string.trimmingCharacters(in: .whitespaces)
+                let text = top.string.trimmingCharacters(in: CharacterSet.whitespaces)
                 guard !text.isEmpty else { continue }
                 let rect = observation.boundingRegion.normalizedPath.boundingBoxOfPath
                 guard !rect.isNull, !rect.isInfinite, rect.width > 0, rect.height > 0 else { continue }
@@ -2030,6 +2030,9 @@ enum ReceiptGeometry {
             var midY: Double
         }
         var samples: [Sample] = []
+        /// Số dòng bị bỏ vì `boundingBox(for:)` ném lỗi — ghi vào
+        /// quyết định chẩn đoán ở cuối hàm, không nuốt im lặng.
+        var boxLookupFailures = 0
         for observation in request.results ?? [] {
             guard let candidate = observation.topCandidates(1).first else { continue }
             var wordRanges: [Range<String.Index>] = []
@@ -2037,15 +2040,32 @@ enum ReceiptGeometry {
                                                  options: .byWords) { _, range, _, _ in
                 wordRanges.append(range)
             }
-            guard wordRanges.count >= 2,
-                  let firstBox = candidate.boundingBox(for: wordRanges.first!),
-                  let lastBox = candidate.boundingBox(for: wordRanges.last!) else { continue }
+            guard wordRanges.count >= 2 else { continue }
+            // P2-FIX (run #28, lỗi 13–14): từ SDK iOS 18, `boundingBox
+            // (for:)` của VNRecognizedText là hàm THROWS (ném khi khoảng
+            // chữ không hợp lệ). Lỗi ở 1 dòng chỉ được bỏ dòng đó
+            // (fail-open như mọi tầng của đường ống) và ĐẾM vào chẩn
+            // đoán ở cuối hàm — không để một dòng hỏng giết cả lượt
+            // thăm dò, cũng không nuốt lỗi im lặng.
+            let firstBoxOpt: VNRectangleObservation?
+            let lastBoxOpt: VNRectangleObservation?
+            do {
+                firstBoxOpt = try candidate.boundingBox(for: wordRanges.first!)
+                lastBoxOpt = try candidate.boundingBox(for: wordRanges.last!)
+            } catch {
+                boxLookupFailures += 1
+                continue
+            }
+            guard let firstBox = firstBoxOpt, let lastBox = lastBoxOpt else { continue }
             // Tâm từ, đổi sang toạ độ pixel gốc TRÊN-TRÁI (y hướng
             // xuống) — góc tính trong hệ này là góc dốc MÀN HÌNH.
-            let x1 = Double(firstBox.midX) * imageW
-            let y1 = (1.0 - Double(firstBox.midY)) * imageH
-            let x2 = Double(lastBox.midX) * imageW
-            let y2 = (1.0 - Double(lastBox.midY)) * imageH
+            // P2-FIX (run #28, lỗi 8–11): firstBox/lastBox là
+            // VNRectangleObservation — .midX/.midY là thuộc tính của
+            // CGRect, phải qua .boundingBox.
+            let x1 = Double(firstBox.boundingBox.midX) * imageW
+            let y1 = (1.0 - Double(firstBox.boundingBox.midY)) * imageH
+            let x2 = Double(lastBox.boundingBox.midX) * imageW
+            let y2 = (1.0 - Double(lastBox.boundingBox.midY)) * imageH
             let dx = x2 - x1
             guard dx >= 0.06 * imageW else { continue }
             let angle = atan2(y2 - y1, dx) * 180.0 / .pi
@@ -2055,6 +2075,7 @@ enum ReceiptGeometry {
         assessment.sampleLineCount = samples.count
         guard samples.count >= PipelineConstants.skewMinReliableLines else {
             assessment.decision = "Chỉ \(samples.count) dòng đo được góc (< \(PipelineConstants.skewMinReliableLines)) — không đủ tin để nắn."
+                + (boxLookupFailures > 0 ? " (\(boxLookupFailures) dòng bị bỏ vì hộp từ ném lỗi.)" : "")
             return assessment
         }
         assessment.globalDegrees = weightedMedian(samples.map { (value: $0.angle, weight: $0.weight) })
@@ -2074,6 +2095,9 @@ enum ReceiptGeometry {
         assessment.decision = assessment.reliable
             ? "Đo được góc nghiêng từ \(samples.count) dòng."
             : "Có \(samples.count) dòng nhưng trung vị góc không xác định — không nắn."
+        if boxLookupFailures > 0 {
+            assessment.decision += " (\(boxLookupFailures) dòng bị bỏ vì hộp từ ném lỗi.)"
+        }
         return assessment
     }
 
@@ -2492,7 +2516,7 @@ enum OCRFragmentMerger {
     /// mảnh đại diện theo thứ tự đọc và ánh xạ lại spans.
     static func assemble(_ fragmentsIn: [OCRFragment2]) -> Assembly {
         let fragments = fragmentsIn.filter {
-            !$0.text.trimmingCharacters(in: .whitespaces).isEmpty
+            !$0.text.trimmingCharacters(in: CharacterSet.whitespaces).isEmpty
         }
         guard !fragments.isEmpty else { return Assembly(lines: [], representatives: []) }
         let clusters = clusterDuplicates(fragments)
