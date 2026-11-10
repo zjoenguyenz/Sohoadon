@@ -1,5 +1,41 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 08:40 CST (ca trực: **TESTB ĐÃ DỰNG
+Cập nhật lần cuối: 2026-11-10 10:40 CST (ca trực: **KIỂM CHỨNG RUN
+#12 + #13 — CẢ HAI VẪN QUEUED, CHƯA CÓ KẾT QUẢ BUILD** — đúng bước
+tiếp theo sau mục 10:37: ca giao trình duyệt đọc trực tiếp trang
+Actions của repo zjoenguyenz13/Sohoadon lúc 10:41–10:43 CST (giờ đo
+của hệ thống). Run #12: nhánh main, commit `5652aaf`, kích hoạt
+10:35 CST — trạng thái **Queued**, job build queued, thời lượng "–",
+artifact "–" (chưa có). Run #13: nhánh testb, commit `7e92a04`,
+kích hoạt 10:36 CST — trạng thái **Queued**, job build queued,
+artifact "–" (chưa có). Kiểm lại sau 60 giây (~10:43) cả hai VẪN
+Queued — chưa bắt đầu chạy, nên chưa xanh/đỏ, chưa artifact IPA,
+chưa dòng lỗi nào để sửa. **Bước tiếp theo: ca sau (hoặc Wally ở
+chat chính) kiểm lại 2 run này tới trạng thái cuối; XANH + artifact
+tồn tại mới tính tiếp buổi M1 theo luật kiểm chứng 10:13; ĐỎ thì
+mang dòng lỗi về tự sửa theo luật 10:18.** Tuyên bố trung thực:
+đã chứng minh = 2 run đúng nhánh/commit và còn Queued ở 10:43;
+chưa chứng minh = kết quả biên dịch của workflow hợp nhất trên cả
+2 nhánh; chưa làm = chưa có IPA nào được kêu anh tải/cài.)
+Cập nhật trước đó: 2026-11-10 10:37 CST (WALLY TỰ SỬA WORKFLOW
+BẰNG TRÌNH DUYỆT — theo luật tự làm của anh 10:18): anh đã lưu đăng
+nhập GitHub vào kho bảo mật + cho mã xác thực một lần; trình duyệt
+của Wally đăng nhập được (tài khoản thật là **zjoenguyenz13** — địa
+chỉ zjoenguyenz/Sohoadon tự chuyển hướng về zjoenguyenz13/Sohoadon)
+và **đã thay file workflow hợp nhất trên CẢ HAI nhánh**: main commit
+`5652aaf`, testb commit `7e92a04` (kiểm lại trên web: 63 dòng, tên
+"Build unsigned IPA", macos-26, tự nhận diện project/scheme, chạy
+khi đẩy lên main hoặc testb). Hệ quả phụ: từ nay Wally TỰ ĐỌC ĐƯỢC
+Actions qua trình duyệt — hết cảnh mù build. Run mới: **#12 (main
+5652aaf) và #13 (testb 7e92a04)** — lúc 10:36 còn Queued; Wally đã
+giao trình duyệt theo dõi tới trạng thái cuối + xác nhận artifact
+tồn tại; ĐỎ thì mang dòng lỗi về tự sửa. Run #11 (đẩy Parser
+779ab85 chạy dưới workflow TestB cũ) đỏ như dự đoán — bỏ qua.
+Trước đó cùng buổi: lỗi đỏ run #9 (WP5) đã tìm ra gốc = gói đẩy
+thiếu Parser.swift → đã đẩy bổ sung `779ab85`; luật đầy đủ gói đẩy
+đã ghi vào WORKFLOW-PROMPT-IOS. Gmail của anh CHƯA nối với Muse
+(status not_connected) — mã xác thực qua email phải nhờ anh đọc
+giúp khi cần.)
+Cập nhật trước đó: 2026-11-10 08:40 CST (ca trực: **TESTB ĐÃ DỰNG
 NỐT — SẴN SÀNG CHO BUỔI M1** — đúng lệnh Wally 07:52: rà soát sâu
 lại wp4-testb/ (từng dòng 3 file Swift, phái sinh khớp từng dòng với
 wp4-prep trên main, ngoặc đếm lại {3/3}·{33/33}·{21/21}, YAML sạch,
