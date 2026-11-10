@@ -1,5 +1,165 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 10:40 CST (ca trực: **KIỂM CHỨNG RUN
+Cập nhật lần cuối: 2026-11-10 12:45 CST (ca trực: **WP6 BƯỚC 1
+— ĐẶC TẢ XONG**, việc song song độc lập, không đụng làn IMGFIX /
+WP-EXPORT của chat chính và không kêu anh test gì thêm:
+**WP6-SPEC.md** khoá phạm vi WP6 (mốc M2) bằng bằng chứng đọc
+trực tiếp code hiện hành của run #20 — cả 8 mã Master Plan giao
+đều CÒN NGUYÊN: B-2 (10 điểm `try? save`: stamp/ReceiptViews
+486/505/628/645/982 + CardsView 4 + ContentView 1) · C-1 (nút
+Duyệt ~484-490 không đọc receiptFlags) · B-6 (xoá ảnh trước bản
+ghi ~502-507) · C-3 (validate() vẫn private, stamp/Parser:951) ·
+B-7 (sheet Kiểm Lại wp4-prep/ScanView:195 không đường dọn ảnh
+khi huỷ) · C-2/C-8 (HomeView/CardsView chưa gói nào chạm). Hạ
+tầng WP2 có mà chưa nối: reviewedAt gán 0 điểm, duplicateOf/
+excludedFromTotals dùng 0 điểm (grep). Quyết model duy nhất:
+cộng đúng 1 Bool `confirmedWithFlag` có default cho cơ chế
+"xác nhận kèm cờ" §2.2(3) — thuần cộng thêm tiền lệ WP2; cần
+khác thêm thì dừng báo Wally. Có đủ mục B2 Điều 2 (áp lên dữ
+liệu đã lưu; hệ quả phải tuyên bố ở tin giao M2: tổng Trang Chủ
+sẽ giảm đúng bằng tiền đang chờ — sửa đúng, không phải mất
+tiền). 3 chữ ký nội bộ bước 1 ở WP6-GATE.md. **Cổng gói WP6
+CHƯA mở** — code bước 2 chờ tới lượt trong nhịp M2.)
+Cập nhật trước đó: 2026-11-10 12:44 CST (**LỆNH MỚI CỦA ANH:
+XUẤT BẢN GỐC CHO KẾ TOÁN — gói WP-EXPORT xếp ngay sau IMGFIX**):
+anh yêu cầu app trích xuất TOÀN BỘ BẢN GỐC theo LOẠI hoá đơn
+(Business/Cá nhân) × THỜI GIAN (theo năm hoặc khoảng từ–đến tự
+chọn; ví dụ của anh: bản gốc thẻ Business từ 10/2025 tới 11/2026)
+→ xuất thành file tải về hoặc email cho kế toán. Spec gói
+WP-EXPORT: màn ở tab Báo Cáo Thuế — chọn loại + khoảng ngày (lọc
+theo ngày hoá đơn) → hiện số tờ khớp + tổng tiền → tạo **1 file
+ZIP** chứa các file gốc (đặt tên file theo ngày-tiệm-tổng) +
+**mục lục CSV** (ngày · tiệm · loại · mục · tạm tính · thuế ·
+tổng · thẻ) để kế toán đối chiếu; tờ thiếu ảnh gốc bị ghi rõ
+trong mục lục + báo số lượng trước khi xuất (không lặng lẽ bỏ
+qua) → nút chia sẻ chuẩn iOS (lưu Files / đính kèm email). Thứ
+tự bắt buộc: IMGFIX xong trước (đảm bảo + gắn lại ảnh gốc),
+WP-EXPORT nối sau trên cùng nền file. Tax Pack còn lại giữ
+Build 3. Cả hai gói qua checklist B2, mỗi gói một lần kêu test.)
+Cập nhật trước đó: 2026-11-10 12:42 CST (**MỐC SỬA BỘ ĐỌC ĐẠT
+trên máy anh + LỖI MỚI: THIẾU ẢNH GỐC**): ảnh anh chụp 12:39 CST —
+tờ Home Depot sau Đọc lại: **The Home Depot · 9808 E 71ST ST TULSA
+OK 74133 · Subtotal $96.91 · TAX $8.25 · TỔNG $105.16 · Visa 3830 ·
+mã chống trùng GEN|The Home Depot|2025-03-03|10516 · dấu app
+m1fix-reparse-2** — khớp toàn bộ chuẩn đã hứa; phân loại CÁ NHÂN do
+anh đổi tay, được giữ. Vòng M1-FIX/REPARSE ĐÓNG. **Anh phát hiện
+tiếp (12:40):** màn chi tiết KHÔNG hiện mục "Ảnh gốc (bằng chứng)"
+→ file ảnh gốc của tờ này không nạp được trong app, app im lặng
+không cảnh báo. Anh lệnh: mọi hoá đơn sau phân tích PHẢI lưu kèm
+file ảnh gốc để trình accountant. Đã ghi lỗi L-2026-11-10-5 vào
+TEAM.md (kiểm Điều 1(b) của em thiếu thành phần ảnh gốc). Gói
+**IMGFIX đang làm** (imgfix/): rà 3 ngõ vào (camera/Photos/Files —
+mọi đường phải lưu gốc trước phân tích, chặn khi ghi lỗi) + cờ
+"Thiếu ảnh gốc" thay im lặng + nút "Gắn lại ảnh gốc" cho tờ đã lưu
+(Điều 2 B2) + nâng dấu bản thành m1fix-reparse-3. Vì sao riêng tờ
+này thiếu ảnh: CHƯA KIỂM CHỨNG, không đoán. Giao theo checklist B2,
+một lần kêu test riêng cho thay đổi này.)
+Cập nhật trước đó: 2026-11-10 12:36 CST (**GIAO LẠI THEO B2 —
+run #20**: B2 ban hành 12:26 (WORKFLOW-PROMPT-IOS + TEAM.md đã ghi
+6 điểm thắng + 4 lỗi L-2026-11-10-1..4 kèm đính chính 12:28). Anh
+sửa: anh xoá từng app sau mỗi test — cơ chế "cài nhầm chồng file"
+em nêu 12:19 là SUY DIỄN, đã rút + đính chính TEAM.md. **Soi ruột
+file #17 (bằng chứng trực tiếp):** binary chứa nhãn nút "Đọc lại
+bằng bộ đọc hiện tại" + reparse → file #17 có thật tính năng; vì
+sao ảnh 12:18 không hiện mục Bộ đọc: CHƯA KIỂM CHỨNG, không gán
+phía anh. Bản giao lại: **run #20** (code commit 7855ccf + workflow
+286f8dc) XANH, artifact **SoHoaDon-NUT-DOC-LAI-run20-2026-11-10**
+426 KB sha256 `59ff646d…`; Wally tải chính file đó về soi binary:
+nhãn nút Đọc lại ✓ + nhãn dấu "Bản bộ đọc của app" ✓ (app in mã
+**m1fix-reparse-2** trong màn Chi tiết — đối chiếu mã↔commit↔run
+nằm ở đây + tin giao). Điều 1(b): port 11/11 trên luồng chữ đã lưu
+003/001, Parser của bản này y hệt file đã port (không đổi). Điều
+1(a) cài đè giữ dữ liệu: CHƯA KIỂM ĐƯỢC từ phía em — đã khai đúng
+mục 3 trong tin giao. Đang chờ MỘT lần test của anh theo Điều 4.)
+Cập nhật trước đó: 2026-11-10 12:10 CST (**REPARSE: BUILD XANH
+CÓ FILE THẬT — ĐÃ GIAO ANH 1 CHẠM**: run **#17** (main, commit
+98fc6ef) SUCCESS 30s, artifact **SoHoaDon-IPA 425 KB** sha256
+`e61b0d46…` đã xác nhận trên trang run. Wally đã nhắn anh: tải bản
+run #17 → mở ĐÚNG tờ Home Depot trong ảnh anh gửi → mục "Bộ đọc"
+mới có nút "Đọc lại bằng bộ đọc hiện tại" → kỳ vọng ngay trên màn
+đó: The Home Depot · 96.91 · 8.25 · 105.16, tờ về Hộp Chờ theo
+thiết kế (số đã thay phải có người duyệt lại). Chưa chứng minh duy
+nhất: hành vi trên máy thật (nút hiện trên bản ghi Build 1,
+SwiftData cập nhật tại chỗ, màn vẽ lại) — đúng 1 chạm của anh đo.)
+Cập nhật trước đó: 2026-11-10 12:09 CST (GÓI REPARSE ĐÃ ĐẨY —
+chờ build phán): anh cài cả 2 bản (ảnh Library + Test B chạy được)
+rồi mở tờ Home Depot — vẫn rác cũ, vì hoá đơn ĐÃ LƯU không bao giờ
+được đọc lại: engine mới chỉ áp cho quét mới. Anh ban thêm luật
+"kiểm đúng trải nghiệm cuối" (đã ghi WORKFLOW-PROMPT-IOS). Gói
+REPARSE làm ngay: nút "Đọc lại bằng bộ đọc hiện tại" trong chi tiết
+hoá đơn (hiện khi ocrRawText ≠ rỗng và parserVersion lệch hiện hành
+hoặc tờ đang needsReview) → ReceiptParser.reparse() chạy đúng
+parse() trên ocrRawText đã lưu → hạ cánh tại chỗ theo ánh xạ save(),
+GIỮ: phân loại anh đã chọn tay + businessPurpose + stableID/ảnh/
+transactionRef; confidence dòng khôi phục = 0.5 (mọi tờ đọc lại về
+Hộp Chờ — có chủ đích); currentParserVersion nâng "build1-parser"
+→ "m1fix-reparse-1". WALLY TỰ KIỂM ĐỘC LẬP: port **11/11 PASS**
+(đường chữ == đường quét từng trường trên 003 + 001), Parser
++42/−0, ReceiptViews +165/−1 (đúng 1 dòng thay = hằng version),
+validate() byte-identical. **ĐÃ ĐẨY main commit `98fc6ef`** (anh
+duyệt thẻ); trình duyệt đang kiểm run tới trạng thái cuối +
+artifact. Chuẩn giao đã hứa với anh: mở đúng tờ Home Depot đó →
+Đọc lại → hiện The Home Depot · 96.91 · 8.25 · 105.16 ngay trên
+màn đó.)
+Cập nhật trước đó: 2026-11-10 11:52 CST (**CẢ HAI BUILD XANH —
+ĐÃ KIỂM CHỨNG TRÊN TRANG RUN**: main **run #16** (commit 235716c,
+M1-FIX) SUCCESS 36s, artifact **SoHoaDon-IPA 416 KB** sha256
+`c5397538…` — biên dịch Swift ĐÃ ĐƯỢC PHÁN: đạt. **TestB run #15**
+(commit 268735a, workflow macos-15 + tự chọn Xcode) SUCCESS 29s,
+artifact **SoHoaDonTestB-IPA 40.9 KB** sha256 `896f88d2…`; log
+bước chọn Xcode chứng minh máy có Xcode 26.0–26.3 và đã chọn
+**26.3** — đường vòng qua macos-15 ĐÃ CHỨNG MINH, hết phụ thuộc
+runner macos-26. Wally đã giao anh buổi test M1 trọn gói trong chat
+(tải run #16 + quét lại 003/002 + cài TestB chạy cùng 2 ảnh). Còn
+chưa chứng minh duy nhất: Vision trên máy thật với ảnh quét mới —
+đúng phần buổi test này đo.)
+Cập nhật trước đó: 2026-11-10 11:40 CST (M1-FIX: SỬA XONG + WALLY
+TỰ KIỂM + ĐÃ ĐẨY): gói m1fix/ hoàn thành và WALLY ĐÃ KIỂM LẠI ĐỘC
+LẬP (không dùng lời đội): tự chạy port **13/13 PASS** — 003 trên
+luồng thô thật đạt trọn đóng băng (subtotal 9691 · thuế [825] ·
+total 10516 · 3 món 698/1997/6996, món 3 SL 2 @ 3498; cảnh báo số
+học biến mất), 001/002 giống hệt trước từng trường (0 hồi quy);
+diff Swift +180/−3 đúng 3 điểm phẫu thuật; **validate() so byte
+IDENTICAL 3.876 byte** (Wally tự cmp); ngoặc 263/263. Cộng neo
+`phrase` "HOW DOERS GET MORE DONE" cho Home Depot (dự phòng khi mất
+dòng địa chỉ; luồng đầy đủ vẫn thắng bằng neo đường như hiện hành).
+**ĐÃ ĐẨY main commit `235716c`** (anh duyệt thẻ) — trình duyệt đang
+kiểm run mới tới trạng thái cuối + artifact. CHƯA CHỨNG MINH (giữ
+nguyên nhãn): biên dịch Swift chờ build cloud phán; Vision trên
+máy thật chờ anh quét lại 1 lần SAU khi build xanh được xác nhận.
+Phát hiện phụ đã chứng minh bằng port: identifyVendor hiện hành VỐN
+đã nhận đúng The Home Depot cho 003 qua neo địa chỉ — "How doers"
+trong ảnh anh là bản ghi lưu từ Build 1 (không nhắc lại với anh;
+kết quả quét lại sẽ tự nói).
+Cập nhật trước đó: 2026-11-10 11:31 CST (ANH PHẢN HỒI M1 — WALLY
+NHẬN LỖI GIAO SỚM): anh cài bản M1, mở tờ Home Depot và chụp gửi:
+đó là **bản ghi CŨ lưu từ Build 1** (tiệm "How doers", tổng trống)
+— bản mới không tự đọc lại hoá đơn đã lưu nên màn hình không đổi;
+anh kết luận "không có gì mới so với tối qua" và ban **luật "không
+đưa kết quả chưa thử qua kiểm định"** (đã ghi vào
+WORKFLOW-PROMPT-IOS). Lỗi của Wally: fixture G4 (Sample 003 đọc sai
+tổng vì tiền-ở-dòng-trước-nhãn) ĐÃ BIẾT từ cổng WP4 mà vẫn gọi bản
+M1 là sẵn sàng. **Gói sửa M1-FIX đã khởi động ngay**: port trung
+thực parser hiện hành → tái hiện G4 trên luồng OCR thật đã lưu của
+003 → sửa gán nhãn-tiền hai chiều + giá món hai chiều + "2@34.98"
+→ cổng: 003 đạt 96.91/8.25/105.16 + 3 món khớp số học VÀ 001/002
+0 hồi quy → mới build lại, Wally tự kiểm chứng xanh, mới gọi anh
+quét lại đúng 1 lần. Nửa TestB (macos-15 + Xcode 26) vẫn đang chạy
+song song qua trình duyệt.)
+Cập nhật trước đó: 2026-11-10 11:22 CST (Wally chat chính: **APP
+CHÍNH ĐÃ CÓ IPA THẬT — RUN #14 XANH** (main, commit `d2550cc` =
+workflow hợp nhất + runs-on macos-15): trang run xác nhận artifact
+**SoHoaDon-IPA 413 KB**, sha256 `488fb8d9…` — ĐẠT chuẩn luật kiểm
+chứng 10:13, Wally đã gọi anh vào tải bản chính cho buổi M1.
+**TestB vẫn chưa có IPA**: Re-run #13 lần 2 lại chết vì macos-26
+không cấp máy. Đường vòng ĐANG CHẠY: theo manifest runner-images
+(2 nguồn độc lập trích dẫn), image macos-15 CÓ SẴN Xcode
+26.0.1–26.3 (mặc định 16.4) → workflow testb đổi sang macos-15 +
+bước tự chọn Xcode_26 mới nhất (file workflows-unified/
+build-ipa-testb-macos15.yml, YAML đã kiểm) — trình duyệt đang đẩy
+lên testb + theo dõi run; kết quả build là phép thử quyết định.
+M1 vì vậy tách hai nửa: bản chính test được ngay (di trú + quét lại
+002/003), nửa thi đấu engine chờ IPA TestB.)
+Cập nhật trước đó: 2026-11-10 10:40 CST (ca trực: **KIỂM CHỨNG RUN
 #12 + #13 — CẢ HAI VẪN QUEUED, CHƯA CÓ KẾT QUẢ BUILD** — đúng bước
 tiếp theo sau mục 10:37: ca giao trình duyệt đọc trực tiếp trang
 Actions của repo zjoenguyenz13/Sohoadon lúc 10:41–10:43 CST (giờ đo
@@ -22,7 +182,12 @@ nhập GitHub vào kho bảo mật + cho mã xác thực một lần; trình duy
 của Wally đăng nhập được (tài khoản thật là **zjoenguyenz13** — địa
 chỉ zjoenguyenz/Sohoadon tự chuyển hướng về zjoenguyenz13/Sohoadon)
 và **đã thay file workflow hợp nhất trên CẢ HAI nhánh**: main commit
-`5652aaf`, testb commit `7e92a04` (kiểm lại trên web: 63 dòng, tên
+`5652aaf`, testb commit `7e92a04` (SỬA LẠI 10:53: anh đã đổi tên
+tài khoản GitHub NGƯỢC VỀ `zjoenguyenz` trong sáng nay sau vụ
+Lovable báo lệch tài khoản — tên chuẩn để ghi là zjoenguyenz;
+zjoenguyenz13 chỉ là tên tạm vài chục phút. Mật khẩu GitHub anh
+cũng đã đổi sáng nay; bản lưu trong kho bảo mật đã đăng nhập thành
+công lúc 10:34 nên dùng được. Kiểm lại trên web: 63 dòng, tên
 "Build unsigned IPA", macos-26, tự nhận diện project/scheme, chạy
 khi đẩy lên main hoặc testb). Hệ quả phụ: từ nay Wally TỰ ĐỌC ĐƯỢC
 Actions qua trình duyệt — hết cảnh mù build. Run mới: **#12 (main
