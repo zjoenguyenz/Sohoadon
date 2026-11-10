@@ -1,0 +1,11 @@
+[PASS] A merge=24 hàng got 24
+[PASS] A hàng khớp ground truth 
+[PASS] B §F qua parser trên hàng ráp subtotal=203.30 total=216.80 taxes=['3.90', '9.60'] items=10 sold=15 tc=797797957863725610228 val={'items_sum': '203.30', 'items_sum_matches_subtotal': True, 'subtotal_plus_tax_matches_total': True, 'qty_sum_positive_items': 15, 'qty_matches_items_sold': True}
+[PASS] C dedupe bỏ đúng 6 mảnh trùng 46 -> 40
+[PASS] C hàng ráp sau dedupe không đổi 
+[PASS] D đối chứng âm: không ráp thì §F trượt subtotal=None total=None items=1
+[PASS] E chồng <50% không ráp 
+[PASS] E 3 mảnh 1 hàng sắp trái->phải 
+[PASS] E confidence dòng ráp = min mảnh 
+
+== 9/9 PASS ==

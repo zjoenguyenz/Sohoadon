@@ -1,13 +1,12 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-09 18:40 CST (ca trực sohoadon-build2-247;
-WP3 bước 2 — đón Share Sheet/onOpenURL + chốt CỔNG WP3 nội bộ — đã
-xong, xem WP3-GATE.md mục BƯỚC 2. WP3 code CHƯA đẩy: trình Wally ở
-chat chính để anh duyệt thẻ đẩy main; bài kiểm máy gộp mốc M1.)
-Đẩy tài liệu ca này: THÀNH CÔNG — commit docs/planning `663e2f0422`
-(WORK-STATE.md + WP3-GATE.md + SCORECARD.md; đã đọc lại WORK-STATE
-trên GitHub khớp nội dung). Dòng ghi kết quả đẩy này sẽ lên GitHub
-cùng lần đẩy của ca sau. Code WP3 CHƯA đẩy — chờ cổng gói (bước 2).
-
+Cập nhật lần cuối: 2026-11-09 20:40 CST (ca trực: **WP4 BƯỚC 1 XONG** —
+đặc tả đo WP4-SPEC.md đã khoá + tầng tạo dòng ứng viên (a) F2a ráp hàng
++ F2c cắt lát/khử trùng ở wp4-prep/ScanView.swift (+121/−16 so với
+wp3-prep/main), kiểm chứng port Python trên fixture mảnh-xé từ đáp án
+002 đạt 9/9 gồm §F trọn qua parser hiện hành + đối chứng âm; văn bản:
+WP4-GATE.md. WP4 chưa tới cổng: còn bước 2 (tiền xử lý phái sinh + F2b
+parser) và bước 3 (bản test engine (b) iOS 26 + thi đấu trên máy).
+Đẩy tài liệu ca này: xem dòng cuối mục này sau khi thử đẩy.
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
   viên; hàng mua để dùng → Supplies).
@@ -137,6 +136,27 @@ cùng lần đẩy của ca sau. Code WP3 CHƯA đẩy — chờ cổng gói (b�
   thiết kế) CHƯA áp vào project.yml (vẫn 17.0) — gắn WP4 §5.6, để
   Wally xử lý khi trình cổng, ca trực không tự đổi.
 
+- **WP4 — BƯỚC 1 (ĐẶC TẢ ĐO + TẦNG TẠO DÒNG ỨNG VIÊN (a)) ĐÃ XONG
+  (2026-11-09 20:40 CST):** `WP4-SPEC.md` khoá cách đo (2 ứng viên × 2
+  cấu hình gốc/phái sinh theo §5.1; bộ mẫu cổng 001/002/003 + 002-C khi
+  có; làn lab chỉ đo độ bền; hệ quả nền tảng §5.6; chia 3 bước).
+  `wp4-prep/ScanView.swift` (nền wp3-prep/main, **+121/−16** — thay
+  toàn bộ thân recognizeLines cũ, giữ nguyên chữ ký + mọi đường
+  WP1–WP3): `mergeRows` F2a nguyên văn CODE-AUDIT (chồng Y ≥50% mảnh
+  ngắn hơn, nối theo minX, confidence = min mảnh) áp cho MỌI đường
+  ảnh; `collectFragments`/`ocrFragments` F2c (ảnh cao/rộng >3.0 và
+  cao >1600px → lát 1600px chồng 200px, quy đổi hộp về ảnh đầy đủ);
+  `dedupeOverlap` (cùng chữ + giao hộp ≥50% hộp nhỏ → giữ confidence
+  cao). **Kiểm chứng:** port Python (`wp4-fixtures/rowmerge_port.py`)
+  trên fixture mảnh-xé SYNTHETIC từ đáp án 002: **9/9 PASS** — ráp 40
+  mảnh → 24 hàng khớp ground truth; parser hiện hành ra **§F trọn**
+  (203.30 · 9.60+3.90 · 216.80 · 10 dòng · Σ 203.30 · 15 món · TC# 21
+  số); đối chứng âm không ráp → subtotal/total None (đúng khiếm
+  khuyết thực địa); biên 33% không ráp, dedupe bỏ đúng 6/6 mảnh
+  trùng. Bằng chứng: `wp4-fixtures/verify-results.txt` + WP4-GATE.md
+  (đủ 3 chữ ký nội bộ bước 1). **CHƯA đẩy code**; biên dịch + Vision
+  thật + phép quy đổi toạ độ lát [CHƯA KIỂM CHỨNG] (bước 3/M1).
+
 ## Hàng việc (theo BUILD2-MASTER-PLAN, tuần tự tuyệt đối)
 1. ~~**WP0** — Đóng băng bộ mẫu & bảng điểm~~ **ĐÃ XONG 2026-11-09 02:41 CST**:
    SCORECARD.md tồn tại (điểm nền Build 1 theo QA-VERDICT Phụ lục B §0.3) +
@@ -170,16 +190,17 @@ cùng lần đẩy của ca sau. Code WP3 CHƯA đẩy — chờ cổng gói (b�
    duyệt 2026-11-09 17:32 CST (ghi vào DESIGN-SYSTEM.md, Sổ quyết
    định); (ii) còn mở: nguyên tắc màu Personal bản sáng cho chữ nhỏ
    ở dark (đo tương phản thật ở WP9 mới khóa).
-6. **WP3** — Đường PDF & nạp file (F1): **bước 1 ĐÃ xong 16:40 +
-   bước 2 ĐÃ xong 18:40 CST 2026-11-09 — WP3 ĐÃ TỚI CỔNG** (xem
-   WP3-GATE.md mục BƯỚC 2 + wp3-prep/ 5 file). **Bước tiếp theo:**
-   Wally trình anh duyệt thẻ đẩy code WP3 lên main ở chat chính
-   (KHÔNG kèm yêu cầu cài/test — bài kiểm máy gộp mốc M1). Code lên
-   main + build cloud xanh xong thì WP3 đóng và mở **WP4 (thi đấu
-   engine)** theo tuần tự tuyệt đối; trong lúc chờ đẩy, ca sau chuẩn
-   bị song song việc độc lập của WP4 KHÔNG đụng code engine: đặc tả
-   đo WP4 + chuẩn bị mẫu 002-C (cần anh chụp camera thật — điểm chờ)
-   + rà soát điều kiện lập bản test pipeline iOS 26.
+6. **WP3** — Đường PDF & nạp file (F1): **ĐÃ ĐÓNG** — code đã đẩy
+   main bởi Wally 2026-11-09 18:52 CST, commit `ec73f92` (5 file).
+7. **WP4** — Thi đấu engine: **bước 1 ĐÃ xong 20:40 CST 2026-11-09**
+   (đặc tả đo WP4-SPEC.md + F2a/F2c ở wp4-prep/, kiểm chứng 9/9 —
+   xem mục WP4 ở Vị trí hiện tại + WP4-GATE.md). **Bước tiếp theo:**
+   bước 2 — tiền xử lý ảnh phái sinh cho ứng viên (a) (tứ giác →
+   perspective → tương phản; ảnh gốc giữ nguyên) + F2b chịu tách
+   dòng phía parser (đặc tả CODE-AUDIT F2b, validate() không đụng).
+   Sau đó bước 3: bản test pipeline engine (b) iOS 26 + chạy thi
+   đấu (cần build cloud/máy — gộp M1) + QA ký chọn engine + quyết
+   nền tảng §5.6 (project.yml vẫn 17.0 — Wally xử lý khi trình cổng).
 
 ## Điểm dừng chờ anh (ghi rõ, không tự vượt)
 - ~~WP1: thẻ duyệt ĐẨY CODE lên main~~ ĐÃ XONG 2026-11-09 10:43–10:44 CST
