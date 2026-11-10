@@ -81,6 +81,16 @@ struct ParseResult {
 // (phần số học của validate() giữ nguyên văn). Bản Swift này là bản
 // dịch của wp5-fixtures/vendor_port.py (đã kiểm chứng 19/19 ở bước 1)
 // + extract_port.py cho phần trích địa chỉ/điện thoại/mã cửa hàng.
+//
+// M1-FIX (bản m1fix, nền wp5-prep): sửa hazard G4 + trích món generic.
+// (a) Vòng tổng generic nhận dạng TIỀN-Ở-DÒNG-TRƯỚC: dòng chỉ-có-tiền
+// mà dòng ngay sau là nhãn tổng trống thì tiền thuộc về nhãn đó, nhãn
+// bị bỏ qua 1 nhịp để máy nhãn-chờ F2b không gán lệch tiếp. (b) Nhánh
+// generic có đường trích món riêng (khối UPC, giá kề hai chiều, dòng
+// "N@X") — trước đây generic không trích món nào. (c) Neo phụ cộng
+// loại cụm-chữ: slogan Home Depot (bằng chứng luồng 003 thật).
+// validate() KHÔNG đổi — phần số học nguyên văn như mọi bản trước.
+// Port kiểm chứng: m1fix/port.py + m1fix/run_port.py (13/13).
 
 enum ReceiptParser {
 
@@ -301,9 +311,18 @@ enum ReceiptParser {
         // (ignoreTotals) y như đường cùng-dòng.
         var ignoreTotals = false
         var pendingKind: String? = nil   // "SUBTOTAL" | "TOTAL" | "TAX"
-        for line in lines {
+        var skipNext = false   // M1-FIX: nhãn đã được dòng tiền ngay trước nhận
+        for (index, line) in lines.enumerated() {
             let text = line.text
             let upper = text.uppercased()
+            // M1-FIX: dòng nhãn đã có tiền từ dòng ngay trước (xem
+            // khối tiền-trước-nhãn ở dưới) -> bỏ qua, không cho máy
+            // nhãn-chờ F2b dựng chờ mới trên nhãn đã xong.
+            if skipNext {
+                skipNext = false
+                pendingKind = nil
+                continue
+            }
             // F2b: dòng chỉ-có-tiền hoàn tất nhãn đang chờ.
             if let kind = pendingKind,
                let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
@@ -321,6 +340,39 @@ enum ReceiptParser {
                 }
                 pendingKind = nil
                 continue
+            }
+            // M1-FIX (tiền-trước-nhãn): dòng CHỈ có tiền mà dòng NGAY
+            // SAU là nhãn tổng trống -> tiền thuộc về nhãn đó (dạng
+            // Mẫu 003 thật: "96.91 / SUBTOTAL", "$105.16 / TOTAL").
+            // Chỉ nhận đúng 1 dòng kề — không vươn xa; nhãn đã nhận
+            // được đánh dấu bỏ qua (skipNext) để không bị gán tiền
+            // của nhãn kế tiếp, đúng gốc hazard G4. TOTAL vẫn tôn
+            // trọng vùng loại trừ như đường cùng-dòng.
+            if let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2,
+               index + 1 < lines.count {
+                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+                let next = lines[index + 1].text
+                let nextUpper = next.uppercased()
+                var claimed = false
+                if matchGroups(next, pattern: #"^SUBTOTAL\s*:?$"#) != nil {
+                    if r.subtotalCents == nil { r.subtotalCents = cents }
+                    claimed = true
+                } else if (nextUpper.hasPrefix("TAX") || nextUpper.hasPrefix("SALES TAX")),
+                          lastMoneyInLine(next) == nil {
+                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents))
+                    claimed = true
+                } else if !ignoreTotals,
+                          matchGroups(next, pattern: #"^(TOTAL|TOTAL DUE|AMOUNT DUE|BALANCE DUE)\s*:?$"#) != nil {
+                    if r.totalCents == nil {
+                        r.totalCents = cents
+                        r.totalConfidence = line.confidence
+                    }
+                    claimed = true
+                }
+                if claimed {
+                    skipNext = true
+                    continue
+                }
             }
             // F2b: dòng chỉ-có-nhãn -> ghi nhớ cho đúng dòng ngay sau.
             if matchGroups(text, pattern: #"^SUBTOTAL\s*:?$"#) != nil {
@@ -373,6 +425,11 @@ enum ReceiptParser {
             }
         }
 
+        // M1-FIX: trích món generic (trước đây nhánh generic không
+        // trích món nào cả) — khối UPC + giá kề hai chiều, xem
+        // parseGenericItems ở dưới.
+        r.items = parseGenericItems(lines: lines)
+
         let card = findCard(lines: lines)
         r.cardLast4 = card.last4
         r.cardBrand = card.brand
@@ -386,6 +443,116 @@ enum ReceiptParser {
             r.dedupeKey = "GEN|\(vendor)|\(day.string(from: date))|\(total)"
         }
         return r
+    }
+
+    // MARK: - M1-FIX: món cho tiệm generic (khối UPC — Home Depot)
+    //
+    // Trước M1-FIX nhánh generic KHÔNG trích món nào cả. Dạng khối
+    // của hoá đơn Home Depot (luồng 003 thật): dòng mã hàng (>= 9 số
+    // liền) + phần tên, dòng mô tả chữ ngay sau; giá là dòng tiền
+    // trần kề TRƯỚC khối (món 1–2) hoặc kề SAU khối (món 3); dòng
+    // "N@X" (vd "2@34.98") gắn số lượng + đơn giá cho món đang mở —
+    // tích N × X chỉ để validate() đối chiếu với subtotal như mọi
+    // món khác, parser không tự thay/suy giá từ nó. Quét dừng ở ranh
+    // giới khối tổng / vùng loại trừ: tiền của khối tổng (dòng tiền
+    // ngay trước nhãn SUBTOTAL...) không bao giờ vào món — khi món
+    // đang mở chưa có giá mà gặp dòng tiền, dòng tiền đó chỉ được
+    // nhận nếu dòng LIỀN TRƯỚC thuộc khối món. Tiệm generic không
+    // có dạng khối này thì items vẫn rỗng như cũ (không hồi quy).
+
+    private static func parseGenericItems(lines: [OCRLine]) -> [ParsedLineItem] {
+        var items: [ParsedLineItem] = []
+        var open: ParsedLineItem? = nil
+        var openHasDescription = false
+        var prevLineWasBlock = false
+        var lastBareMoney: (index: Int, cents: Int)? = nil
+        var bareMoneyConsumed = Set<Int>()
+
+        func closeOpen() {
+            if let o = open { items.append(o) }
+            open = nil
+            openHasDescription = false
+            prevLineWasBlock = false
+        }
+
+        for (index, line) in lines.enumerated() {
+            let text = line.text
+            let upper = text.uppercased()
+
+            // Ranh giới: khối tổng / vùng loại trừ -> hết vùng món.
+            if upper.hasPrefix("SUBTOTAL") || upper.hasPrefix("TOTAL")
+                || upper.hasPrefix("SALES TAX") || upper.hasPrefix("TAX")
+                || upper.contains("RETURN POLICY") || upper.contains("MAX REFUND VALUE")
+                || upper.contains("SUGGESTED TIP") || upper.contains("TIP GUIDE") {
+                break
+            }
+
+            // Dòng số lượng kiểu Home Depot: "2@34.98".
+            if let m = matchGroups(text, pattern: #"^(\d+)\s*@\s*(\d[\d,]*\.\d{2})$"#), m.count == 2,
+               var o = open {
+                o.qty = Int(m[0] ?? "") ?? o.qty
+                o.unitPriceCents = moneyToCents(m[1] ?? "", negative: false)
+                open = o
+                prevLineWasBlock = true
+                continue
+            }
+
+            // Dòng chỉ-có-tiền: làm giá của món đang mở khi món chưa
+            // có giá và dòng liền trước thuộc khối món (giá kề SAU
+            // khối); giá kề TRƯỚC khối được nhận tại dòng mã món.
+            if let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
+                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+                lastBareMoney = (index, cents)
+                if var o = open, o.amountCents == nil, prevLineWasBlock {
+                    o.amountCents = cents
+                    if o.unitPriceCents == nil { o.unitPriceCents = cents }
+                    open = o
+                    bareMoneyConsumed.insert(index)
+                }
+                prevLineWasBlock = false
+                continue
+            }
+
+            // Dòng mã món: >= 9 số liền + phần tên (đuôi "<A>" là cờ).
+            if let m = matchGroups(text, pattern: #"^(\d{9,})\s+(.+)$"#), m.count == 2 {
+                closeOpen()
+                var item = ParsedLineItem(name: "")
+                item.itemCode = m[0]
+                var rest = m[1] ?? ""
+                if let fm = matchGroups(rest, pattern: #"^(.*?)\s*<([A-Z])>$"#),
+                   let cleaned = fm[0] {
+                    rest = cleaned
+                    item.taxFlag = fm[1]
+                }
+                item.name = rest
+                if let lb = lastBareMoney, lb.index == index - 1,
+                   !bareMoneyConsumed.contains(lb.index) {
+                    item.amountCents = lb.cents
+                    item.unitPriceCents = lb.cents
+                }
+                open = item
+                openHasDescription = false
+                prevLineWasBlock = true
+                continue
+            }
+
+            // Dòng mô tả: dòng chữ thường ngay sau dòng mã — tên đầy
+            // đủ của món ("GORILLA GLUE 2 OZ"); chỉ nhận dòng đầu,
+            // không nhận dòng ngày tháng.
+            if var o = open, !openHasDescription, prevLineWasBlock,
+               text.contains(where: { $0.isLetter }),
+               matchGroups(text, pattern: #"(\d{1,2})/(\d{1,2})/(\d{2,4})"#) == nil {
+                o.name = text
+                open = o
+                openHasDescription = true
+                prevLineWasBlock = true
+                continue
+            }
+
+            prevLineWasBlock = false
+        }
+        closeOpen()
+        return items
     }
 
     // MARK: - WP5: Nhận diện tiệm 3 nấc (WP5-SPEC mục 3–5)
@@ -431,7 +598,13 @@ enum ReceiptParser {
     private static let vendorAnchors: [(vendor: String, key: String, kind: String, value: String)] = [
         ("The Home Depot", "generic", "street", "9808 E 71ST ST"),
         ("The Home Depot", "generic", "zip", "74133"),
-        ("Sam's Club", "sams", "phone", "9182529503")
+        ("Sam's Club", "sams", "phone", "9182529503"),
+        // M1-FIX: neo cụm chữ (phrase) — slogan in ngay dưới logo
+        // Home Depot; bằng chứng trong bộ mẫu đóng băng: 2 dòng đầu
+        // của luồng 003 thật. Khớp trên toàn văn đã chuẩn hoá nối
+        // liền vì OCR xé slogan thành 2 dòng ("How doers" /
+        // "get more done") — neo theo dòng đơn không bao giờ khớp.
+        ("The Home Depot", "generic", "phrase", "HOW DOERS GET MORE DONE")
     ]
 
     /// Món đặc trưng (nấc 3) — bảng seed RỖNG: chưa mẫu đóng băng nào
@@ -500,6 +673,9 @@ enum ReceiptParser {
     private static func anchorHits(lines: [OCRLine]) -> [(vendor: String, key: String)] {
         var kindsByVendor: [String: Set<String>] = [:]
         var keyByVendor: [String: String] = [:]
+        // M1-FIX: neo cụm chữ khớp trên toàn văn nối liền (slogan bị
+        // OCR xé nhiều dòng) — tính một lần trước vòng lặp.
+        let joinedNormalized = lines.map { normalizeForVendorMatch($0.text) }.joined(separator: " ")
         for line in lines {
             let normalized = normalizeForVendorMatch(line.text)
             let tokens = normalized.split(separator: " ").map(String.init)
@@ -510,6 +686,7 @@ enum ReceiptParser {
                 case "street": ok = normalized.contains(anchor.value)
                 case "phone": ok = digits.contains(anchor.value)
                 case "zip": ok = tokens.contains(anchor.value)
+                case "phrase": ok = joinedNormalized.contains(anchor.value)
                 default: ok = false
                 }
                 if ok {
@@ -518,7 +695,7 @@ enum ReceiptParser {
                 }
             }
         }
-        let strongKinds: Set<String> = ["street", "phone"]
+        let strongKinds: Set<String> = ["street", "phone", "phrase"]
         var qualifying: [(vendor: String, key: String)] = []
         for (vendor, kinds) in kindsByVendor {
             if !kinds.isDisjoint(with: strongKinds) || kinds.count >= 2 {
