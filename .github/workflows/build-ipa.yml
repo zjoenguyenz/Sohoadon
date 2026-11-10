@@ -33,6 +33,13 @@ jobs:
           echo "PROJ=$PROJ" >> "$GITHUB_ENV"
           echo "NAME=$NAME" >> "$GITHUB_ENV"
 
+      - name: Select Xcode 26
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          echo "Using $XC"
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+
       - name: Build app (signing disabled)
         run: |
           xcodebuild build \
