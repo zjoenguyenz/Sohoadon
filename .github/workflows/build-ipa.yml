@@ -58,6 +58,6 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.NAME }}-IPA
+          name: SoHoaDon-NUT-DOC-LAI
           path: ${{ env.NAME }}-unsigned.ipa
           retention-days: 30
