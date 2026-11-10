@@ -3,11 +3,13 @@ name: Build unsigned IPA
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, testb ]
 
 jobs:
   build:
-    runs-on: macos-15
+    # macos-26 = Xcode 26: can cho TestB (SDK iOS 26); app chinh build
+    # duoi Xcode 26 van duoc (deployment target nam o project.yml).
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,11 +25,19 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      - name: Discover project and scheme
+        run: |
+          PROJ=$(ls -d *.xcodeproj | head -1)
+          NAME=$(basename "$PROJ" .xcodeproj)
+          echo "Discovered project: $PROJ (scheme: $NAME)"
+          echo "PROJ=$PROJ" >> "$GITHUB_ENV"
+          echo "NAME=$NAME" >> "$GITHUB_ENV"
+
       - name: Build app (signing disabled)
         run: |
           xcodebuild build \
-            -project SoHoaDon.xcodeproj \
-            -scheme SoHoaDon \
+            -project "$PROJ" \
+            -scheme "$NAME" \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build/DD \
@@ -39,15 +49,15 @@ jobs:
         run: |
           APP_PATH=$(find build/DD/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
           echo "App: $APP_PATH"
-          rm -rf Payload SoHoaDon-unsigned.ipa
+          rm -rf Payload "$NAME-unsigned.ipa"
           mkdir Payload
           cp -R "$APP_PATH" Payload/
-          zip -qry SoHoaDon-unsigned.ipa Payload
-          ls -lh SoHoaDon-unsigned.ipa
+          zip -qry "$NAME-unsigned.ipa" Payload
+          ls -lh "$NAME-unsigned.ipa"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoHoaDon-IPA
-          path: SoHoaDon-unsigned.ipa
+          name: ${{ env.NAME }}-IPA
+          path: ${{ env.NAME }}-unsigned.ipa
           retention-days: 30
