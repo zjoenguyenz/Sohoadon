@@ -1,6 +1,7 @@
 import SwiftUI
 import VisionKit
 import Vision
+import CoreImage
 import PhotosUI
 import UIKit
 import PDFKit
@@ -394,8 +395,24 @@ struct ScanView: View {
         }
     }
 
+    // MARK: - WP4 ứng viên (a): Vision cổ điển + ráp hàng F2a + cắt lát F2c
+    // + tiền xử lý ảnh phái sinh (bước 2: phát hiện tứ giác -> nắn
+    // perspective -> tăng tương phản — TOP-APPS-RESEARCH ý #3, WP4-SPEC §1).
+    // (Đặc tả đo + luật chọn thắng/thua: WP4-SPEC.md. Ảnh GỐC không bao
+    //  giờ bị sửa: process() đã lưu JPEG gốc TRƯỚC khi đọc; phái sinh chỉ
+    //  tồn tại trong bộ nhớ ở đường đọc này, không lưu, không thay gốc.)
+
+    /// Một mảnh chữ Vision kèm hộp toạ độ chuẩn hoá (gốc dưới-trái) trong
+    /// KHÔNG GIAN ẢNH ĐẦY ĐỦ — mảnh của lát cắt đã quy đổi về trước khi ráp.
+    struct OCRFrag {
+        var text: String
+        var confidence: Double
+        var box: CGRect
+    }
+
     /// Vision VNRecognizeTextRequest — API cổ điển, ổn định từ iOS 13.
-    /// (Không dùng RecognizeDocumentsRequest của iOS 26 — xem BUILD1-NOTES.)
+    /// (Ứng viên (b) RecognizeDocumentsRequest của iOS 26 thi đấu ở bản test
+    /// pipeline RIÊNG — WP4-SPEC.md; không đưa vào bản chính ở bước này.)
     private func recognizeLines(in image: UIImage, completion: @escaping ([OCRLine]) -> Void) {
         // Chuẩn hoá hướng ảnh trước khi OCR: ảnh từ thư viện có thể mang hướng EXIF
         // mà cgImage bỏ qua — không chuẩn hoá thì Vision đọc chữ bị xoay, ra rác.
@@ -410,28 +427,177 @@ struct ScanView: View {
             completion([])
             return
         }
-        let request = VNRecognizeTextRequest { req, _ in
-            let rawResults: [VNObservation] = req.results ?? []
-            let observations = rawResults.compactMap { $0 as? VNRecognizedTextObservation }
-            // Vision dùng gốc toạ độ dưới-trái: sắp xếp dòng từ trên xuống.
-            let sorted = observations.sorted { $0.boundingBox.maxY > $1.boundingBox.maxY }
-            let lines: [OCRLine] = sorted.compactMap { observation in
-                guard let candidate = observation.topCandidates(1).first else { return nil }
-                return OCRLine(text: candidate.string, confidence: Double(candidate.confidence))
-            }
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Cấu hình đo của ứng viên (a) (WP4-SPEC §2): đọc trên ảnh
+            // PHÁI SINH khi cờ bật và phái sinh tạo được; mọi lỗi ở tầng
+            // phái sinh đều fail-open về ảnh gốc — không có đường nào mà
+            // tiền xử lý hỏng lại làm mất lượt đọc.
+            let ocrImage = Self.useDerivedImage
+                ? (Self.derivedOCRImage(cgImage) ?? cgImage)
+                : cgImage
+            let frags = Self.collectFragments(cgImage: ocrImage)
+            let lines = Self.mergeRows(Self.dedupeOverlap(frags))
             completion(lines)
         }
+    }
+
+    /// WP4-SPEC §2: hai cấu hình đo của TỪNG ứng viên là "đọc trên ảnh
+    /// gốc" và "đọc trên ảnh phái sinh" — cờ này là công tắc để bước 3
+    /// chạy thi đấu hai cấu hình trên cùng một bản code. Bản trình cổng
+    /// giữ `true`: phái sinh chỉ được dùng khi phát hiện được tứ giác đủ
+    /// tin cậy (xem derivedOCRImage), còn lại tự rơi về ảnh gốc.
+    private static let useDerivedImage = true
+
+    /// Tạo ảnh PHÁI SINH trong bộ nhớ để đọc (không bao giờ lưu):
+    /// VNDetectRectanglesRequest tìm tứ giác hoá đơn -> CIPerspective-
+    /// Correction nắn thẳng -> CIColorControls bỏ màu + tăng tương phản.
+    /// Trả nil (= dùng ảnh gốc) khi: không thấy tứ giác nào đạt ngưỡng
+    /// tin cậy, hoặc bất kỳ bước lọc nào lỗi. Ngưỡng 0.5 và hệ số tương
+    /// phản 1.1 là GIÁ TRỊ KHỞI ĐIỂM cho bước 3 đo trên bộ mẫu — chưa
+    /// có bằng chứng chúng tối ưu, không được đọc là "đã tinh chỉnh".
+    /// [CHƯA KIỂM CHỨNG trên máy: VNDetectRectanglesRequest + phép đổi
+    /// toạ độ Vision (gốc dưới-trái, chuẩn hoá) sang toạ độ CI (gốc
+    /// dưới-trái, điểm ảnh) — cùng gốc nên chỉ nhân với kích thước ảnh;
+    /// bài kiểm thật ở bước 3 / mốc M1.]
+    private static func derivedOCRImage(_ cgImage: CGImage) -> CGImage? {
+        let detect = VNDetectRectanglesRequest()
+        detect.minimumConfidence = 0.5
+        detect.maximumObservations = 1
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([detect])
+        } catch {
+            return nil
+        }
+        guard let quad = (detect.results ?? []).first else { return nil }
+        let w = CGFloat(cgImage.width)
+        let h = CGFloat(cgImage.height)
+        func ciPoint(_ p: CGPoint) -> CIVector {
+            CIVector(x: p.x * w, y: p.y * h)
+        }
+        let source = CIImage(cgImage: cgImage)
+        guard let perspective = CIFilter(name: "CIPerspectiveCorrection") else { return nil }
+        perspective.setValue(source, forKey: kCIInputImageKey)
+        perspective.setValue(ciPoint(quad.topLeft), forKey: "inputTopLeft")
+        perspective.setValue(ciPoint(quad.topRight), forKey: "inputTopRight")
+        perspective.setValue(ciPoint(quad.bottomLeft), forKey: "inputBottomLeft")
+        perspective.setValue(ciPoint(quad.bottomRight), forKey: "inputBottomRight")
+        guard let corrected = perspective.outputImage else { return nil }
+        guard let enhance = CIFilter(name: "CIColorControls") else { return nil }
+        enhance.setValue(corrected, forKey: kCIInputImageKey)
+        enhance.setValue(NSNumber(value: 0.0), forKey: kCIInputSaturationKey)
+        enhance.setValue(NSNumber(value: 1.1), forKey: kCIInputContrastKey)
+        enhance.setValue(NSNumber(value: 0.0), forKey: kCIInputBrightnessKey)
+        guard let output = enhance.outputImage else { return nil }
+        let context = CIContext(options: nil)
+        return context.createCGImage(output, from: output.extent)
+    }
+
+    /// Trích mảnh chữ từ ảnh đầy đủ. F2c: ảnh RẤT cao (tỉ lệ cao/rộng > 3.0
+    /// và cao > 1600px — dạng hoá đơn dài như Mẫu 002) được cắt thành lát
+    /// dọc ~1600px chồng nhau 200px, OCR từng lát, rồi quy đổi hộp của mỗi
+    /// mảnh về toạ độ ảnh đầy đủ TRƯỚC khi ráp hàng. Ngoài ngưỡng đó: 1 lượt
+    /// OCR như cũ. handler.perform là ĐỒNG BỘ nên vòng lát chạy tuần tự
+    /// trong hàng đợi nền — không có request nào chạy song song.
+    private static func collectFragments(cgImage: CGImage) -> [OCRFrag] {
+        let w = cgImage.width
+        let h = cgImage.height
+        guard h > 1600, Double(h) / Double(max(w, 1)) > 3.0 else {
+            return ocrFragments(tile: cgImage, tileTopPx: 0, tileHeightPx: h, fullHeightPx: h)
+        }
+        var all: [OCRFrag] = []
+        let tileHeight = 1600
+        let overlap = 200
+        let step = tileHeight - overlap
+        var top = 0
+        while top < h {
+            let th = min(tileHeight, h - top)
+            if let tile = cgImage.cropping(to: CGRect(x: 0, y: top, width: w, height: th)) {
+                all += ocrFragments(tile: tile, tileTopPx: top, tileHeightPx: th, fullHeightPx: h)
+            }
+            if top + th >= h { break }
+            top += step
+        }
+        return all
+    }
+
+    /// OCR 1 lát (hoặc cả ảnh khi không cắt) và quy đổi hộp về ảnh đầy đủ.
+    /// Trục Y: Vision dùng gốc dưới-trái TRONG lát; lát bắt đầu ở tileTopPx
+    /// tính từ ĐỈNH ảnh đầy đủ (toạ độ cắt của CGImage) — công thức dưới
+    /// đổi cạnh-trên của hộp thành khoảng cách từ đỉnh ảnh đầy đủ rồi mới
+    /// lật về gốc dưới-trái chuẩn hoá. [Hướng cắt CGImage + phép quy đổi
+    /// này CHƯA KIỂM CHỨNG trên máy — bài kiểm mốc M1/WP4 bước 3.]
+    private static func ocrFragments(tile: CGImage, tileTopPx: Int, tileHeightPx: Int, fullHeightPx: Int) -> [OCRFrag] {
+        let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.recognitionLanguages = ["vi-VN", "en-US"]
         // Hoá đơn đầy mã số — tắt tự sửa chính tả để khỏi "sửa" nhầm mã/tiền.
         request.usesLanguageCorrection = false
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                try handler.perform([request])
-            } catch {
-                completion([])
+        let handler = VNImageRequestHandler(cgImage: tile, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            return []
+        }
+        let observations = (request.results ?? [])
+        return observations.compactMap { obs in
+            guard let candidate = obs.topCandidates(1).first else { return nil }
+            let b = obs.boundingBox
+            let topFromFullTop = Double(tileTopPx) + (1.0 - Double(b.maxY)) * Double(tileHeightPx)
+            let heightFull = Double(b.height) * Double(tileHeightPx) / Double(fullHeightPx)
+            let maxYFull = 1.0 - topFromFullTop / Double(fullHeightPx)
+            let box = CGRect(x: b.minX, y: CGFloat(maxYFull - heightFull),
+                             width: b.width, height: CGFloat(heightFull))
+            return OCRFrag(text: candidate.string, confidence: Double(candidate.confidence), box: box)
+        }
+    }
+
+    /// Khử mảnh trùng sinh ra trong vùng chồng 200px giữa hai lát: cùng
+    /// chữ + hộp giao nhau >= 50% diện tích hộp nhỏ hơn -> giữ bản có độ
+    /// tin cậy cao hơn (đúng luật CODE-AUDIT F2c). Hai dòng THẬT khác nhau
+    /// không bao giờ giao hộp tới mức này nên không bị xoá nhầm.
+    static func dedupeOverlap(_ frags: [OCRFrag]) -> [OCRFrag] {
+        var kept: [OCRFrag] = []
+        for f in frags.sorted(by: { $0.confidence > $1.confidence }) {
+            let isDuplicate = kept.contains { k in
+                guard k.text == f.text else { return false }
+                let inter = k.box.intersection(f.box)
+                guard !inter.isNull else { return false }
+                let smaller = min(k.box.width * k.box.height, f.box.width * f.box.height)
+                return smaller > 0 && (inter.width * inter.height) / smaller >= 0.5
             }
+            if !isDuplicate { kept.append(f) }
+        }
+        return kept
+    }
+
+    /// F2a — ráp mảnh thành HÀNG THỊ GIÁC (nguyên văn thuật toán CODE-AUDIT
+    /// F2a): sắp trên->xuống theo maxY; gom mảnh có khoảng Y chồng >= 50%
+    /// chiều cao mảnh NGẮN HƠN vào cùng hàng; trong hàng sắp trái->phải
+    /// theo minX và nối bằng 1 khoảng trắng; độ tin cậy của dòng ráp = MIN
+    /// của các mảnh (mảnh yếu nhất quyết định — không để tiền mờ trốn sau
+    /// nhãn nét). Hàng giữ thứ tự trên->xuống vì mảnh đã sắp và chỉ nối
+    /// vào hàng đang mở cuối cùng.
+    static func mergeRows(_ fragsIn: [OCRFrag]) -> [OCRLine] {
+        var frags = fragsIn
+        frags.sort { $0.box.maxY > $1.box.maxY }
+        var rows: [[OCRFrag]] = []
+        for f in frags {
+            if var row = rows.last, let anchor = row.first {
+                let overlap = min(f.box.maxY, anchor.box.maxY) - max(f.box.minY, anchor.box.minY)
+                let shorter = min(f.box.height, anchor.box.height)
+                if shorter > 0 && overlap / shorter >= 0.5 {
+                    row.append(f)
+                    rows[rows.count - 1] = row
+                    continue
+                }
+            }
+            rows.append([f])
+        }
+        return rows.map { row in
+            let sorted = row.sorted { $0.box.minX < $1.box.minX }
+            return OCRLine(text: sorted.map(\.text).joined(separator: " "),
+                           confidence: sorted.map(\.confidence).min() ?? 0)
         }
     }
 }

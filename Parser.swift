@@ -58,6 +58,11 @@ struct ParseResult {
 // Sam's Club: cổng nguyên luật đã kiểm chứng ở parser-prototype v0.1/v0.2
 // (Mẫu 001: 10 dòng món, subtotal 203.30, thuế 9.60+3.90, total 216.80, thẻ 2586).
 // Tiệm khác: đường generic (vendor/ngày/thẻ/tổng) — tách từng món để bản sau.
+//
+// WP4 bước 2 (bản wp4-prep): F2b — parser chịu được nhãn/tiền TÁCH DÒNG
+// (CODE-AUDIT F2b): máy trạng thái "nhãn chờ đúng 1 dòng" ở vòng tổng của
+// cả hai nhánh + dòng chỉ-có-tiền hoàn tất món đang chờ ở nhánh Sam's.
+// F2b chỉ đổi NƠI tìm tiền, không đổi CÁCH phán xét: validate() NGUYÊN VĂN.
 
 enum ReceiptParser {
 
@@ -126,6 +131,21 @@ enum ReceiptParser {
                 continue
             }
 
+            // F2b: dòng CHỈ có tiền ("19.48 Y") hoàn tất món đang chờ —
+            // tiền của món rớt xuống dòng thị giác ngay sau khi hàng bị xé
+            // dù đã ráp (ảnh lệch). Không có món chờ thì dòng tiền lẻ rơi
+            // tiếp xuống các luật dưới (không luật nào nhận) như cũ.
+            if var p = pending,
+               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?\s*([YT])?$"#), m.count == 3 {
+                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+                p.amountCents = cents
+                p.unitPriceCents = cents
+                if let flag = m[2] { p.taxFlag = flag }
+                r.items.append(p)
+                pending = nil
+                continue
+            }
+
             // Dòng giảm giá Instant Savings: "INST SV <tên> [tiền] [cờ]"
             if let rest = matchPrefix(text, pattern: #"^INST SV\s+(.+)$"#) {
                 if let tail = trailingAmount(in: rest) {
@@ -163,8 +183,54 @@ enum ReceiptParser {
         if let p = pending { r.items.append(p) }
 
         // --- Tổng / thuế / thẻ / TC# ---
+        // F2b: máy trạng thái nhãn-chờ (đúng đặc tả CODE-AUDIT F2b).
+        // pendingKind: "SUBTOTAL" | "TOTAL" | "TAX"; với TAX giữ thêm
+        // nhãn hiển thị ("TAX 1") + tỉ lệ đọc được trên dòng nhãn để
+        // dòng thuế tách không thua thông tin so với đường cùng-dòng.
+        var pendingKind: String? = nil
+        var pendingTaxLabel: String? = nil
+        var pendingTaxRate: String? = nil
         for line in lines {
             let text = line.text
+            // Dòng chỉ-có-tiền hoàn tất nhãn đang chờ.
+            if let kind = pendingKind,
+               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
+                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+                switch kind {
+                case "SUBTOTAL":
+                    r.subtotalCents = cents
+                case "TOTAL":
+                    r.totalCents = cents
+                    r.totalConfidence = line.confidence
+                default:
+                    r.taxes.append(ParsedTaxLine(label: pendingTaxLabel ?? "TAX",
+                                                  rateText: pendingTaxRate,
+                                                  amountCents: cents))
+                }
+                pendingKind = nil
+                pendingTaxLabel = nil
+                pendingTaxRate = nil
+                continue
+            }
+            // Dòng chỉ-có-nhãn (TAX được kèm thứ hạng + tỉ lệ, chưa có tiền).
+            if let lm = matchGroups(text, pattern: #"^(SUBTOTAL|TOTAL|TAX\s+(\d)(?:\s+([\d.]+)\s*%)?)$"#), lm.count == 3 {
+                let head = lm[0] ?? ""
+                if head == "SUBTOTAL" || head == "TOTAL" {
+                    pendingKind = head
+                    pendingTaxLabel = nil
+                    pendingTaxRate = nil
+                } else {
+                    pendingKind = "TAX"
+                    pendingTaxLabel = "TAX \(lm[1] ?? "")"
+                    pendingTaxRate = lm[2]
+                }
+                continue
+            }
+            // Mọi dòng khác: nhãn chờ HẾT HẠN — đúng 1 dòng ân hạn, không
+            // bao giờ vươn qua một dòng chữ để vớ số ở xa (CODE-AUDIT F2b).
+            pendingKind = nil
+            pendingTaxLabel = nil
+            pendingTaxRate = nil
             if let m = matchGroups(text, pattern: #"^SUBTOTAL\s+\$?(\d[\d,]*\.\d{2})(-)?$"#) {
                 r.subtotalCents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
                 continue
@@ -238,10 +304,50 @@ enum ReceiptParser {
         }
 
         // Tổng: cắt vùng loại trừ TRƯỚC (Suggested Tip chứa tổng giả).
+        // F2b: cùng máy trạng thái nhãn-chờ như nhánh Sam's, theo pattern
+        // của nhánh generic; TOTAL vẫn tôn trọng vùng loại trừ
+        // (ignoreTotals) y như đường cùng-dòng.
         var ignoreTotals = false
+        var pendingKind: String? = nil   // "SUBTOTAL" | "TOTAL" | "TAX"
         for line in lines {
             let text = line.text
             let upper = text.uppercased()
+            // F2b: dòng chỉ-có-tiền hoàn tất nhãn đang chờ.
+            if let kind = pendingKind,
+               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
+                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+                switch kind {
+                case "SUBTOTAL":
+                    if r.subtotalCents == nil { r.subtotalCents = cents }
+                case "TOTAL":
+                    if !ignoreTotals, r.totalCents == nil {
+                        r.totalCents = cents
+                        r.totalConfidence = line.confidence
+                    }
+                default:
+                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents))
+                }
+                pendingKind = nil
+                continue
+            }
+            // F2b: dòng chỉ-có-nhãn -> ghi nhớ cho đúng dòng ngay sau.
+            if matchGroups(text, pattern: #"^SUBTOTAL\s*:?$"#) != nil {
+                pendingKind = "SUBTOTAL"
+                continue
+            }
+            if !ignoreTotals,
+               matchGroups(text, pattern: #"^(TOTAL|TOTAL DUE|AMOUNT DUE|BALANCE DUE)\s*:?$"#) != nil {
+                pendingKind = "TOTAL"
+                continue
+            }
+            if (upper.hasPrefix("TAX") || upper.hasPrefix("SALES TAX")),
+               lastMoneyInLine(text) == nil {
+                pendingKind = "TAX"
+                continue
+            }
+            // Mọi dòng khác (kể cả dòng bật vùng loại trừ và RETURN
+            // POLICY ở dưới): nhãn chờ hết hạn sau đúng 1 dòng.
+            pendingKind = nil
             if upper.contains("SUGGESTED TIP") || upper.contains("TIP GUIDE") {
                 ignoreTotals = true
             }
