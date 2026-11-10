@@ -41,6 +41,15 @@ struct ParseResult {
     var vendorConfidence: Double = 0
     var dateConfidence: Double = 0
     var totalConfidence: Double = 0
+    // WP5 (thuần cộng thêm): hạ cánh các trường model WP2 ĐÃ CÓ sẵn +
+    // nguồn/gợi ý của hàm nhận diện tiệm. ParseResult là struct nháp,
+    // không phải SwiftData model — không có rủi ro di trú.
+    var vendorAddress: String? = nil
+    var vendorPhone: String? = nil
+    var storeNumber: String? = nil
+    var vendorSource: String? = nil   // "tier1-exact" | "tier1-fuzzy" | "tier2-anchor"
+    var vendorSuggestion: String? = nil   // nấc 3: CHỈ gợi ý, không bao giờ tự điền
+    var vendorAnchorDisputed: Bool = false
     var rawText: String = ""
 
     var taxTotalCents: Int { taxes.reduce(0) { $0 + $1.amountCents } }
@@ -63,6 +72,15 @@ struct ParseResult {
 // (CODE-AUDIT F2b): máy trạng thái "nhãn chờ đúng 1 dòng" ở vòng tổng của
 // cả hai nhánh + dòng chỉ-có-tiền hoàn tất món đang chờ ở nhánh Sam's.
 // F2b chỉ đổi NƠI tìm tiền, không đổi CÁCH phán xét: validate() NGUYÊN VĂN.
+//
+// WP5 bước 2 (bản wp5-prep, nền wp4-prep): nhận diện tiệm 3 nấc theo
+// WP5-SPEC — hàm identifyVendor chung chạy TRƯỚC rẽ nhánh (khớp tên
+// toàn-bộ-dòng exact-trước-mờ-sau · neo phụ mạnh/yếu · món đặc trưng
+// chỉ-gợi ý với bảng seed RỖNG); ĐƯỜNG RƠI DÒNG-ĐẦU của parseGeneric
+// ĐÃ BỎ về mặt cấu trúc; validate() MỞ RỘNG kỷ luật C-11 cho tiệm/ngày
+// (phần số học của validate() giữ nguyên văn). Bản Swift này là bản
+// dịch của wp5-fixtures/vendor_port.py (đã kiểm chứng 19/19 ở bước 1)
+// + extract_port.py cho phần trích địa chỉ/điện thoại/mã cửa hàng.
 
 enum ReceiptParser {
 
@@ -73,41 +91,37 @@ enum ReceiptParser {
         var result = ParseResult()
         result.rawText = lines.map { $0.text }.joined(separator: "\n")
 
-        if isSams(lines: lines) {
+        // WP5: nhận diện tiệm 3 nấc chạy TRƯỚC, một hàm chung cho mọi
+        // đường — kết quả quyết định rẽ nhánh Sam's/generic (thay isSams
+        // khớp-chuỗi cũ) và là nguồn tên tiệm DUY NHẤT của cả parser.
+        let identification = identifyVendor(lines: lines)
+        if identification.vendorKey == "sams" {
             result = parseSams(lines: lines)
         } else {
-            result = parseGeneric(lines: lines)
+            result = parseGeneric(lines: lines, identifiedVendor: identification.vendor)
         }
+        result.vendor = identification.vendor
+        result.vendorKey = identification.vendorKey
+        result.vendorConfidence = identification.confidence
+        result.vendorSource = identification.source
+        result.vendorSuggestion = identification.suggestion
+        result.vendorAnchorDisputed = identification.anchorDisputed
+        let contact = extractVendorContact(lines: lines)
+        result.vendorAddress = contact.address
+        result.vendorPhone = contact.phone
+        result.storeNumber = contact.storeNumber
         result.rawText = lines.map { $0.text }.joined(separator: "\n")
         result.warnings = validate(result)
         return result
-    }
-
-    // MARK: Nhận diện Sam's
-
-    private static func isSams(lines: [OCRLine]) -> Bool {
-        for line in lines {
-            let lower = line.text.lowercased()
-            if lower.contains("sam's club") || lower.contains("sams club") || lower.contains("sam’s club") {
-                return true
-            }
-        }
-        return false
     }
 
     // MARK: - SAM'S CLUB (cổng từ prototype v0.1 đã đạt Mẫu 001)
 
     private static func parseSams(lines: [OCRLine]) -> ParseResult {
         var r = ParseResult()
-        r.vendor = "Sam's Club"
         r.vendorKey = "sams"
-        for line in lines {
-            let lower = line.text.lowercased()
-            if lower.contains("sam's club") || lower.contains("sams club") || lower.contains("sam’s club") {
-                r.vendorConfidence = line.confidence
-                break
-            }
-        }
+        // Tên tiệm + vendorConfidence: parse() gắn từ identifyVendor
+        // (WP5) sau khi hàm này trả về — ở đây KHÔNG tự đặt tên tiệm.
 
         // Ngày + giờ: MM/DD/YY(YY) HH:MM
         if let found = findDateTime(in: lines) {
@@ -265,37 +279,15 @@ enum ReceiptParser {
 
     // MARK: - GENERIC (mọi tiệm khác — Build 1 chỉ lấy trường cốt lõi)
 
-    private static func parseGeneric(lines: [OCRLine]) -> ParseResult {
+    private static func parseGeneric(lines: [OCRLine], identifiedVendor: String?) -> ParseResult {
         var r = ParseResult()
         r.vendorKey = "generic"
 
-        // Vendor: nhận một số tiệm lớn, còn lại lấy dòng đầu hợp lệ.
-        let knownVendors: [(needle: String, name: String)] = [
-            ("WALMART", "Walmart"),
-            ("COSTCO", "Costco"),
-            ("HOME DEPOT", "Home Depot"),
-            ("LOWE", "Lowe's"),
-            ("TARGET", "Target"),
-            ("QUIKTRIP", "QuikTrip"),
-            ("CASEY", "Casey's"),
-            ("LOVE'S", "Love's"),
-            ("LOVES", "Love's")
-        ]
-        var vendorFound = false
-        for line in lines.prefix(6) {
-            let upper = line.text.uppercased()
-            for kv in knownVendors where upper.contains(kv.needle) {
-                r.vendor = kv.name
-                r.vendorConfidence = line.confidence
-                vendorFound = true
-                break
-            }
-            if vendorFound { break }
-        }
-        if !vendorFound, let first = lines.first, first.text.count <= 40 {
-            r.vendor = first.text
-            r.vendorConfidence = min(first.confidence, 0.5) // đoán từ dòng đầu -> tin cậy thấp
-        }
+        // Vendor: WP5 — tên tiệm CHỈ từ identifyVendor (nấc 1 khớp tên /
+        // nấc 2 neo phụ). Đường rơi dòng-đầu của Build 1 (nguồn lỗi
+        // "How doers" trên Mẫu 003) ĐÃ BỎ về mặt cấu trúc: không khớp
+        // thì để trống, validate() gắn cảnh báo, anh nhập tay.
+        r.vendor = identifiedVendor
 
         // Ngày
         if let found = findDateTime(in: lines) ?? findDateOnly(in: lines) {
@@ -394,6 +386,253 @@ enum ReceiptParser {
             r.dedupeKey = "GEN|\(vendor)|\(day.string(from: date))|\(total)"
         }
         return r
+    }
+
+    // MARK: - WP5: Nhận diện tiệm 3 nấc (WP5-SPEC mục 3–5)
+    //
+    // Bản Swift của wp5-fixtures/vendor_port.py (port đã kiểm chứng
+    // 19/19 ở bước 1 — sửa hành vi thì sửa port + fixture TRƯỚC, không
+    // sửa một phía). Tên tiệm chỉ đến từ bằng chứng: nấc 1 khớp tên
+    // toàn-bộ-dòng (exact trước, mờ sau) hoặc nấc 2 neo phụ của tiệm
+    // đã biết; nấc 3 món đặc trưng CHỈ gợi ý (bảng seed RỖNG). Ngoài
+    // hai nấc đầu, tên tiệm để TRỐNG — không còn đường rơi dòng-đầu.
+
+    struct VendorIdentification {
+        var vendor: String? = nil
+        var vendorKey: String = "generic"
+        var confidence: Double = 0
+        var source: String? = nil   // "tier1-exact" | "tier1-fuzzy" | "tier2-anchor"
+        var suggestion: String? = nil
+        var anchorDisputed: Bool = false
+    }
+
+    /// Danh sách tiệm đã biết — đúng seed Build 1 + Sam's, tên chuẩn
+    /// theo vendor_port.py (needle đã chuẩn hoá: apostrophe -> khoảng
+    /// trắng, vd "SAM S CLUB").
+    private static let knownVendors: [(name: String, needles: [String], key: String)] = [
+        ("Sam's Club", ["SAM S CLUB", "SAMS CLUB"], "sams"),
+        ("Walmart", ["WALMART"], "generic"),
+        ("Costco", ["COSTCO"], "generic"),
+        ("The Home Depot", ["HOME DEPOT", "THE HOME DEPOT"], "generic"),
+        ("Lowe's", ["LOWE S", "LOWES"], "generic"),
+        ("Target", ["TARGET"], "generic"),
+        ("QuikTrip", ["QUIKTRIP", "QUIK TRIP"], "generic"),
+        ("Casey's", ["CASEY S", "CASEYS"], "generic"),
+        ("Love's", ["LOVE S", "LOVES"], "generic")
+    ]
+
+    /// Token thuộc diện chỉ-khớp-đúng, cấm khớp-mờ (từ ngắn/phổ thông —
+    /// chống dương tính giả kiểu "TARGETED" thành Target).
+    private static let exactTokenOnly: Set<String> = ["TARGET", "LOWES", "LOWE"]
+
+    /// Neo phụ (nấc 2) — seed CHỈ gồm neo có bằng chứng trong bộ mẫu
+    /// đóng băng (WP5-SPEC mục 4): (tiệm, key, loại neo, giá trị đã
+    /// chuẩn hoá). Cấm chép địa chỉ chuỗi tiệm từ internet vào đây.
+    private static let vendorAnchors: [(vendor: String, key: String, kind: String, value: String)] = [
+        ("The Home Depot", "generic", "street", "9808 E 71ST ST"),
+        ("The Home Depot", "generic", "zip", "74133"),
+        ("Sam's Club", "sams", "phone", "9182529503")
+    ]
+
+    /// Món đặc trưng (nấc 3) — bảng seed RỖNG: chưa mẫu đóng băng nào
+    /// khoá được một món là đặc trưng của một tiệm (WP5-SPEC mục 5).
+    private static let signatureItems: [String: String] = [:]
+
+    private static func identifyVendor(lines: [OCRLine]) -> VendorIdentification {
+        var result = VendorIdentification()
+
+        // NẤC 1 — quét TOÀN BỘ dòng (bỏ prefix(6) của Build 1);
+        // khớp-đúng ở BẤT KỲ dòng nào thắng khớp-mờ ở dòng sớm hơn;
+        // cùng hạng thì dòng sớm hơn thắng.
+        var best: (rank: Int, lineIndex: Int, vendor: String, key: String, confidence: Double, kind: String)? = nil
+        for (index, line) in lines.enumerated() {
+            let normalized = normalizeForVendorMatch(line.text)
+            for kv in knownVendors {
+                for needle in kv.needles {
+                    guard let kind = vendorLineMatch(normalizedLine: normalized, needle: needle) else { continue }
+                    let rank = kind == "exact" ? 2 : 1
+                    if let b = best, rank < b.rank || (rank == b.rank && index >= b.lineIndex) { continue }
+                    best = (rank, index, kv.name, kv.key, line.confidence, kind)
+                }
+            }
+        }
+        if let b = best {
+            result.vendor = b.vendor
+            result.vendorKey = b.key
+            if b.kind == "exact" {
+                result.source = "tier1-exact"
+                result.confidence = b.confidence
+            } else {
+                result.source = "tier1-fuzzy"
+                result.confidence = b.confidence * 0.8
+            }
+            return result
+        }
+
+        // NẤC 2 — neo phụ: ≥1 neo MẠNH (street/phone) hoặc ≥2 neo YẾU
+        // khác loại của CÙNG tiệm (ZIP đơn độc là yếu — không đủ). Hai
+        // tiệm khác nhau cùng khớp neo -> tranh chấp, KHÔNG điền.
+        let hits = anchorHits(lines: lines)
+        if hits.count == 1, let only = hits.first {
+            result.vendor = only.vendor
+            result.vendorKey = only.key
+            result.source = "tier2-anchor"
+            result.confidence = 0.5   // neo không phải tên in trên giấy: giới hạn 0.5
+            return result
+        }
+        if hits.count > 1 {
+            result.anchorDisputed = true
+        }
+
+        // NẤC 3 — món đặc trưng: CHỈ gợi ý, vendor vẫn để trống.
+        if !signatureItems.isEmpty {
+            let joined = lines.map { normalizeForVendorMatch($0.text) }.joined(separator: " ")
+            for (token, vendor) in signatureItems where joined.contains(token) {
+                result.suggestion = vendor
+                break
+            }
+        }
+        return result
+    }
+
+    /// Các tiệm đủ điều kiện neo: (tiệm, key). Điều kiện: có neo mạnh
+    /// hoặc ≥2 loại neo yếu khác nhau của cùng tiệm.
+    private static func anchorHits(lines: [OCRLine]) -> [(vendor: String, key: String)] {
+        var kindsByVendor: [String: Set<String>] = [:]
+        var keyByVendor: [String: String] = [:]
+        for line in lines {
+            let normalized = normalizeForVendorMatch(line.text)
+            let tokens = normalized.split(separator: " ").map(String.init)
+            let digits = line.text.filter { $0.isASCII && $0.isNumber }
+            for anchor in vendorAnchors {
+                let ok: Bool
+                switch anchor.kind {
+                case "street": ok = normalized.contains(anchor.value)
+                case "phone": ok = digits.contains(anchor.value)
+                case "zip": ok = tokens.contains(anchor.value)
+                default: ok = false
+                }
+                if ok {
+                    kindsByVendor[anchor.vendor, default: []].insert(anchor.kind)
+                    keyByVendor[anchor.vendor] = anchor.key
+                }
+            }
+        }
+        let strongKinds: Set<String> = ["street", "phone"]
+        var qualifying: [(vendor: String, key: String)] = []
+        for (vendor, kinds) in kindsByVendor {
+            if !kinds.isDisjoint(with: strongKinds) || kinds.count >= 2 {
+                qualifying.append((vendor, keyByVendor[vendor] ?? "generic"))
+            }
+        }
+        return qualifying
+    }
+
+    /// Chuẩn hoá để khớp tiệm (bản Swift của normalize() trong port):
+    /// thống nhất apostrophe cong/thẳng, bỏ dấu tiếng Việt, viết hoa,
+    /// ký tự không phải A-Z/0-9 thành khoảng trắng, gọn khoảng trắng.
+    private static func normalizeForVendorMatch(_ text: String) -> String {
+        var t = text.replacingOccurrences(of: "\u{2019}", with: "'")
+        t = t.replacingOccurrences(of: "\u{2018}", with: "'")
+        t = t.replacingOccurrences(of: "\u{02BC}", with: "'")
+        t = t.folding(options: [.diacriticInsensitive], locale: nil).uppercased()
+        var out = ""
+        for scalar in t.unicodeScalars {
+            if (scalar.value >= 65 && scalar.value <= 90) || (scalar.value >= 48 && scalar.value <= 57) {
+                out.append(Character(scalar))
+            } else {
+                out.append(" ")
+            }
+        }
+        return out.split(separator: " ").joined(separator: " ")
+    }
+
+    /// Một dòng đã chuẩn hoá khớp một needle: "exact" khi needle xuất
+    /// hiện nguyên vẹn theo ranh giới token; "fuzzy" khi MỌI token của
+    /// needle có một token trong dòng khớp (đúng hoặc mờ-1-ký-tự) và ít
+    /// nhất một token là khớp-mờ thật; nil nếu không khớp.
+    private static func vendorLineMatch(normalizedLine: String, needle: String) -> String? {
+        let lineTokens = normalizedLine.split(separator: " ").map(String.init)
+        let needleTokens = needle.split(separator: " ").map(String.init)
+        guard !needleTokens.isEmpty, !lineTokens.isEmpty else { return nil }
+        if lineTokens.count >= needleTokens.count {
+            for i in 0...(lineTokens.count - needleTokens.count) {
+                if Array(lineTokens[i..<(i + needleTokens.count)]) == needleTokens {
+                    return "exact"
+                }
+            }
+        }
+        var usedFuzzy = false
+        for nt in needleTokens {
+            var hit: String? = nil
+            for lt in lineTokens {
+                if lt == nt { hit = "exact"; break }
+                if tokenFuzzyEqual(lineToken: lt, needleToken: nt) { hit = "fuzzy" }
+            }
+            guard let h = hit else { return nil }
+            if h == "fuzzy" { usedFuzzy = true }
+        }
+        return usedFuzzy ? "fuzzy" : nil
+    }
+
+    /// 1 token khớp-mờ: bằng nhau, hoặc cả hai dài ≥5 và Levenshtein ≤1.
+    /// Token thuộc exactTokenOnly chỉ khớp khi bằng nhau.
+    private static func tokenFuzzyEqual(lineToken: String, needleToken: String) -> Bool {
+        if lineToken == needleToken { return true }
+        if exactTokenOnly.contains(needleToken) { return false }
+        guard lineToken.count >= 5, needleToken.count >= 5 else { return false }
+        return levenshtein(lineToken, needleToken) <= 1
+    }
+
+    private static func levenshtein(_ a: String, _ b: String) -> Int {
+        let aChars = Array(a), bChars = Array(b)
+        if aChars.isEmpty { return bChars.count }
+        if bChars.isEmpty { return aChars.count }
+        var prev = Array(0...bChars.count)
+        for i in 1...aChars.count {
+            var cur = [i]
+            for j in 1...bChars.count {
+                cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (aChars[i - 1] == bChars[j - 1] ? 0 : 1)))
+            }
+            prev = cur
+        }
+        return prev[bChars.count]
+    }
+
+    // MARK: - WP5: Trích địa chỉ / điện thoại / mã cửa hàng (hạ cánh WP2)
+    //
+    // Chỉ trích NGUYÊN VĂN dòng thấy được trên hoá đơn, không ghép/suy
+    // địa chỉ từ nhiều dòng rời (WP5-SPEC mục 4). Mẫu regex chốt ở đây
+    // kèm bản port kiểm chứng wp5-fixtures/extract_port.py.
+
+    private static func extractVendorContact(lines: [OCRLine]) -> (address: String?, phone: String?, storeNumber: String?) {
+        var address: String? = nil
+        var phone: String? = nil
+        var storeNumber: String? = nil
+        for line in lines {
+            let text = line.text
+            // Địa chỉ: dòng bắt đầu bằng số nhà + tên đường + hậu tố
+            // đường (ST/AVE/BLVD...). Lấy nguyên văn dòng đầu tiên khớp.
+            if address == nil,
+               matchGroups(text.uppercased(), pattern: #"^\d{1,6}\s+[A-Z0-9 .'\-]+\s+(ST|STREET|AVE|AVENUE|BLVD|RD|ROAD|DR|DRIVE|LN|LANE|HWY|HIGHWAY|CT|COURT|WAY|CIR|CIRCLE|PL|PLACE|TER|TERRACE|TRL|TRAIL)\b"#) != nil {
+                address = text
+            }
+            // Điện thoại 10 số có định dạng (dấu - . khoảng trắng hoặc
+            // ngoặc mã vùng), hai đầu không dính số khác — tránh vớ
+            // phải dãy số hoá đơn/TC#.
+            if phone == nil,
+               let m = matchGroups(text, pattern: #"(?<!\d)(\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4})(?!\d)"#),
+               let found = m.first ?? nil {
+                phone = found
+            }
+            // Mã cửa hàng: "STORE #1234" / "ST# 1234" / "CLUB #1234".
+            if storeNumber == nil,
+               let m = matchGroups(text, pattern: #"\b(?:STORE|ST|CLUB)\s*#\s*(\d{3,6})\b"#),
+               let found = m.first ?? nil {
+                storeNumber = found
+            }
+        }
+        return (address, phone, storeNumber)
     }
 
     // MARK: - Thẻ: CHỈ từ dòng có ký tự che (luật toàn cục số 2)
@@ -520,6 +759,40 @@ enum ReceiptParser {
                 warnings.append("Tổng tiền độ tin cậy THẤP — bắt buộc kiểm tra lại với giấy.")
             } else if r.totalConfidence >= 0.60 && r.totalConfidence < 0.85 {
                 warnings.append("Tổng tiền chưa thật chắc — anh kiểm tra giúp.")
+            }
+        }
+        // WP5 — kỷ luật C-11 mở rộng cho TIỆM và NGÀY (WP5-SPEC mục 6):
+        // cùng mẫu ngưỡng 0.60/0.85 với total ở trên (ngưỡng khởi điểm,
+        // chưa hiệu chuẩn trên corpus — hiệu chuẩn thuộc bài chấm M1).
+        // Phần số học của validate() ở trên giữ NGUYÊN VĂN. Cảnh báo
+        // mới đi qua warnings -> ReviewView.save() ép Hộp Chờ như cũ.
+        if r.vendor == nil {
+            if let suggestion = r.vendorSuggestion {
+                warnings.append("Chưa rõ tiệm — gợi ý từ món đặc trưng: \(suggestion) (chưa tự điền).")
+            } else {
+                warnings.append("Không đọc được tên tiệm — anh nhập tay giúp.")
+            }
+        } else {
+            if r.vendorSource == "tier1-fuzzy" {
+                warnings.append("Tên tiệm khớp mờ — anh kiểm tra giúp.")
+            }
+            if r.vendorSource == "tier2-anchor" {
+                warnings.append("Tên tiệm nhận qua địa chỉ/số điện thoại — anh kiểm tra giúp.")
+            }
+            if r.vendorConfidence > 0 && r.vendorConfidence < 0.60 {
+                warnings.append("Tên tiệm độ tin cậy THẤP — bắt buộc kiểm tra lại với giấy.")
+            } else if r.vendorConfidence >= 0.60 && r.vendorConfidence < 0.85 {
+                warnings.append("Tên tiệm chưa thật chắc — anh kiểm tra giúp.")
+            }
+        }
+        if r.vendorAnchorDisputed {
+            warnings.append("Nhiều tiệm cùng khớp neo phụ — không tự điền tên tiệm.")
+        }
+        if r.date != nil {
+            if r.dateConfidence > 0 && r.dateConfidence < 0.60 {
+                warnings.append("Ngày độ tin cậy THẤP — bắt buộc kiểm tra lại với giấy.")
+            } else if r.dateConfidence >= 0.60 && r.dateConfidence < 0.85 {
+                warnings.append("Ngày chưa thật chắc — anh kiểm tra giúp.")
             }
         }
         return warnings
