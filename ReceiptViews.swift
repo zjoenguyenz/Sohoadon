@@ -86,8 +86,14 @@ struct RawTextDisclosure: View {
 // SCANPRO (2026-11-10): cộng nút chụp lại bản gốc bằng máy quét tài
 // liệu (VNDocumentCamera) ngay trong màn Chi Tiết — mã mới
 // "m1fix-reparse-4".
+//
+// OCRFIX (2026-11-10): làm lại đường đọc ảnh->OCR trong ScanView
+// (ảnh gốc là ứng viên số 1, phái sinh thi đấu theo điểm sản lượng,
+// hạ ngưỡng cắt lát cho ảnh cao) sau sự cố Mẫu 001 đọc ra rác. Đây
+// là bản sửa CỐT LÕI nên đặt mã riêng "ocrfix-1", không nối tiếp
+// dãy m1fix-reparse (dãy đó dành cho các gói sửa đường chữ).
 
-let currentParserVersion = "m1fix-reparse-4"
+let currentParserVersion = "ocrfix-1"
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //

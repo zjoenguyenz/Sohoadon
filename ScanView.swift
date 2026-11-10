@@ -401,6 +401,12 @@ struct ScanView: View {
     // (Đặc tả đo + luật chọn thắng/thua: WP4-SPEC.md. Ảnh GỐC không bao
     //  giờ bị sửa: process() đã lưu JPEG gốc TRƯỚC khi đọc; phái sinh chỉ
     //  tồn tại trong bộ nhớ ở đường đọc này, không lưu, không thay gốc.)
+    // OCRFIX (2026-11-10): làm lại LUẬT CHỌN ẢNH ĐẦU VÀO của đường đọc —
+    // ảnh gốc là ứng viên số 1 LUÔN được đọc; ảnh phái sinh chỉ là ứng
+    // viên phụ, thắng khi ĐIỂM SẢN LƯỢNG cao hơn hẳn (xem yieldScore).
+    // Cờ thay-thế-mù useDerivedImage của WP4 đã gỡ bỏ (sự cố Mẫu 001:
+    // phái sinh thắng thế vô điều kiện, lượt đọc sụp còn 3 mảnh rác mà
+    // không có kiểm sản lượng, không có đường lùi — xem gói OCRFIX).
 
     /// Một mảnh chữ Vision kèm hộp toạ độ chuẩn hoá (gốc dưới-trái) trong
     /// KHÔNG GIAN ẢNH ĐẦY ĐỦ — mảnh của lát cắt đã quy đổi về trước khi ráp.
@@ -428,30 +434,98 @@ struct ScanView: View {
             return
         }
         DispatchQueue.global(qos: .userInitiated).async {
-            // Cấu hình đo của ứng viên (a) (WP4-SPEC §2): đọc trên ảnh
-            // PHÁI SINH khi cờ bật và phái sinh tạo được; mọi lỗi ở tầng
-            // phái sinh đều fail-open về ảnh gốc — không có đường nào mà
-            // tiền xử lý hỏng lại làm mất lượt đọc.
-            let ocrImage = Self.useDerivedImage
-                ? (Self.derivedOCRImage(cgImage) ?? cgImage)
-                : cgImage
-            let frags = Self.collectFragments(cgImage: ocrImage)
-            let lines = Self.mergeRows(Self.dedupeOverlap(frags))
-            completion(lines)
+            // OCRFIX: hai ứng viên thi đấu theo SẢN LƯỢNG (yieldScore).
+            // Ứng viên 1 — ảnh GỐC — luôn được đọc trước và là kết quả
+            // mặc định; ứng viên 2 — ảnh PHÁI SINH — chỉ thắng khi điểm
+            // cao hơn HẲN (hoà thì giữ gốc). Mọi lỗi ở tầng phái sinh
+            // (không thấy tứ giác, lọc lỗi) đều thu về "không có ứng
+            // viên 2" — tiền xử lý hỏng không còn làm mất lượt đọc, và
+            // phái sinh không còn âm thầm thay thế gốc như sự cố
+            // Mẫu 001 (phái sinh đọc ra 3 mảnh rác và thắng thế vì là
+            // đầu vào duy nhất được đọc).
+            let originalLines = Self.ocrLines(from: cgImage)
+            var bestLines = originalLines
+            if let derived = Self.derivedOCRImage(cgImage) {
+                let derivedLines = Self.ocrLines(from: derived)
+                if Self.yieldScore(derivedLines) > Self.yieldScore(originalLines) {
+                    bestLines = derivedLines
+                }
+            }
+            completion(bestLines)
         }
     }
 
-    /// WP4-SPEC §2: hai cấu hình đo của TỪNG ứng viên là "đọc trên ảnh
-    /// gốc" và "đọc trên ảnh phái sinh" — cờ này là công tắc để bước 3
-    /// chạy thi đấu hai cấu hình trên cùng một bản code. Bản trình cổng
-    /// giữ `true`: phái sinh chỉ được dùng khi phát hiện được tứ giác đủ
-    /// tin cậy (xem derivedOCRImage), còn lại tự rơi về ảnh gốc.
-    private static let useDerivedImage = true
+    /// OCRFIX: một lượt đọc trọn vẹn trên MỘT ảnh — cắt lát (nếu đạt
+    /// ngưỡng) -> mảnh -> khử trùng vùng chồng -> ráp hàng. Đây là
+    /// đúng đường ống cũ của WP4, chỉ tách thành hàm riêng để chạy
+    /// cho cả hai ứng viên (gốc + phái sinh) bằng cùng một cơ chế.
+    private static func ocrLines(from cgImage: CGImage) -> [OCRLine] {
+        mergeRows(dedupeOverlap(collectFragments(cgImage: cgImage)))
+    }
+
+    /// OCRFIX: điểm SẢN LƯỢNG của một bộ dòng — ước lượng "bộ này có
+    /// giống một lượt đọc hoá đơn thành công không", CHỈ dùng để chọn
+    /// ứng viên, không chạm vào nội dung dòng và không thay bất kỳ
+    /// kiểm chứng nào của Parser. Ba thành phần, hệ số tròn trị:
+    ///  1. +10 cho mỗi dòng chứa ít nhất 1 ký tự chữ-số (dòng rác
+    ///     thuần ký hiệu không tính).
+    ///  2. +(tổng số ký tự chữ-số của mọi dòng) / 10, chia nguyên —
+    ///     thưởng cho lượng thông tin thật, để một ứng viên không
+    ///     thắng chỉ nhờ nhiều dòng vụn ngắn.
+    ///  3. Neo cấu trúc, mỗi loại tối đa 1 lần: SUBTOTAL +30; TOTAL
+    ///     trên dòng KHÔNG phải SUBTOTAL +40; ký tự % +20; mẫu ngày
+    ///     dd/dd/dd(dd) hoặc dd-dd-dd(dd) +20. Hoá đơn đọc trúng gần
+    ///     như luôn có các neo này.
+    /// Hiệu chuẩn trên chính sự cố Mẫu 001 (bản gương Python của
+    /// đúng công thức này, xem AFTER.md gói OCRFIX): bộ rác 3 dòng
+    /// ("28200860 / IV Z / 9969080000") được 3×10 + 21/10 + 0 = 32
+    /// điểm; một bộ dòng Sam's trúng RÚT GỌN còn 14 dòng đã đạt 271
+    /// điểm (đủ 4 neo = +110) — cách biệt ~8,5 lần ngay trên bản rút
+    /// gọn, lượt đọc đầy đủ còn cao hơn; không nằm ở vùng nhiễu của
+    /// phép chọn.
+    private static func yieldScore(_ lines: [OCRLine]) -> Int {
+        var contentLines = 0
+        var alnumChars = 0
+        var hasSubtotal = false
+        var hasTotal = false
+        var hasPercent = false
+        var hasDate = false
+        for line in lines {
+            let text = line.text
+            let alnum = text.unicodeScalars.filter {
+                CharacterSet.alphanumerics.contains($0)
+            }.count
+            if alnum > 0 {
+                contentLines += 1
+                alnumChars += alnum
+            }
+            let upper = text.uppercased()
+            if upper.contains("SUBTOTAL") {
+                hasSubtotal = true
+            } else if upper.contains("TOTAL") {
+                hasTotal = true
+            }
+            if text.contains("%") { hasPercent = true }
+            if !hasDate,
+               text.range(of: #"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"#,
+                          options: .regularExpression) != nil {
+                hasDate = true
+            }
+        }
+        var score = contentLines * 10 + alnumChars / 10
+        if hasSubtotal { score += 30 }
+        if hasTotal { score += 40 }
+        if hasPercent { score += 20 }
+        if hasDate { score += 20 }
+        return score
+    }
 
     /// Tạo ảnh PHÁI SINH trong bộ nhớ để đọc (không bao giờ lưu):
     /// VNDetectRectanglesRequest tìm tứ giác hoá đơn -> CIPerspective-
     /// Correction nắn thẳng -> CIColorControls bỏ màu + tăng tương phản.
-    /// Trả nil (= dùng ảnh gốc) khi: không thấy tứ giác nào đạt ngưỡng
+    /// OCRFIX: phái sinh chỉ còn là ỨNG VIÊN PHỤ — tạo được thì đọc
+    /// riêng rồi thi đấu điểm sản lượng với ảnh gốc (xem recognizeLines).
+    /// Trả nil (= không có ứng viên phái sinh) khi: không thấy tứ giác nào đạt ngưỡng
     /// tin cậy, hoặc bất kỳ bước lọc nào lỗi. Ngưỡng 0.5 và hệ số tương
     /// phản 1.1 là GIÁ TRỊ KHỞI ĐIỂM cho bước 3 đo trên bộ mẫu — chưa
     /// có bằng chứng chúng tối ưu, không được đọc là "đã tinh chỉnh".
@@ -493,16 +567,24 @@ struct ScanView: View {
         return context.createCGImage(output, from: output.extent)
     }
 
-    /// Trích mảnh chữ từ ảnh đầy đủ. F2c: ảnh RẤT cao (tỉ lệ cao/rộng > 3.0
-    /// và cao > 1600px — dạng hoá đơn dài như Mẫu 002) được cắt thành lát
-    /// dọc ~1600px chồng nhau 200px, OCR từng lát, rồi quy đổi hộp của mỗi
-    /// mảnh về toạ độ ảnh đầy đủ TRƯỚC khi ráp hàng. Ngoài ngưỡng đó: 1 lượt
-    /// OCR như cũ. handler.perform là ĐỒNG BỘ nên vòng lát chạy tuần tự
-    /// trong hàng đợi nền — không có request nào chạy song song.
+    /// Trích mảnh chữ từ ảnh đầy đủ. F2c: ảnh cao được cắt thành lát
+    /// dọc ~1600px chồng nhau 200px, OCR từng lát, rồi quy đổi hộp của
+    /// mỗi mảnh về toạ độ ảnh đầy đủ TRƯỚC khi ráp hàng. Ngoài ngưỡng
+    /// đó: 1 lượt OCR như cũ. handler.perform là ĐỒNG BỘ nên vòng lát
+    /// chạy tuần tự trong hàng đợi nền — không có request nào chạy
+    /// song song.
+    /// OCRFIX — NGƯỠNG CẮT MỚI: cao > 2000px là cắt, BẤT KỂ tỉ lệ
+    /// (WP4 đòi thêm tỉ lệ cao/rộng > 3.0). Lý do: hoá đơn giấy dài
+    /// là ca THƯỜNG chứ không phải ca cá biệt theo tỉ lệ — Mẫu 001
+    /// (1320×2868, tỉ lệ 2.17) bị ngưỡng cũ bỏ qua, phải đọc một lượt
+    /// trên toàn chiều cao 2868px. Rủi ro vùng chồng 200px sinh mảnh
+    /// trùng được dedupeOverlap xử theo đúng luật F2c như trước
+    /// (cùng chữ + hộp giao ≥ 50% -> giữ bản tin cậy hơn); xem thêm
+    /// phân tích rủi ro trong AFTER.md của gói OCRFIX.
     private static func collectFragments(cgImage: CGImage) -> [OCRFrag] {
         let w = cgImage.width
         let h = cgImage.height
-        guard h > 1600, Double(h) / Double(max(w, 1)) > 3.0 else {
+        guard h > 2000 else {
             return ocrFragments(tile: cgImage, tileTopPx: 0, tileHeightPx: h, fullHeightPx: h)
         }
         var all: [OCRFrag] = []
