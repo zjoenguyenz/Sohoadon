@@ -1,0 +1,39 @@
+WP-EXPORT verify (bản gương Python) — 37/37 PASS
+
+[PASS] U1 money 10516
+[PASS] U2 money None
+[PASS] U3 money âm
+[PASS] U4 Sams
+[PASS] U5 bỏ dấu
+[PASS] U6 Home Depot
+[PASS] U7 tên rỗng
+[PASS] S1 số tờ khớp = 6
+[PASS] S1 tổng = 21680+5000+5000+10850+2000+7600
+[PASS] S1 thiếu gốc = 1 (Lowe's)
+[PASS] S1 Sam's có mặt
+[PASS] S1 trùng tên có -2
+[PASS] S1 đa trang: p1 + trang3 (p2 mất)
+[PASS] S1 biên đầu vào, biên cuối là personal nên không vào
+[PASS] S1 Home Depot (personal) không vào
+[PASS] S1 tên ZIP
+[PASS] S1 CSV có BOM
+[PASS] S1 CSV dòng Lowe's ghi THIẾU BẢN GỐC
+[PASS] S1 CSV Best Buy ghi thiếu 1 trang gốc
+[PASS] S1 CSV dòng TỔNG
+[PASS] S2 năm 2025 = 2 tờ (HD + Target biên đầu khoảng năm)
+[PASS] S2 gồm Home Depot + Target 2025-10-01
+[PASS] S2 Walmart 2024 ngoài năm
+[PASS] S3 đúng 1 tờ Home Depot
+[PASS] S3 tổng 10516
+[PASS] S3 CSV thẻ 3830 + tổng 105.16
+[PASS] S4 unknown Phở vào Tất cả + ghi chú chưa phân loại
+[PASS] S4 thiếu gốc toàn cục = 1
+[PASS] S4 tờ thiếu tổng: tên file chua-doc-duoc-tong
+[PASS] S4 Walmart 2024 vẫn ngoài
+[PASS] S5 zip testzip sạch
+[PASS] S5 mọi thành viên STORE
+[PASS] S5 muc-luc.csv là thành viên cuối
+[PASS] S5 csv trong ZIP khớp byte bản sinh
+[PASS] S5 số thành viên = file gốc + 1 csv
+[PASS] S5 byte từng file gốc khớp store
+[PASS] S5 ZIP tái lập (byte-identical 2 lần chạy)

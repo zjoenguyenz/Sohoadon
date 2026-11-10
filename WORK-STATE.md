@@ -1,5 +1,128 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 12:45 CST (ca trực: **WP6 BƯỚC 1
+Cập nhật lần cuối: 2026-11-10 16:47 CST (chat chính: **HUY ĐỘNG
+TOÀN ĐỘI LÀM LẠI CỐT LÕI OCR** theo lệnh anh 16:44 — bản OCRFIX
+đọc đúng phần đầu trên Mẫu 001 nhưng sổ món vẫn mất 2 đơn vị /
+$34.46 trên máy (anh báo 16:40) → anh lệnh: giải pháp tuyệt đối,
+KHÔNG bản test nhỏ nữa. 4 tuyến song song đã mở trong core-redo/:
+ENGINE (thi đấu dứt điểm (a) Vision cổ điển vs (b) iOS 26
+RecognizeDocumentsRequest + kiến trúc đa lượt), PIPELINE (kiểm
+toán ráp mảnh/lát cắt theo bằng chứng lỗi), RECONCILE (lớp đối
+chiếu số học + sửa có mục tiêu + đọc lại theo vùng), QA (bench
+nghiệm thu "tuyệt đối" + gói đo MỘT buổi duy nhất). ĐÓNG BĂNG
+mọi giao bản; bản tiếp theo = giải pháp trọn gói qua cổng QA.
+Đầu vào bằng chứng số 1 còn thiếu: luồng OCR gốc trên máy của
+tờ Sam's vừa nạp (anh copy từ mục Văn bản OCR gốc). WP-EXPORT
+tiếp tục đóng băng.)
+Cập nhật trước đó: 2026-11-10 16:40 CST (ca trực: **KIỂM CHỨNG
+TỪ XA LẦN ĐẨY MƠ HỒ 14:40 — KHÔNG LÊN ĐƯỢC CHÚT NÀO, KHÔNG
+TRÙNG**: đúng việc ca 14:40 dặn ca sau. Đọc trực tiếp GitHub
+(zjoenguyenz/Sohoadon) trong ca này: nhánh docs/planning vẫn ở
+đầu `cdd83e013e16` (commit 2026-11-10T18:46:55Z = 12:46 CST,
+"WP6 bước 1 đặc tả") — không có commit nào sau đó. Kiểm từng
+file trong danh sách đẩy 14:40 trên nhánh: WP-EXPORT-SPEC.md,
+WP-EXPORT-GATE.md, wp-export-fixtures/export_port.py,
+verify_export.py, verify-export-results.txt đều **KHÔNG TỒN
+TẠI** trên docs/planning; WORK-STATE.md trên nhánh vẫn là bản
+12:45 CST (blob `16b70966…`). Kết luận: lần đẩy bị gián đoạn
+14:40 KHÔNG lên được phần nào — đẩy lại 6 file đó không tạo
+trùng. **Bước tiếp theo giữ nguyên: anh test OCRFIX run #26
+trên Mẫu 001** (Sam's Club · 203.30 · 9.60+3.90 · 216.80);
+WP-EXPORT vẫn đóng băng theo L-2026-11-10-6 cho tới khi mốc
+đó qua trên máy anh. Ca này không viết Swift, không kêu anh
+test thêm gì.)
+Cập nhật trước đó: 2026-11-10 16:33 CST (chat chính: **OCRFIX ĐÃ
+GIAO THEO B2 — run #26**: sự cố Mẫu 001 (ảnh rõ → OCR 3 mảnh rác)
+được anh báo 16:19; đọc code tại chỗ tìm ra tầng phái sinh chưa
+kiểm chứng thay mù ảnh gốc (L-2026-11-10-6, đóng băng đã áp).
+OCRFIX qua cổng Wally: ScanView +106/−24 đúng 5 vùng, ứng viên
+gốc-trước + yieldScore (gương hiệu chuẩn: rác 32đ vs Sam's thật
+271đ), lát cắt khi cao >2000px, harness chữ 13/13 + 11/11 tự
+chạy lại đạt; ReceiptViews chỉ đổi dấu → **ocrfix-1**. Code
+734f676 + workflow a35ef93 → run #26 XANH, artifact
+**SoHoaDon-OCRFIX-run26-2026-11-10** 447 KB sha256 `4aa574db…`;
+soi binary file giao: yieldScore ✓ + đủ nhãn cũ. Đã giao anh, 1
+lần test quyết định: nạp lại CHÍNH ảnh Sam's Mẫu 001 → chuẩn đạt
+Sam's Club · 203.30 · 9.60+3.90 · 216.80; kèm tuỳ chọn 1 phút nạp
+cùng ảnh vào TestB (đã cài sẵn) để chốt thi đấu engine. WP-EXPORT
+vẫn đóng băng chờ mốc này.)
+Cập nhật trước đó: 2026-11-10 16:17 CST (chat chính: **SCANPRO
+ĐƯỢC ANH NGHIỆM 15:54** — bản scan phẳng đã thay ảnh chụp thường
+làm ẢNH GỐC trong chi tiết Home Depot, nút Chụp lại + chú thích
+đúng vị trí, số giữ nguyên. Anh ghi nhận quét tự động chưa hoàn
+hảo, phải chỉnh crop tay trong trình quét — giới hạn của chính
+máy quét hệ thống. **Anh lệnh 16:16: tiếp tục các bước tiếp
+theo** → gói **WP-EXPORT code ĐANG LÀM** (export/, nền
+wp3-prep/ContentView + scanpro/ReceiptViews; oracle = bản gương
+37/37 + 8 quyết §6; dấu bản dự kiến m1fix-reparse-5).)
+Cập nhật trước đó: 2026-11-10 14:40 CST (ca trực: **WP-EXPORT
+BƯỚC CHUẨN BỊ — BẢN GƯƠNG LOGIC XONG**, việc song song độc lập
+trong lúc SCANPRO run #24 chờ anh nghiệm; KHÔNG viết Swift —
+đặc tả ghi cứng code chỉ bắt đầu sau khi anh nghiệm SCANPRO:
+`wp-export-fixtures/export_port.py` (lọc loại × khoảng ngày gồm
+cả 2 đầu · đặt tên file ZIP: làm sạch tên tiệm/`-trangN`/dedupe
+`-2` · muc-luc.csv UTF-8 BOM + dòng TỔNG · ZIP kiểu STORE) +
+`verify_export.py` **37/37 PASS** (verify-export-results.txt) +
+`unzip -t` hệ thống sạch trên ZIP mẫu thu nhỏ. Fixture: metadata
+THẬT Sam's 001 (Business 2586 · 216.80) + Home Depot 003 (Cá
+nhân 3830 · 105.16) + biên SYNTHETIC (unknown có dấu · trùng tên
+· đa trang mất trang 2 · biên đầu/cuối · thiếu tổng · file không
+nạp được); byte file gốc là giả lập (kho ảnh thật ở iPhone anh).
+8 quyết khoá tại điểm đặc tả để ngỏ → WP-EXPORT-SPEC.md mục 6;
+văn bản cổng bước: WP-EXPORT-GATE.md. Lỗi phía em bắt được ở
+gương: "Sam's" → "Sam-s-Club", đã sửa + khoá luật bỏ dấu nháy.
+**Bước tiếp theo giữ nguyên: anh nghiệm SCANPRO → mới viết code
+WP-EXPORT (Swift dịch trung thực gương này).** Không kêu anh
+test gì ở bước này.)
+CHỜ DUYỆT ĐẨY (ca 14:40): đã thử đẩy docs/planning ĐÚNG 1 LẦN
+(6 file: WORK-STATE.md, WP-EXPORT-SPEC.md, WP-EXPORT-GATE.md,
+wp-export-fixtures/export_port.py, wp-export-fixtures/
+verify_export.py, wp-export-fixtures/verify-export-results.txt)
+— lần đẩy bị gián đoạn giữa chừng do dịch vụ khởi động lại,
+kết quả KHÔNG XÁC ĐỊNH (có thể đã lên một phần hoặc chưa);
+ca sau kiểm từ xa trạng thái nhánh docs/planning trước khi đẩy
+lại, không đẩy mù trùng lặp. **[ĐÃ GIẢI QUYẾT 16:40 CST: ca
+trực kiểm từ xa — lần đẩy đó KHÔNG lên được phần nào, xem mục
+mới nhất ở đầu file; ca 16:40 đẩy lại 6 file này đúng 1 lần ở
+cuối ca.]**
+Cập nhật trước đó: 2026-11-10 13:09 CST (chat chính: **SCANPRO
+ĐÃ GIAO THEO B2 — run #24**: gói qua cổng Wally — diff +117/−1,
+1 dòng thay là mã bản; wrapper DocumentCameraView của ScanView
+là struct cấp tệp nên ReceiptViews dùng lại nguyên trạng, chỉ
+cộng import VisionKit. Code 9222298 + workflow 6942892 → run #24
+XANH, artifact **SoHoaDon-CHUP-LAI-run24-2026-11-10** 445 KB
+sha256 `9464b01c…`; Wally soi binary file giao: đủ nhãn Chụp lại
+bản gốc / Gắn lại / Đọc lại / Bản bộ đọc. Dấu bản:
+**m1fix-reparse-4**. Đã giao anh, 1 lần test: mở Home Depot →
+Chụp lại bản gốc → quét tờ giấy → bản scan phẳng thành ảnh gốc
+mới, ảnh cũ giữ ở file phụ. Chưa kiểm được đã khai: máy quét tài
+liệu chỉ chạy trên máy thật. WP-EXPORT code bắt đầu sau khi anh
+nghiệm SCANPRO.)
+Cập nhật trước đó: 2026-11-10 13:02 CST (chat chính: **IMGFIX
+ĐƯỢC ANH NGHIỆM ĐẠT 12:53** — ảnh chi tiết Home Depot đã hiện mục
+ẢNH GỐC (BẰNG CHỨNG) + ảnh tờ hoá đơn + số đúng toàn bộ; vòng ảnh
+gốc đóng. **LỆNH MỚI 13:00: nút CHỤP LẠI BẢN GỐC kiểu máy scan**
+(Microsoft Lens) trong chi tiết — bản scan phẳng, chữ rõ, lưu làm
+bản gốc. Đã kiểm grep: tab CHỤP vốn đã dùng
+VNDocumentCameraViewController từ Build 1 (wp4-prep/ScanView còn
+đủ) — thiếu duy nhất ở màn Chi tiết. Gói **SCANPRO đang làm**
+(scanpro/, nền imgfix/ReceiptViews): nút "Chụp lại bản gốc (quét
+như máy scan)" ở cả nhánh có ảnh lẫn nhánh thiếu ảnh; trang quét
+1 → imageFileName mới (JPEG q0.9), file cũ GIỮ vào
+originalImageFileNames (không xoá bằng chứng), trang thêm nối
+tiếp; KHÔNG tự đọc lại số. Dấu bản dự kiến m1fix-reparse-4.
+WP-EXPORT nối sau SCANPRO.)
+Cập nhật trước đó: 2026-11-10 12:51 CST (chat chính: **IMGFIX ĐÃ
+GIAO THEO B2 — run #22**: gói qua cổng Wally — diff +144/−1, đúng
+1 dòng thay là mã bản; rà 3 ngõ vào đều ĐÃ lưu gốc trước phân
+tích, lỗ hổng chỉ ở bản ghi đã lưu không đối soát. Code ad14b27 +
+workflow 079e9af → run #22 XANH, artifact
+**SoHoaDon-ANH-GOC-run22-2026-11-10** 438 KB sha256 `b3fa8ca7…`;
+Wally tải chính file giao về soi binary đủ 4 nhãn: Thiếu ảnh gốc /
+Gắn lại ảnh gốc / Đọc lại / Bản bộ đọc. Dấu bản: **m1fix-reparse-3**.
+Đã giao anh, 1 lần test: mở Home Depot → cờ Thiếu ảnh gốc + Gắn
+lại → chọn ảnh → ảnh hiện trong chi tiết. Chưa kiểm được đã khai
+trong tin giao: cài đè giữ dữ liệu + picker trên máy anh.)
+Cập nhật trước đó: 2026-11-10 12:45 CST (ca trực: **WP6 BƯỚC 1
 — ĐẶC TẢ XONG**, việc song song độc lập, không đụng làn IMGFIX /
 WP-EXPORT của chat chính và không kêu anh test gì thêm:
 **WP6-SPEC.md** khoá phạm vi WP6 (mốc M2) bằng bằng chứng đọc
