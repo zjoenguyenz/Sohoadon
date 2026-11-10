@@ -1,9 +1,12 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-09 16:40 CST (ca trực sohoadon-build2-247;
-WP3 bước 1 — lõi đường PDF + nạp từ Files — đã chuẩn bị xong, xem
-WP3-GATE.md. WP2 code đã lên main 15:52 CST commit `d7497d8`.)
-Đẩy tài liệu ca này: xem dòng cuối mục này sau khi thử đẩy (luật chống
-treo: thử đúng 1 lần ở cuối ca).
+Cập nhật lần cuối: 2026-11-09 18:40 CST (ca trực sohoadon-build2-247;
+WP3 bước 2 — đón Share Sheet/onOpenURL + chốt CỔNG WP3 nội bộ — đã
+xong, xem WP3-GATE.md mục BƯỚC 2. WP3 code CHƯA đẩy: trình Wally ở
+chat chính để anh duyệt thẻ đẩy main; bài kiểm máy gộp mốc M1.)
+Đẩy tài liệu ca này: THÀNH CÔNG — commit docs/planning `663e2f0422`
+(WORK-STATE.md + WP3-GATE.md + SCORECARD.md; đã đọc lại WORK-STATE
+trên GitHub khớp nội dung). Dòng ghi kết quả đẩy này sẽ lên GitHub
+cùng lần đẩy của ca sau. Code WP3 CHƯA đẩy — chờ cổng gói (bước 2).
 
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
@@ -113,6 +116,26 @@ treo: thử đúng 1 lần ở cuối ca).
   [CHƯA KIỂM CHỨNG] (gộp bài kiểm mốc M1). **WP3 chưa tới cổng:**
   còn bước 2 — đón Share Sheet/onOpenURL (CẢNH BÁO: không đẩy riêng
   project.yml bước 1 trước bước 2, tránh đường "Mở bằng" chết).
+- **WP3 — BƯỚC 2 (ĐÓN SHARE SHEET + CHỐT CỔNG) ĐÃ XONG (2026-11-09
+  18:40 CST) — WP3 ĐÃ TỚI CỔNG GÓI:** `wp3-prep/` nay 5 file (thêm
+  `ContentView.swift` nền build1 **+18/−2**): ContentView giữ URL qua
+  `.onOpenURL` (khoá Face ID thì chờ, không đọc trước cổng khoá) →
+  TabShell nhảy tab CHỤP + truyền binding → ScanView (**bước 2
+  +63/−1**) hút vào CÙNG `importQueue` của đường Files (không đường
+  nạp thứ hai), quét `Documents/Inbox` khi hiện, xoá bản sao Inbox
+  ngay sau khi đọc xong dữ liệu (chỉ xoá trong Inbox — file mở-tại-
+  chỗ của anh không bị đụng). **Quyết nhãn F3 ĐÃ CHỐT:** nhãn theo
+  ĐƯỜNG sinh chữ — lớp chữ "Văn bản trong PDF" / render→OCR "Văn bản
+  OCR gốc (từ PDF)" / ảnh "Văn bản OCR gốc" — qua helper chung
+  `rawTextTitle` (ReceiptViews bước 2 **+16/−2**) + trường Bool
+  thuần cộng thêm `rawTextFromPDFTextLayer` (Models bước 2 **+6/−0**).
+  Kiểm chứng: diff từng file + cân bằng ngoặc 4 file (94/94 · 94/94 ·
+  185/185 · 36/36) + grep ký hiệu đủ định nghĩa/điểm dùng; không chấm
+  lại điểm (khả năng đọc không đổi). Đủ 3 chữ ký CỔNG WP3 — văn bản:
+  WP3-GATE.md mục BƯỚC 2 + tờ khai trung thực toàn gói. **CHƯA đẩy
+  code.** Điểm mở ghi trong cổng: quyết iOS 26 (anh duyệt 17:32 ở làn
+  thiết kế) CHƯA áp vào project.yml (vẫn 17.0) — gắn WP4 §5.6, để
+  Wally xử lý khi trình cổng, ca trực không tự đổi.
 
 ## Hàng việc (theo BUILD2-MASTER-PLAN, tuần tự tuyệt đối)
 1. ~~**WP0** — Đóng băng bộ mẫu & bảng điểm~~ **ĐÃ XONG 2026-11-09 02:41 CST**:
@@ -143,16 +166,20 @@ treo: thử đúng 1 lần ở cuối ca).
    chiếu số học, nút CHỤP nổi 60pt, cảnh báo tách khỏi màu Business),
    MOCKUP-M1.html (4 màn, dữ liệu thật 001/002/003 — Wally đã kiểm:
    div 206/206, số $105.16/$216.80/TAX 1 8.517% khớp đáp án). Đầu vào
-   WP9. **2 điểm chờ quyết:** (i) bỏ iOS 17, chỉ iOS 26+? — đã trình
-   anh kèm đề xuất duyệt; (ii) nguyên tắc màu Personal bản sáng cho
-   chữ nhỏ ở dark (đo tương phản thật ở WP9 mới khóa).
-6. **WP3** — Đường PDF & nạp file (F1): **bước 1 (lõi PDF + nạp từ
-   Files) ĐÃ chuẩn bị xong 2026-11-09 16:40 CST** (xem WP3-GATE.md +
-   wp3-prep/ + wp3-fixtures/). **Bước tiếp theo (ca sau): WP3 bước 2**
-   — đón Share Sheet/onOpenURL + xử lý Inbox dùng chung hàng chờ nạp,
-   quyết nhãn OCR-từ-PDF, rà soát rồi chốt cổng WP3 (Wally duyệt +
-   thẻ đẩy của anh; bài kiểm máy gộp mốc M1, KHÔNG xin anh test
-   riêng). Sau WP3 mới tới WP4 (thi đấu engine) theo tuần tự.
+   WP9. **Quyết đã chốt:** (i) **chỉ iOS 26+, bỏ hẳn iOS 17** — anh
+   duyệt 2026-11-09 17:32 CST (ghi vào DESIGN-SYSTEM.md, Sổ quyết
+   định); (ii) còn mở: nguyên tắc màu Personal bản sáng cho chữ nhỏ
+   ở dark (đo tương phản thật ở WP9 mới khóa).
+6. **WP3** — Đường PDF & nạp file (F1): **bước 1 ĐÃ xong 16:40 +
+   bước 2 ĐÃ xong 18:40 CST 2026-11-09 — WP3 ĐÃ TỚI CỔNG** (xem
+   WP3-GATE.md mục BƯỚC 2 + wp3-prep/ 5 file). **Bước tiếp theo:**
+   Wally trình anh duyệt thẻ đẩy code WP3 lên main ở chat chính
+   (KHÔNG kèm yêu cầu cài/test — bài kiểm máy gộp mốc M1). Code lên
+   main + build cloud xanh xong thì WP3 đóng và mở **WP4 (thi đấu
+   engine)** theo tuần tự tuyệt đối; trong lúc chờ đẩy, ca sau chuẩn
+   bị song song việc độc lập của WP4 KHÔNG đụng code engine: đặc tả
+   đo WP4 + chuẩn bị mẫu 002-C (cần anh chụp camera thật — điểm chờ)
+   + rà soát điều kiện lập bản test pipeline iOS 26.
 
 ## Điểm dừng chờ anh (ghi rõ, không tự vượt)
 - ~~WP1: thẻ duyệt ĐẨY CODE lên main~~ ĐÃ XONG 2026-11-09 10:43–10:44 CST
@@ -173,6 +200,12 @@ treo: thử đúng 1 lần ở cuối ca).
   có 2 tờ test Build 1 và mở app — 2 tờ còn nguyên, số không đổi =
   kiểm di trú đạt, WP2 đóng (chi tiết + quyết định thiết kế dòng thuế
   ở WP2-GATE.md mục "WP2 BƯỚC 2").
+- **WP3 ĐÃ TỚI CỔNG NỘI BỘ (2026-11-09 18:40 CST):** chờ Wally trình
+  anh duyệt THẺ ĐẨY CODE WP3 lên main ở chat chính (5 file wp3-prep).
+  Theo luật mốc lớn KHÔNG kèm yêu cầu cài/test; build cloud xanh +
+  code lên main là WP3 đóng, mở WP4. Kèm điểm mở để Wally xử lý khi
+  trình: project.yml vẫn iOS 17.0 trong khi làn thiết kế đã chốt chỉ
+  iOS 26 (17:32 CST) — quyết nền tảng gắn WP4 (§5.6).
 - Mọi lần ĐẨY CODE lên main khác (thẻ duyệt của hệ thống sẽ tới anh).
 - WP3: file PDF Sam's (chưa có) — nghiệm thu trên PDF thật khác trước, ghi chờ.
 - WP4: mẫu 002-C chụp camera thật + bản test engine iOS 26 cài trên máy anh.

@@ -177,7 +177,159 @@ riêng gói này; các bài kiểm trên máy gộp vào mốc M1.
   hiển thị render trang 1 ✓ · fallback không lớp chữ → render → OCR ✓.
   QA ký CHUẨN BỊ BƯỚC 1 — chưa ký cổng WP3.
 
-## Việc còn lại của WP3 (ca sau, không làm trong ca này)
+---
+
+# BƯỚC 2 — ĐÓN SHARE SHEET / onOpenURL + CHỐT CỔNG WP3 (2026-11-09 18:40 CST)
+
+**Trạng thái sau ca này: WP3 ĐÃ TỚI CỔNG GÓI** — đủ 3 chữ ký nội bộ cho
+toàn gói (mục cuối). Code ở `wp3-prep/` nay gồm **5 file** (thêm
+`ContentView.swift`). **CHƯA đẩy code** — trình Wally ở chat chính để
+anh duyệt thẻ đẩy lên main; bài kiểm trên máy gộp mốc M1 theo luật mốc
+lớn, KHÔNG xin anh cài/test riêng gói này.
+
+## Việc đã làm trong ca này — đúng MỘT bước: bước 2 của WP3
+(Diff bước 2 đo bằng diff dòng đơn giản so với bản bước 1; số luỹ kế
+so với main/WP2 ghi ở mục chốt cổng.)
+
+- **`ContentView.swift`** (file MỚI trong wp3-prep; nền = build1 —
+  WP2 không đụng file này; diff so với build1: **+18 / −2**, 2 dòng −
+  là điểm dựng `TabShellView(...)` và `ScanView()` được nối thêm tham
+  số binding):
+  - `ContentView` giữ `@State pendingImportURLs: [URL]` và nhận file
+    qua `.onOpenURL` — URL chỉ được GIỮ, không đọc tại đây. App đang
+    khoá Face ID thì URL chờ; mở khoá xong mới truyền xuống (không đọc
+    file trước cổng khoá, đúng tinh thần TEAM.md lỗi #1).
+  - `TabShellView` nhận `@Binding pendingImportURLs`, truyền thẳng
+    xuống `ScanView(externalImportURLs:)`; có file chờ → tự nhảy sang
+    tab CHỤP (`.onChange`).
+- **`ScanView.swift`** (bước 2: **+63 / −1**; dòng −1 duy nhất là dòng
+  dựng `ScanDraft` của nhánh lớp chữ được nối thêm tham số):
+  - `@Binding var externalImportURLs` + `consumeExternalImports()`:
+    đổ URL ngoài vào CÙNG `importQueue` của đường Files rồi xoá danh
+    sách chờ — điểm nạp duy nhất vẫn là
+    `processNextImportedFile`/`processImportedFile`, **không có đường
+    nạp thứ hai**. Hút ở 2 thời điểm: `.onChange` (file tới lúc màn
+    Chụp đang hiện) và `.onAppear` (file chờ từ lúc app khoá/ở tab
+    khác). Hàng chờ bận (đang OCR/đang mở Review) thì URL nằm lại trong
+    queue, `onDismiss` của Review gọi tiếp như đường Files.
+  - `sweepInbox()` ở `.onAppear`: quét `Documents/Inbox` — nơi iOS chép
+    file khi mở-bằng-app mà không mở-tại-chỗ — nạp nốt file còn sót
+    (onOpenURL chưa chạy / app bị giết giữa chừng).
+  - `removeInboxCopyIfNeeded(_:)`: trong `processImportedFile`, ngay
+    sau khi `Data(contentsOf:)` đọc xong, xoá bản sao **chỉ khi URL
+    nằm trong Documents/Inbox của chính app** (so prefix đường dẫn đã
+    standardized). File mở-tại-chỗ từ Files không nằm trong Inbox →
+    file gốc của anh tuyệt đối không bị đụng. Xoá sau khi đọc = quét
+    Inbox lần sau không nạp trùng.
+  - Security-scoped: URL ngoài đi qua đúng hàm cũ — scope mở và đóng
+    trong cùng lượt gọi đồng bộ, đường OCR phía sau không chạm lại URL
+    (giữ nguyên kỷ luật bước 1; file Inbox nằm trong sandbox nên
+    `startAccessing…` trả false, vô hại).
+- **QUYẾT NHÃN OCR-TỪ-PDF (việc treo từ mục phản biện bước 1) — ĐÃ
+  QUYẾT:** nhãn F3 nói đúng ĐƯỜNG sinh ra chữ theo đúng chữ CODE-AUDIT
+  F3 mục 3 ("honest label about which pipeline produced it"), không
+  chỉ nguồn nạp:
+  - Lớp chữ PDF → **"Văn bản trong PDF"**
+  - PDF render→OCR → **"Văn bản OCR gốc (từ PDF)"**
+  - Mọi đường ảnh → **"Văn bản OCR gốc"**
+  - Cơ chế: `ScanDraft.rawTextIsPDFTextLayer` (chỉ nhánh lớp chữ gắn
+    true) → lưu vào trường mới `Receipt.rawTextFromPDFTextLayer`
+    (**Models.swift bước 2: +6 / −0** — một Bool có mặc định, THUẦN
+    cộng thêm, di trú nhẹ; chưa từng có bản ghi `.pdfImport` nào trên
+    máy ai vì WP3 chưa đẩy, nên không bản ghi cũ nào bị nhãn sai) →
+    một helper chung `rawTextTitle(sourceType:isPDFTextLayer:)` trong
+    **ReceiptViews.swift (bước 2: +16 / −2**, 2 dòng − là đúng 2 điểm
+    gọi nhãn cũ) dùng cho cả Kiểm Lại và Chi Tiết; `save()` nối thêm
+    đúng 1 dòng chép cờ.
+
+## Kiểm chứng phía mình đã chạy (bằng chứng)
+- Diff từng file như trên; cân bằng ngoặc: ScanView 94/94 (đơn
+  210/210) · Models 94/94 (178/178) · ReceiptViews 185/185 (470/470) ·
+  ContentView 36/36 (64/64).
+- Grep ký hiệu: mọi ký hiệu mới (`rawTextTitle`, `rawTextIsPDFTextLayer`,
+  `rawTextFromPDFTextLayer`, `consumeExternalImports`, `sweepInbox`,
+  `removeInboxCopyIfNeeded`, `externalImportURLs`, `pendingImportURLs`)
+  tồn tại đúng chỗ định nghĩa + điểm dùng; điểm dựng `ScanView(` duy
+  nhất trong bộ prep là ở ContentView mới với binding khớp; trường
+  ScanDraft mới có giá trị mặc định nên mọi điểm dựng draft cũ biên
+  dịch nguyên vẹn.
+- Rà kiểu/optional (TEAM.md lỗi #2): `[URL]` là Equatable cho
+  `onChange(of:)`; closure `onChange` 2 tham số đúng iOS 17; binding
+  truyền qua 2 tầng (ContentView → TabShell → ScanView) cùng một
+  `@State` gốc.
+- KHÔNG chấm lại điểm cổng: bước 2 không đổi khả năng đọc (đường trích
+  lớp chữ + parser giữ nguyên từng dòng) — điểm 001/002/003 không đổi;
+  SCORECARD thêm 1 dòng nhật ký ghi việc này, không ghi điểm mới.
+
+## Tự phản biện trước cổng gói (State 4)
+- Danh mục lỗi TEAM.md: #1 framework lạ lúc khởi động — onOpenURL chỉ
+  GIỮ URL, không chạm PDFKit/không đọc file; đọc chỉ xảy ra sau thao
+  tác/thao tác mở file của anh và sau cổng Face ID ✓ · #2 kiểu/
+  optional — đã rà ✓ · #3 API chưa kiểm trên máy anh — onOpenURL +
+  document-types là luồng MỚI song song, luồng camera/Photos/Files cũ
+  nguyên vẹn; bài kiểm máy thật đã ghi vào M1 ✓ có điều kiện · #4
+  suy đoán thay bằng chứng — hành vi Inbox/onOpenURL của iOS là tài
+  liệu chuẩn của Apple nhưng CHƯA đo trên máy anh → ghi unverified ở
+  dưới, không khẳng định ✓.
+- Trường hợp biên đã rà trong code: (i) mở 2 file một lúc từ Share
+  Sheet → onOpenURL gọi từng URL, queue xử lý lần lượt ✓ (ii) mở file
+  khi đang có draft Review mở → queue chờ, onDismiss nạp tiếp ✓
+  (iii) mở file trùng tên ở Inbox → iOS tự đổi tên bản sao, app đọc
+  theo URL được trao, không đoán theo tên ✓ (iv) file Inbox bị xoá
+  giữa chừng → nhánh lỗi đọc-file sẵn có báo lỗi + nạp tiếp ✓
+  (v) vòng lặp onChange: ScanView xoá `externalImportURLs` → TabShell
+  onChange nhận mảng rỗng → guard không nhảy tab ✓.
+- Cảnh báo bước 1 ("không đẩy riêng project.yml trước bước 2") ĐÃ
+  HẾT HIỆU LỰC: đường "Mở bằng" nay có đầu nhận thật (onOpenURL +
+  Inbox) — cả gói đẩy chung một lần.
+
+## Tờ khai trung thực toàn gói WP3 (claims / evidence / unverified)
+- [ĐÃ CHỨNG MINH phía mình] Trích lớp chữ giữ dạng dòng + bài §F 10/10
+  trên fixture tự tạo + rẽ nhánh fallback (bằng chứng bước 1:
+  `wp3-fixtures/verify-results.txt`) · diff/cân bằng/grep ký hiệu cả
+  2 bước · YAML hợp lệ (bước 1).
+- [CHƯA CHỨNG MINH] Biên dịch (không compiler trong môi trường ca —
+  phép kiểm thật là build cloud sau khi anh duyệt đẩy) · PDFKit
+  `page.string` trên iOS cho thứ tự dòng ra sao trên PDF thật · hướng
+  ảnh render · hành vi fileImporter CHỌN FILE, onOpenURL, và đường
+  Inbox trên iOS của anh. Tất cả gộp vào bài kiểm mốc M1: mở-bằng từ
+  Files/Mail → app nhận + mở Kiểm Lại; PDF lớp chữ thật → đọc được;
+  PDF scan → render đúng chiều; nạp 2–3 file → Review lần lượt; Inbox
+  trống sau khi nạp.
+- [CHƯA LÀM / CHƯA NGHIỆM THU] PDF Sam's thật — chờ file của anh
+  (Master Plan §3.2: ghi chờ, không ghi đạt thay) · PDF nhiều trang
+  đầy đủ = WP8 · PDF mã hoá/khoá: chưa có xử lý riêng (giới hạn đã
+  biết ở bước 1) · quyết nền tảng iOS 26 (anh duyệt ở làn thiết kế
+  17:32 CST) CHƯA áp vào `project.yml` (vẫn 17.0) — thuộc quyết định
+  nền tảng gắn WP4 (§5.6), không tự đổi trong WP3; ghi để Wally xử lý
+  khi trình cổng.
+
+## Số luỹ kế toàn gói WP3 so với main (WP2) — đo bằng diff dòng đơn giản
+`ScanView.swift` +230/−3 · `Models.swift` +42/−2 (2 dòng − là chú
+thích cũ viết lại ở bước 1) · `ReceiptViews.swift` +34/−7 ·
+`ContentView.swift` (so với build1, WP2 không đụng) +18/−2 ·
+`project.yml` +7/−0. Model: chỉ cộng thêm (1 case enum + 1 Bool có
+mặc định) — không thuộc diện thay đổi không-thuần-cộng-thêm phải
+dừng báo.
+
+## Ba chữ ký nội bộ — CỔNG WP3 (toàn gói, thay các ký bước)
+- **Design ✓** — Không màn mới, không nút mới ở bước 2: mở file từ
+  ngoài → app tự nhảy tab CHỤP → Kiểm Lại như mọi đường nạp; nhãn F3
+  3 nhánh trung thực theo đường đọc. Trạng thái tiến độ lô để WP8/WP9
+  như đã chốt ở bước 1.
+- **Code ✓** — Một điểm nạp duy nhất cho 3 đường vào (Files / Share
+  Sheet / Inbox); scope bảo mật đóng trong cùng lượt gọi; xoá Inbox
+  có điều kiện prefix, không đụng file gốc mở-tại-chỗ; model thuần
+  cộng thêm ở cả 2 bước.
+- **QA ✓** — Đối chiếu CODE-AUDIT F1 đủ 5 mục: nạp Files + Share
+  Sheet/onOpenURL + document-types ✓ · hook `processImportedFile`
+  duy nhất ✓ · trích lớp chữ đúng mã mẫu, confidence 1.0, vẫn qua
+  validate() ✓ · lưu PDF gốc + hiển thị render trang 1 ✓ · fallback
+  không lớp chữ → render → OCR ✓ — và F3 mục 3: nhãn đúng đường đọc
+  ở cả 2 màn ✓. **QA KÝ CỔNG WP3** (cổng nội bộ theo luật mốc lớn;
+  nghiệm thu máy thật gộp mốc M1).
+
+## Việc còn lại của WP3 (cũ — ĐÃ LÀM ở bước 2 phía trên)
 1. **Bước 2 — đón Share Sheet:** `onOpenURL`/Inbox trong ContentView/
    App: file được hệ thống chép vào `Documents/Inbox` phải được đưa
    vào cùng hàng chờ nạp của ScanView (dùng chung `processImportedFile`,
