@@ -1,4 +1,4 @@
-name: Build unsigned IPA
+name: Build unsigned IPA (Test B)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,10 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    # iOS 26 SDK cần Xcode 26 — runner macos-26 mang Xcode 26 theo
+    # thông báo của GitHub. [CHƯA KIỂM CHỨNG trong ca: bước "Show Xcode
+    # version" in ra bản thật để đối chiếu khi chạy lần đầu.]
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,8 +29,8 @@ jobs:
       - name: Build app (signing disabled)
         run: |
           xcodebuild build \
-            -project SoHoaDon.xcodeproj \
-            -scheme SoHoaDon \
+            -project SoHoaDonTestB.xcodeproj \
+            -scheme SoHoaDonTestB \
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build/DD \
@@ -39,15 +42,15 @@ jobs:
         run: |
           APP_PATH=$(find build/DD/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
           echo "App: $APP_PATH"
-          rm -rf Payload SoHoaDon-unsigned.ipa
+          rm -rf Payload SoHoaDonTestB-unsigned.ipa
           mkdir Payload
           cp -R "$APP_PATH" Payload/
-          zip -qry SoHoaDon-unsigned.ipa Payload
-          ls -lh SoHoaDon-unsigned.ipa
+          zip -qry SoHoaDonTestB-unsigned.ipa Payload
+          ls -lh SoHoaDonTestB-unsigned.ipa
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoHoaDon-IPA
-          path: SoHoaDon-unsigned.ipa
+          name: SoHoaDonTestB-IPA
+          path: SoHoaDonTestB-unsigned.ipa
           retention-days: 30
