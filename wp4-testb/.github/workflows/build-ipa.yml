@@ -1,0 +1,56 @@
+name: Build unsigned IPA (Test B)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    # iOS 26 SDK cần Xcode 26 — runner macos-26 mang Xcode 26 theo
+    # thông báo của GitHub. [CHƯA KIỂM CHỨNG trong ca: bước "Show Xcode
+    # version" in ra bản thật để đối chiếu khi chạy lần đầu.]
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          ls /Applications | grep -i xcode || true
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app (signing disabled)
+        run: |
+          xcodebuild build \
+            -project SoHoaDonTestB.xcodeproj \
+            -scheme SoHoaDonTestB \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build/DD \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH=$(find build/DD/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          echo "App: $APP_PATH"
+          rm -rf Payload SoHoaDonTestB-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry SoHoaDonTestB-unsigned.ipa Payload
+          ls -lh SoHoaDonTestB-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoHoaDonTestB-IPA
+          path: SoHoaDonTestB-unsigned.ipa
+          retention-days: 30

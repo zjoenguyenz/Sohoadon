@@ -189,3 +189,66 @@ giống NGUYÊN VĂN (kiểm bằng script trích hàm + so byte: identical,
   chồng 200px, lát 1600px, tỉ lệ 3.0, confidence = min); fixture có
   đối chứng âm; kết luận fixture được ghi đúng phạm vi (thuật toán,
   không phải OCR thật) — TEAM.md #4.
+
+---
+
+# WP4 — BƯỚC 3 PHẦN CHUẨN BỊ: BẢN TEST PIPELINE ENGINE (b) (2026-11-10 00:40 CST)
+**Việc đã làm — đúng phần chuẩn bị được của bước 3 (WP4-SPEC §6):** dựng
+bản test pipeline engine (b) cô lập kiểu Test 0 ở `wp4-testb/` (5 file +
+workflow). Phần còn lại của bước 3 (chạy thi đấu trên máy + QA ký chọn
+engine + chốt §5.6 + quyết riêng HAZARD G4) cần build cloud + máy anh —
+gộp mốc M1 theo luật mốc lớn, KHÔNG xin anh cài/test riêng gói này.
+
+## Sản phẩm `wp4-testb/`
+- `project.yml` — XcodeGen riêng: target **iOS 26.0**, bundle
+  `com.nje.sohoadon.testb`, chỉ 3 file nguồn. App chính KHÔNG bị đụng
+  (vẫn 17.0 cho tới quyết §5.6).
+- `EngineB.swift` — `RecognizeDocumentsRequest` + xuất dòng theo đoạn
+  (paragraph transcript tách theo "\n") để đưa qua CÙNG parser như ứng
+  viên (a); `derivedImage` chép đúng thuật toán phái sinh wp4-prep
+  bước 2 (đối chiếu từng dòng với `derivedOCRImage` bản gốc) để (b)
+  chấm ở cả 2 cấu hình gốc/phái sinh trên CÙNG ảnh phái sinh (§5.1).
+- `ContentView.swift` + `TestBApp.swift` — chọn ảnh (PhotosPicker) →
+  chạy 2 cấu hình → khối văn bản copy được (thời gian · số đoạn/bảng/
+  danh sách · dòng). Không SwiftData/parser/lưu trữ.
+- `.github/workflows/build-ipa.yml` — khuôn Test 0, runner `macos-26`,
+  scheme/project đổi tên TestB, artifact `SoHoaDonTestB-IPA`.
+- `README.md` — cách build + quy trình thi đấu ở M1 (4 ảnh: 001/002/
+  003 + chụp camera lập 002-C) + giới hạn đã biết ghi trước.
+
+## Kiểm chứng đã chạy (bằng chứng)
+- **API đối chiếu 2 nguồn độc lập trước khi viết** (TEAM.md #4):
+  WWDC25 "Read documents using the Vision framework" (bản ghi Apple
+  qua apple-docs.everest.mt) + code chạy thật của Daniel Saidi
+  (2026-01-10). Whitelist thành viên được dùng: `RecognizeDocuments-
+  Request()` · `textRecognitionOptions.useLanguageCorrection` ·
+  `perform(on:)` · `document` · `paragraphs[].transcript` · `tables` ·
+  `lists`. Ngoài whitelist = không dùng.
+- Kiểm tĩnh: cân bằng ngoặc 3 file Swift ({3/3} · {33/33} · {21/21},
+  tròn/vuông khớp); grep ký hiệu: mọi hàm có định nghĩa + điểm dùng.
+- Thuật toán phái sinh: đối chiếu với wp4-prep `derivedOCRImage` —
+  cùng ngưỡng 0.5, cùng thứ tự filter, cùng khoá KVC, fail-open nil.
+
+## Tuyên bố trung thực 3 phần — BƯỚC 3 (phần chuẩn bị)
+- **Đã chứng minh:** bản test (b) tồn tại, cô lập hoàn toàn khỏi app
+  chính (bundle/target/file riêng), chỉ dùng thành viên API có 2 nguồn
+  độc lập xác nhận; quy trình thi đấu M1 đã viết thành văn bản.
+- **Chưa chứng minh:** (1) biên dịch [CHƯA KIỂM CHỨNG — không compiler
+  trong ca; runner macos-26/Xcode 26 cũng chưa chạy lần nào]; (2) hành
+  vi RecognizeDocumentsRequest trên ảnh mẫu thật + điểm cổng của (b) ở
+  2 cấu hình — chưa đo, cần build cloud + máy (M1); (3) `tables/lists`
+  có đúng là mảng đếm được như đã viết — chỉ build cloud mới xác nhận.
+- **Chưa làm (đúng phạm vi bước):** chạy thi đấu + QA ký chọn engine +
+  loại engine thua + chốt nền tảng §5.6 + QUYẾT RIÊNG cho HAZARD G4 —
+  tất cả chờ dữ liệu máy ở M1; mẫu 002-C chờ anh chụp ở M1.
+
+## Chữ ký nội bộ — BƯỚC 3 (phần chuẩn bị)
+- Design ✓ — app test tối giản theo khuôn Test 0; không phải bề mặt
+  sản phẩm, không áp hệ "Sổ".
+- Code ✓ — framework lạ chỉ chạm sau thao tác chọn ảnh + bấm chạy
+  (TEAM.md #1); lỗi ném ra màn hình nguyên văn, không nuốt (fail-open
+  thành trạng thái đọc được); rà kiểu: đường dữ liệu Data→UIImage→
+  CGImage đều guard rõ (TEAM.md #2).
+- QA ✓ — API có bằng chứng 2 nguồn trước khi viết (TEAM.md #4); giới
+  hạn confidence-theo-dòng của (b) ghi trước trong README để văn bản
+  chọn engine phải cân — không để tới lúc chấm mới phát hiện.

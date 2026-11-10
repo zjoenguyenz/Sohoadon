@@ -1,5 +1,12 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-09 22:40 CST (ca trực: **WP4 BƯỚC 2 XONG** —
+Cập nhật lần cuối: 2026-11-10 00:40 CST (ca trực: **WP4 BƯỚC 3 — PHẦN
+CHUẨN BỊ XONG** — bản test pipeline engine (b) iOS 26 cô lập ở
+`wp4-testb/` (5 file + workflow): RecognizeDocumentsRequest, target
+26.0/bundle riêng, API đối chiếu 2 nguồn độc lập trước khi viết
+(WWDC25 + code chạy Saidi), kiểm tĩnh đạt (ngoặc 3/3 file, ký hiệu đủ);
+thi đấu thật + QA chọn engine + chốt §5.6 + quyết HAZARD G4 chờ build
+cloud + máy ở mốc M1. Xem WP4-GATE.md mục BƯỚC 3 PHẦN CHUẨN BỊ. —
+TRƯỚC ĐÓ: **WP4 BƯỚC 2 XONG** —
 tiền xử lý ảnh phái sinh cho ứng viên (a) ở wp4-prep/ScanView.swift
 (bước 2 thuần cộng thêm +61/−0 trên nền bước 1; tổng so main +182/−16)
 + F2b chịu tách dòng ở wp4-prep/Parser.swift MỚI (+106/−0 so build1,
@@ -10,7 +17,11 @@ trên dạng tiền-trước-nhãn của Mẫu 003 (fixture G4 khoá: subtotal=8
 thuế=10516, total=None → cờ thiếu tổng giữ tờ ở Hộp Chờ) — chủ sửa là
 WP7 + quyết riêng ở cổng bước 3, xem WP4-GATE.md. WP4 chưa tới cổng:
 còn bước 3 (bản test engine (b) iOS 26 + thi đấu + QA ký chọn engine).
-Đẩy tài liệu ca trước: THÀNH CÔNG — commit docs/planning `507d5000`. Code WP4 (bước 1+2) CHƯA đẩy — chờ cổng gói (bước 3).
+Đẩy tài liệu ca trước: THÀNH CÔNG — commit docs/planning `507d5000`.
+Đẩy tài liệu ca này: THÀNH CÔNG — commit docs/planning `8adb22cd`
+(WORK-STATE.md + WP4-GATE.md + SCORECARD.md + wp4-fixtures/ f2b_port.py
++ verify_f2b.py + verify-f2b-results.txt). Dòng ghi kết quả đẩy này sẽ
+lên GitHub cùng lần đẩy của ca sau. Code WP4 (bước 1+2) CHƯA đẩy — chờ cổng gói (bước 3).
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
   viên; hàng mua để dùng → Supplies).
@@ -220,14 +231,17 @@ còn bước 3 (bản test engine (b) iOS 26 + thi đấu + QA ký chọn engine
    xong 22:40 CST 2026-11-09** (bước 2: tiền xử lý phái sinh +
    F2b parser ở wp4-prep/, kiểm chứng 10/10 + hồi quy 9/9 — xem mục
    WP4 bước 2 ở Vị trí hiện tại + WP4-GATE.md mục BƯỚC 2).
-   **Bước tiếp theo:** bước 3 — bản test pipeline engine (b) iOS 26
-   (RecognizeDocumentsRequest, bản test riêng kiểu Test 0) + chạy thi
-   đấu 2 ứng viên × 2 cấu hình trên bộ mẫu (cần build cloud/máy —
-   gộp M1) + QA ký chọn engine + loại engine thua + quyết nền tảng
-   §5.6 (project.yml vẫn 17.0 — Wally xử lý khi trình cổng) + QUYẾT
-   RIÊNG cho finding HAZARD G4 (F2b ghép lệch trên dạng tiền-trước-
-   nhãn của Mẫu 003; chủ sửa dài hạn là WP7 — WP7 không mở khi chưa
-   có thiết kế thứ tự khối tổng kèm fixture G4).
+   **Bước 3 — PHẦN CHUẨN BỊ ĐÃ XONG 2026-11-10 00:40 CST** (bản test
+   engine (b) cô lập ở wp4-testb/ — xem mục BƯỚC 3 trong WP4-GATE.md).
+   **Bước tiếp theo:** bước 3 phần chạy — đẩy wp4-testb lên repo test
+   + build cloud (khi Wally trình cổng) → ở M1: chạy thi đấu 2 ứng
+   viên × 2 cấu hình trên bộ mẫu + lập 002-C + QA ký chọn engine +
+   loại engine thua + quyết nền tảng §5.6 (project.yml vẫn 17.0 —
+   Wally xử lý khi trình cổng) + QUYẾT RIÊNG cho finding HAZARD G4
+   (F2b ghép lệch trên dạng tiền-trước-nhãn của Mẫu 003; chủ sửa dài
+   hạn là WP7 — WP7 không mở khi chưa có thiết kế thứ tự khối tổng
+   kèm fixture G4). Trong lúc chờ M1, ca sau có thể chuẩn bị song
+   song việc độc lập: đặc tả WP5 (nhận diện tiệm) theo Master Plan.
 
 ## Điểm dừng chờ anh (ghi rõ, không tự vượt)
 - ~~WP1: thẻ duyệt ĐẨY CODE lên main~~ ĐÃ XONG 2026-11-09 10:43–10:44 CST
@@ -259,8 +273,10 @@ còn bước 3 (bản test engine (b) iOS 26 + thi đấu + QA ký chọn engine
 - WP4: mẫu 002-C chụp camera thật + bản test engine iOS 26 cài trên máy anh.
 
 ## Luật ca trực
-- **LUẬT LÀM VIỆC CHUNG (anh ban hành 2026-11-09 13:09 CST): đọc và áp dụng
-  `WORKFLOW-PROMPT-IOS.md` (prompt 5 trạng thái đã lọc cho dự án này) —
+- **LUẬT LÀM VIỆC CHUNG (anh ban hành 2026-11-09 13:09 CST; TÁI XÁC NHẬN
+  chính thức 2026-11-09 23:53 CST dưới tên TEMPLATE B tại
+  ~/workspace/prompt-craft/TEMPLATES.md mục B — hai bản khớp nhau): đọc
+  và áp dụng `WORKFLOW-PROMPT-IOS.md` (prompt 5 trạng thái đã lọc) —
   trong gói việc chạy vòng code → kiểm chứng trên bộ mẫu cố định → tự sửa
   LIỀN MẠCH không dừng chờ duyệt ở bước con; cổng chỉ ở cuối gói; lúc một
   gói chờ cổng thì chuẩn bị song song việc độc lập; trước cổng tự phản

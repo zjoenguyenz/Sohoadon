@@ -1,0 +1,32 @@
+name: SoHoaDonTestB
+options:
+  bundleIdPrefix: com.nje
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+targets:
+  SoHoaDonTestB:
+    type: application
+    platform: iOS
+    sources:
+      - TestBApp.swift
+      - ContentView.swift
+      - EngineB.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon.testb
+        INFOPLIST_FILE: Info.plist
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: "Test B — Engine iOS 26"
+        CFBundleName: "SoHoaDonTestB"
+        NSPhotoLibraryUsageDescription: "Chọn ảnh hoá đơn mẫu để chấm engine (b)."
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
