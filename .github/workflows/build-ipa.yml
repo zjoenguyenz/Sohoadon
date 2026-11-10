@@ -9,7 +9,7 @@ jobs:
   build:
     # macos-26 = Xcode 26: can cho TestB (SDK iOS 26); app chinh build
     # duoi Xcode 26 van duoc (deployment target nam o project.yml).
-    runs-on: macos-26
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
