@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UniformTypeIdentifiers
 
 // MARK: - Huy hiệu phân loại: 4 tín hiệu cùng lúc (màu + icon + chữ + badge đuôi thẻ)
 
@@ -75,7 +77,12 @@ struct RawTextDisclosure: View {
 // một tờ đã mang dấu hiện hành cho kết quả số y hệt (cùng bộ đọc) —
 // phép so chỉ quyết định nút có hiện hay không, không đổi số.
 
-let currentParserVersion = "m1fix-reparse-2"
+// IMGFIX (2026-11-10): từ bản này, hằng này là DẤU BẢN BUILD trong app —
+// mỗi bản giao cho anh mang một mã duy nhất, in ngay trong màn Chi Tiết
+// (dòng "Bản bộ đọc của app") để ảnh chụp tự khai đang chạy bản nào.
+// IMGFIX = "m1fix-reparse-3".
+
+let currentParserVersion = "m1fix-reparse-3"
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //
@@ -101,6 +108,15 @@ func vendorSourceText(_ source: String?) -> String? {
 
 // MARK: - Cờ kiểm tra lại trên 1 hoá đơn đã lưu (chỉ hiển thị, không sửa số)
 
+/// IMGFIX: tờ còn file ảnh gốc nào tải được trong kho bằng chứng không.
+/// Bằng chứng gộp cả imageFileName (Build 1) lẫn originalImageFileNames
+/// (WP2/WP3 — vd file PDF nguyên byte) qua allOriginalImageFileNames:
+/// chỉ cần MỘT file còn tải được là bằng chứng còn. ImageStore.load với
+/// tên .pdf tự render trang 1 nên PDF gốc cũng tính là còn bằng chứng.
+func receiptHasOriginalImage(_ receipt: Receipt) -> Bool {
+    receipt.allOriginalImageFileNames.contains { ImageStore.load(fileName: $0) != nil }
+}
+
 func receiptFlags(_ receipt: Receipt) -> [String] {
     var flags: [String] = []
     if let subtotal = receipt.subtotalCents, !receipt.items.isEmpty {
@@ -123,6 +139,13 @@ func receiptFlags(_ receipt: Receipt) -> [String] {
     }
     if receipt.classification == .unknown {
         flags.append("Chưa phân loại Cá nhân / Business")
+    }
+    // IMGFIX: ảnh gốc là bằng chứng BẮT BUỘC (trình accountant) — tờ
+    // không còn file gốc nào tải được phải kêu thành cờ trong khu
+    // "Cần kiểm lại", không được im lặng như trước (bài học tờ Home
+    // Depot 2026-11-10: số đã đúng hết mà ảnh gốc mất không ai hay).
+    if !receiptHasOriginalImage(receipt) {
+        flags.append("Thiếu ảnh gốc — cần gắn lại để đủ bằng chứng")
     }
     return flags
 }
@@ -307,6 +330,12 @@ struct ReceiptDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var savedNote = false
     @State private var reparsedNote = false
+    // IMGFIX: gắn lại ảnh gốc cho tờ bị mất file bằng chứng (mục "Ảnh
+    // gốc" chỉ hiện khi tờ không còn file gốc nào tải được).
+    @State private var showReattachPicker = false
+    @State private var reattachPickerItem: PhotosPickerItem? = nil
+    @State private var showReattachImporter = false
+    @State private var reattachError: String? = nil
 
     init(receipt: Receipt) {
         self.receipt = receipt
@@ -343,6 +372,37 @@ struct ReceiptDetailView: View {
                         .scaledToFit()
                         .frame(maxHeight: 320)
                         .frame(maxWidth: .infinity)
+                }
+            } else if !receiptHasOriginalImage(receipt) {
+                // IMGFIX: trước đây thiếu ảnh là app IM LẶNG (không mục
+                // ảnh, không cờ). Nay hiện mục gắn lại tại đúng vị trí
+                // của mục ảnh, kèm cờ trong "Cần kiểm lại" (receiptFlags).
+                // Điều kiện dùng receiptHasOriginalImage (mọi file gốc
+                // đều không tải được) — không chỉ imageFileName — để tờ
+                // còn PDF gốc trong originalImageFileNames không bị báo
+                // thiếu oan. Gắn xong, imageFileName tải được -> thân
+                // màn tự vẽ lại thành mục "Ảnh gốc (bằng chứng)".
+                Section("Ảnh gốc") {
+                    Text("Tờ này đang thiếu file ảnh gốc. Hoá đơn cần ảnh gốc làm bằng chứng (để trình accountant) — anh gắn lại ảnh chụp / file tải về của đúng tờ này:")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        reattachError = nil
+                        showReattachPicker = true
+                    } label: {
+                        Label("Gắn lại ảnh gốc từ thư viện ảnh", systemImage: "photo.on.rectangle.angled")
+                    }
+                    Button {
+                        reattachError = nil
+                        showReattachImporter = true
+                    } label: {
+                        Label("Gắn lại từ Files (ảnh / PDF)", systemImage: "folder")
+                    }
+                    if let reattachError {
+                        Text(reattachError)
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                    }
                 }
             }
 
@@ -507,10 +567,93 @@ struct ReceiptDetailView: View {
             }
             Button("Huỷ", role: .cancel) {}
         }
+        // IMGFIX: hai ngõ gắn lại ảnh gốc — bám đúng mẫu ScanView đang
+        // dùng (PhotosPicker cho ảnh; fileImporter chọn FILE, không
+        // chọn thư mục — bài học Test 0 ở TEAM.md).
+        .photosPicker(isPresented: $showReattachPicker, selection: $reattachPickerItem, matching: .images)
+        .onChange(of: reattachPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    attachReattachedImage(image)
+                } else {
+                    reattachError = "Không mở được ảnh đã chọn."
+                }
+                reattachPickerItem = nil
+            }
+        }
+        .fileImporter(isPresented: $showReattachImporter,
+                      allowedContentTypes: [.pdf, .jpeg, .png, .heic],
+                      allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    attachReattachedFile(url: url)
+                }
+            case .failure(let error):
+                reattachError = "Không nạp được file: \(error.localizedDescription)"
+            }
+        }
     }
 
     private func moneyText(_ cents: Int?) -> Text {
         Text(formatMoney(optionalCents: cents)).monospacedDigit()
+    }
+
+    // IMGFIX: hạ cánh file gắn lại vào CHÍNH bản ghi này. imageFileName
+    // luôn trỏ tới file vừa gắn (đó là file màn Chi Tiết hiển thị qua
+    // ImageStore.load — kể cả .pdf, load tự render trang 1 như tờ nạp
+    // PDF từ đầu). originalImageFileNames chỉ được nạp khi đang rỗng
+    // (tờ đời cũ chưa có danh sách); đã có danh sách thì KHÔNG chắp
+    // thêm — allOriginalImageFileNames đã gộp imageFileName vào đầu
+    // danh sách bằng chứng, và giữ nguyên danh sách cũ là giữ nguyên
+    // lịch sử bằng chứng của tờ. Lưu context xong, thân màn tự vẽ lại:
+    // mục "Ảnh gốc" nhường chỗ cho mục "Ảnh gốc (bằng chứng)" và cờ
+    // "Thiếu ảnh gốc" tự mất (receiptFlags tính lại theo file mới).
+    private func attachReattachedOriginal(named name: String) {
+        receipt.imageFileName = name
+        if receipt.originalImageFileNames.isEmpty {
+            receipt.originalImageFileNames = [name]
+        }
+        try? modelContext.save()
+        reattachError = nil
+    }
+
+    /// Đường ảnh (thư viện ảnh, hoặc file ảnh từ Files): lưu JPEG qua
+    /// đúng ImageStore.saveJPEG như mọi đường nạp — lưu hỏng thì báo
+    /// lỗi thật, không gán tên file ma vào bản ghi.
+    private func attachReattachedImage(_ image: UIImage) {
+        guard let name = ImageStore.saveJPEG(image) else {
+            reattachError = "Không lưu được ảnh gốc vào máy — anh kiểm tra dung lượng trống giúp."
+            return
+        }
+        attachReattachedOriginal(named: name)
+    }
+
+    /// Đường file từ Files: bám kỷ luật đường nạp file của ScanView —
+    /// mở quyền truy cập bảo mật, đọc ĐỒNG BỘ trong cùng lượt gọi, đóng
+    /// ngay. PDF lưu NGUYÊN BYTE qua ImageStore.saveFile (như đường nạp
+    /// PDF của WP3) để bằng chứng giữ đúng dạng file mà màn Chi Tiết
+    /// render được; ảnh thì rẽ sang đường JPEG ở trên.
+    private func attachReattachedFile(url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            reattachError = "Không đọc được file \(url.lastPathComponent)."
+            return
+        }
+        if url.pathExtension.lowercased() == "pdf" {
+            guard let name = ImageStore.saveFile(data: data, fileExtension: "pdf") else {
+                reattachError = "Không lưu được file PDF gốc vào máy — anh kiểm tra dung lượng trống giúp."
+                return
+            }
+            attachReattachedOriginal(named: name)
+        } else if let image = UIImage(data: data) {
+            attachReattachedImage(image)
+        } else {
+            reattachError = "File \(url.lastPathComponent) không phải PDF hay ảnh đọc được."
+        }
     }
 
     // REPARSE: hạ cánh kết quả đọc lại vào CHÍNH bản ghi này, theo đúng
