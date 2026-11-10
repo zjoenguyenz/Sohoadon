@@ -76,6 +76,107 @@ riêng gói này; bài kiểm trên máy gộp vào mốc M1.
   3; mẫu 002-C cần anh chụp camera thật — điểm chờ, gộp M1, không
   xin riêng.
 
+---
+
+# WP4 — BƯỚC 2 CHUẨN BỊ (2026-11-09 22:40 CST) — vẫn CHƯA tới cổng gói
+**Việc đã làm — đúng bước 2 của WP4-SPEC §6:** tiền xử lý ảnh phái sinh
+cho ứng viên (a) + F2b phía parser. Code ở `wp4-prep/` nay 2 file
+(`ScanView.swift` + `Parser.swift` MỚI, nền build1 = bản main cho file
+này vì WP2/WP3 không đụng Parser). **Chưa đẩy code ở bất kỳ nhánh nào.**
+
+## Phần A — Tiền xử lý ảnh phái sinh (`wp4-prep/ScanView.swift`)
+- Tổng diff so wp3-prep/main: **+182/−16** (bước 1 là +121/−16; bước 2
+  thuần cộng thêm **+61/−0** trên nền bước 1) + 1 dòng `import CoreImage`.
+- `derivedOCRImage`: VNDetectRectanglesRequest (minimumConfidence 0.5,
+  maximumObservations 1) → CIPerspectiveCorrection (đổi toạ độ Vision
+  gốc-dưới-trái chuẩn hoá × kích thước ảnh → điểm CI cùng gốc) →
+  CIColorControls (saturation 0, contrast 1.1, brightness 0) → CGImage
+  qua CIContext. Mọi lỗi/không-thấy-tứ-giác → nil → **fail-open về ảnh
+  gốc**. Phái sinh chỉ sống trong bộ nhớ ở đường đọc: `process()` đã
+  lưu JPEG GỐC trước khi OCR, không có đường nào ghi phái sinh đè gốc
+  (ACCOUNTING-SPEC F2/§192).
+- Cờ `useDerivedImage = true`: công tắc 2 cấu hình đo của WP4-SPEC §2
+  (gốc / phái sinh) để bước 3 chấm cả hai trên cùng một bản code.
+- Ngưỡng 0.5 + tương phản 1.1 ghi rõ trong code là GIÁ TRỊ KHỞI ĐIỂM
+  cho bước 3 đo — không phải đã tinh chỉnh.
+
+## Phần B — F2b chịu tách dòng (`wp4-prep/Parser.swift`, +106/−0)
+Thuần cộng thêm 106 dòng, 0 dòng xoá/sửa so với build1; `validate()`
+giống NGUYÊN VĂN (kiểm bằng script trích hàm + so byte: identical,
+1.697 ký tự). Ba điểm nối đúng CODE-AUDIT F2b:
+- Vòng tổng Sam's: máy trạng thái nhãn-chờ — dòng chỉ-có-nhãn
+  (SUBTOTAL/TOTAL/TAX n [tỉ lệ %]) ghi nhớ, dòng chỉ-có-tiền ngay sau
+  hoàn tất; mọi dòng khác làm nhãn hết hạn (đúng 1 dòng ân hạn). Chệch
+  khỏi bản audit ở 2 điểm NHỎ, có lợi dữ liệu và ghi rõ: nhãn thuế giữ
+  dạng hiển thị "TAX 1" như đường cùng-dòng (audit dùng "TAX1") và
+  tỉ lệ % trên dòng nhãn được giữ vào `rateText` (audit bỏ).
+- Vòng món Sam's: dòng chỉ-có-tiền (kèm cờ Y/T tuỳ chọn) hoàn tất món
+  đang chờ (kể cả INST SV), đặt ở sau luật dòng-số-lượng, trước INST SV.
+- Vòng tổng generic: cùng máy trạng thái theo pattern generic
+  (SUBTOTAL/TOTAL DUE/AMOUNT DUE/BALANCE DUE/TAX/SALES TAX); TOTAL vẫn
+  tôn trọng vùng loại trừ SUGGESTED TIP như đường cùng-dòng.
+
+## Kiểm chứng đã chạy (bằng chứng file)
+- Port Python `wp4-fixtures/f2b_port.py` + `verify_f2b.py` → **10/10
+  PASS**, đầy đủ ở `wp4-fixtures/verify-f2b-results.txt`:
+  S1 tổng Sam's tách dòng → §F trọn + giữ tỉ lệ thuế · S2 món Sam's
+  tách dòng (gồm INST SV tiền âm) → §F trọn · S3 nhãn hết hạn sau 1
+  dòng xen — tiền KHÔNG bị vớ · S4 nhãn treo → total vẫn None · S5 hồi
+  quy hàng nguyên 002 → §F trọn · G1 generic tách dòng → đủ 3 số ·
+  G2 TOTAL chờ bị dòng tip làm hết hạn → None · G3 generic hồi quy
+  cùng-dòng → đủ 3 số · G4 = finding HAZARD dưới đây.
+- Hồi quy bước 1: `verify_rowmerge.py` chạy lại — vẫn **9/9 PASS**.
+- Kiểm tĩnh Swift: cân bằng ngoặc Parser {170/170} (328/328) [106/106];
+  ScanView {121/121} (303/303) [41/41]; grep: mọi hàm/cờ mới có đúng 1
+  định nghĩa + điểm dùng thật.
+
+## FINDING ĐỎ (red-team, bắt buộc xử lý — không lấp)
+- **F2b ghép LỆCH MỘT NHỊP trên dạng tiền-ở-dòng-TRƯỚC (Mẫu 003 thật):**
+  dãy `96.91 / SUBTOTAL / 8.25 / SALES TAX / $105.16 / TOTAL` qua F2b
+  cho subtotal=825 (tiền thuế), thuế=10516 (tiền tổng), total=None
+  (fixture G4 khoá hành vi thật). Build 1 ở dạng này ra None cả 3 —
+  F2b sửa đúng dạng nhãn-trước nhưng làm dạng tiền-trước TỆ HƠN.
+  Giảm nhẹ hiện có: total None → validate() gắn cờ "Không đọc được
+  TỔNG TIỀN" → tờ vào Hộp Chờ, KHÔNG sạch lặng lẽ; nhưng 2 số lệch
+  không mang cờ riêng — chạm tinh thần luật cổng SCORECARD.
+- **Chủ sở hữu việc sửa:** dạng tiền-trước-nhãn cho khối tổng đã được
+  chẩn đoán Mẫu 003 giao cho **WP7** ("parser chịu được tiền-ở-dòng-
+  trước cho khối tổng — WP7", sample-003-ground-truth.md mục Chẩn
+  đoán 2). Ca này KHÔNG tự bịa cơ chế vá ngoài đặc tả CODE-AUDIT.
+  Điều kiện cổng: bước 3 (QA ký chọn engine) phải ghi quyết riêng cho
+  hazard này, và WP7 không được mở khi chưa có thiết kế xử lý thứ tự
+  khối tổng kèm fixture G4 này trong bộ kiểm.
+
+## Tuyên bố trung thực 3 phần — BƯỚC 2
+- **Đã chứng minh:** F2b (bản port) đạt §F trên cả hai dạng tách dòng
+  nhãn-trước (tổng + món Sam's, generic), giữ đúng kỷ luật hết-hạn-1-
+  dòng và không đổi hành vi trên hàng nguyên (hồi quy S5/G3); Parser
+  thuần cộng thêm, validate() nguyên văn; hazard ghép-lệch của chính
+  F2b trên dạng 003 đã đo và khoá bằng fixture, không giấu.
+- **Chưa chứng minh:** (1) biên dịch Swift cả 2 file [CHƯA KIỂM CHỨNG
+  — không compiler trong ca; build cloud khi Wally trình đẩy];
+  (2) tiền xử lý phái sinh: VNDetectRectanglesRequest + CIPerspective-
+  Correction + phép đổi toạ độ trên máy thật [CHƯA KIỂM CHỨNG — bước
+  3/M1]; ngưỡng 0.5 / tương phản 1.1 chưa có điểm đo; (3) điểm cổng
+  001/002/003 của ứng viên (a) ở cả 2 cấu hình — chưa đo (cần OCR thật).
+- **Chưa làm (đúng chia bước):** bước 3 — bản test pipeline engine (b)
+  iOS 26 + chạy thi đấu + QA ký chọn engine + loại engine thua + chốt
+  nền tảng §5.6 + quyết riêng cho finding HAZARD ở trên; mẫu 002-C chờ
+  anh chụp ở M1.
+
+## Chữ ký nội bộ — BƯỚC 2
+- Design ✓ — không đổi giao diện; phái sinh vô hình với anh (chỉ tầng
+  đọc), ảnh gốc anh xem ở Kiểm Lại/Chi Tiết vẫn là ảnh gốc.
+- Code ✓ — diff Parser +106/−0, ScanView bước 2 +61/−0; API dùng toàn
+  API ≤ iOS 13 (Vision/CoreImage cổ điển), framework lạ chỉ chạm SAU
+  thao tác đọc hoá đơn, fail-open (TEAM.md #1); rà kiểu/optional:
+  matchGroups đếm nhóm tường minh (m.count == 2/3), optional pending
+  dọn sạch ở mọi nhánh continue (TEAM.md #2).
+- QA ✓ — đối chiếu CODE-AUDIT F2b từng điều kiện (1 dòng ân hạn, hết
+  hạn bởi dòng xen, validate không đụng); fixture có đối chứng âm
+  (S3/S4/G2) + hồi quy (S5/G3) + fixture khoá hazard của chính thay
+  đổi (G4) — TEAM.md #4: kết luận ghi đúng phạm vi thuật toán.
+
 ## Chữ ký nội bộ — BƯỚC 1
 - Design ✓ — bước này không đổi giao diện nào; đặc tả đo tôn trọng
   nguyên tắc "số tiền không bị che" (không đụng lớp hiển thị).

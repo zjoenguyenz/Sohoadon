@@ -1,12 +1,16 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-09 20:40 CST (ca trực: **WP4 BƯỚC 1 XONG** —
-đặc tả đo WP4-SPEC.md đã khoá + tầng tạo dòng ứng viên (a) F2a ráp hàng
-+ F2c cắt lát/khử trùng ở wp4-prep/ScanView.swift (+121/−16 so với
-wp3-prep/main), kiểm chứng port Python trên fixture mảnh-xé từ đáp án
-002 đạt 9/9 gồm §F trọn qua parser hiện hành + đối chứng âm; văn bản:
-WP4-GATE.md. WP4 chưa tới cổng: còn bước 2 (tiền xử lý phái sinh + F2b
-parser) và bước 3 (bản test engine (b) iOS 26 + thi đấu trên máy).
-Đẩy tài liệu ca này: xem dòng cuối mục này sau khi thử đẩy.
+Cập nhật lần cuối: 2026-11-09 22:40 CST (ca trực: **WP4 BƯỚC 2 XONG** —
+tiền xử lý ảnh phái sinh cho ứng viên (a) ở wp4-prep/ScanView.swift
+(bước 2 thuần cộng thêm +61/−0 trên nền bước 1; tổng so main +182/−16)
++ F2b chịu tách dòng ở wp4-prep/Parser.swift MỚI (+106/−0 so build1,
+validate() nguyên văn — kiểm so byte). Kiểm chứng port Python F2b:
+**10/10 PASS** gồm §F trọn trên dòng tách (tổng + món) + hết-hạn-1-dòng
++ hồi quy; hồi quy bước 1 vẫn 9/9. **FINDING ĐỎ:** F2b ghép LỆCH 1 nhịp
+trên dạng tiền-trước-nhãn của Mẫu 003 (fixture G4 khoá: subtotal=825,
+thuế=10516, total=None → cờ thiếu tổng giữ tờ ở Hộp Chờ) — chủ sửa là
+WP7 + quyết riêng ở cổng bước 3, xem WP4-GATE.md. WP4 chưa tới cổng:
+còn bước 3 (bản test engine (b) iOS 26 + thi đấu + QA ký chọn engine).
+Đẩy tài liệu ca trước: THÀNH CÔNG — commit docs/planning `507d5000`. Code WP4 (bước 1+2) CHƯA đẩy — chờ cổng gói (bước 3).
 ## Vị trí hiện tại
 - Master Plan đã trình anh (23:38) + anh trả lời hết câu hỏi mở (LLC 1 thành
   viên; hàng mua để dùng → Supplies).
@@ -156,6 +160,26 @@ parser) và bước 3 (bản test engine (b) iOS 26 + thi đấu trên máy).
   trùng. Bằng chứng: `wp4-fixtures/verify-results.txt` + WP4-GATE.md
   (đủ 3 chữ ký nội bộ bước 1). **CHƯA đẩy code**; biên dịch + Vision
   thật + phép quy đổi toạ độ lát [CHƯA KIỂM CHỨNG] (bước 3/M1).
+- **WP4 — BƯỚC 2 (TIỀN XỬ LÝ PHÁI SINH + F2b PARSER) ĐÃ XONG
+  (2026-11-09 22:40 CST):** `wp4-prep/ScanView.swift`: `derivedOCRImage`
+  — VNDetectRectanglesRequest (tin cậy ≥0.5) → CIPerspectiveCorrection
+  → CIColorControls (bỏ màu, tương phản 1.1) — chỉ trong bộ nhớ,
+  fail-open về ảnh gốc, ảnh gốc đã lưu trước khi đọc không bao giờ bị
+  đụng; cờ `useDerivedImage` là công tắc 2 cấu hình đo của WP4-SPEC §2.
+  `wp4-prep/Parser.swift` (nền build1, **+106/−0**): F2b máy trạng thái
+  nhãn-chờ-1-dòng cho vòng tổng Sam's + generic và dòng-chỉ-có-tiền
+  hoàn tất món Sam's; `validate()` nguyên văn (so byte identical).
+  Kiểm chứng: port Python `wp4-fixtures/f2b_port.py` + `verify_f2b.py`
+  **10/10 PASS** (`verify-f2b-results.txt`): §F trọn khi tổng/món tách
+  dòng, generic tách dòng đủ 3 số, hết-hạn-1-dòng có răng (S3/G2),
+  hồi quy hàng nguyên (S5/G3). **FINDING ĐỎ (fixture G4):** dạng
+  tiền-ở-dòng-TRƯỚC của Mẫu 003 bị F2b ghép lệch 1 nhịp (subtotal
+  nhận 8.25, thuế nhận 105.16, total trống → validate gắn cờ thiếu
+  tổng, tờ vào Hộp Chờ; 2 số lệch không có cờ riêng). Chủ sửa: WP7
+  (khối tổng tiền-trước-nhãn) + quyết riêng ở cổng bước 3 — ca này
+  không tự vá ngoài đặc tả. Đủ 3 chữ ký nội bộ bước 2 — WP4-GATE.md
+  mục BƯỚC 2. **CHƯA đẩy code**; biên dịch + Vision/CoreImage thật
+  [CHƯA KIỂM CHỨNG] (bước 3/M1).
 
 ## Hàng việc (theo BUILD2-MASTER-PLAN, tuần tự tuyệt đối)
 1. ~~**WP0** — Đóng băng bộ mẫu & bảng điểm~~ **ĐÃ XONG 2026-11-09 02:41 CST**:
@@ -192,15 +216,18 @@ parser) và bước 3 (bản test engine (b) iOS 26 + thi đấu trên máy).
    ở dark (đo tương phản thật ở WP9 mới khóa).
 6. **WP3** — Đường PDF & nạp file (F1): **ĐÃ ĐÓNG** — code đã đẩy
    main bởi Wally 2026-11-09 18:52 CST, commit `ec73f92` (5 file).
-7. **WP4** — Thi đấu engine: **bước 1 ĐÃ xong 20:40 CST 2026-11-09**
-   (đặc tả đo WP4-SPEC.md + F2a/F2c ở wp4-prep/, kiểm chứng 9/9 —
-   xem mục WP4 ở Vị trí hiện tại + WP4-GATE.md). **Bước tiếp theo:**
-   bước 2 — tiền xử lý ảnh phái sinh cho ứng viên (a) (tứ giác →
-   perspective → tương phản; ảnh gốc giữ nguyên) + F2b chịu tách
-   dòng phía parser (đặc tả CODE-AUDIT F2b, validate() không đụng).
-   Sau đó bước 3: bản test pipeline engine (b) iOS 26 + chạy thi
-   đấu (cần build cloud/máy — gộp M1) + QA ký chọn engine + quyết
-   nền tảng §5.6 (project.yml vẫn 17.0 — Wally xử lý khi trình cổng).
+7. **WP4** — Thi đấu engine: **bước 1 ĐÃ xong 20:40 CST + bước 2 ĐÃ
+   xong 22:40 CST 2026-11-09** (bước 2: tiền xử lý phái sinh +
+   F2b parser ở wp4-prep/, kiểm chứng 10/10 + hồi quy 9/9 — xem mục
+   WP4 bước 2 ở Vị trí hiện tại + WP4-GATE.md mục BƯỚC 2).
+   **Bước tiếp theo:** bước 3 — bản test pipeline engine (b) iOS 26
+   (RecognizeDocumentsRequest, bản test riêng kiểu Test 0) + chạy thi
+   đấu 2 ứng viên × 2 cấu hình trên bộ mẫu (cần build cloud/máy —
+   gộp M1) + QA ký chọn engine + loại engine thua + quyết nền tảng
+   §5.6 (project.yml vẫn 17.0 — Wally xử lý khi trình cổng) + QUYẾT
+   RIÊNG cho finding HAZARD G4 (F2b ghép lệch trên dạng tiền-trước-
+   nhãn của Mẫu 003; chủ sửa dài hạn là WP7 — WP7 không mở khi chưa
+   có thiết kế thứ tự khối tổng kèm fixture G4).
 
 ## Điểm dừng chờ anh (ghi rõ, không tự vượt)
 - ~~WP1: thẻ duyệt ĐẨY CODE lên main~~ ĐÃ XONG 2026-11-09 10:43–10:44 CST

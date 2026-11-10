@@ -1,0 +1,12 @@
+[PASS] S1 Sam's tổng tách dòng -> §F trọn subtotal=20330 total=21680 taxes=[{'label': 'TAX 1', 'rate': '8.517', 'amount': 960}, {'label': 'TAX 2', 'rate': '4.017', 'amount': 390}]
+[PASS] S1 tỉ lệ thuế giữ được từ dòng nhãn taxes=[{'label': 'TAX 1', 'rate': '8.517', 'amount': 960}, {'label': 'TAX 2', 'rate': '4.017', 'amount': 390}]
+[PASS] S2 Sam's món tách dòng -> §F trọn items=10 sum=20330
+[PASS] S3 nhãn hết hạn: tiền sau dòng xen KHÔNG bị vớ subtotal=None total=21680
+[PASS] S4 nhãn treo cuối -> total vẫn None (cờ validate giữ nguyên) total=None
+[PASS] S5 hồi quy: hàng nguyên 002 -> §F trọn như bước 1 subtotal=20330 total=21680
+[PASS] G1 generic tổng tách dòng -> đủ 3 số {'subtotal': 9691, 'taxes': [{'label': 'TAX', 'rate': None, 'amount': 825}], 'total': 10516}
+[PASS] G2 generic: TOTAL chờ bị dòng tip làm hết hạn -> total None {'subtotal': None, 'taxes': [], 'total': None}
+[PASS] G3 generic hồi quy cùng-dòng -> đủ 3 số {'subtotal': 9691, 'taxes': [{'label': 'TAX', 'rate': None, 'amount': 825}], 'total': 10516}
+[PASS] G4 HAZARD khoá hành vi thật: ghép lệch (subtotal=825 thuế=10516 total=None) {'subtotal': 825, 'taxes': [{'label': 'TAX', 'rate': None, 'amount': 10516}], 'total': None}
+
+== 10/10 PASS ==
