@@ -7,9 +7,11 @@ on:
 
 jobs:
   build:
-    # macos-26 = Xcode 26: can cho TestB (SDK iOS 26); app chinh build
-    # duoi Xcode 26 van duoc (deployment target nam o project.yml).
-    runs-on: macos-26
+    # TestB can SDK iOS 26 (Xcode 26). Runner macos-26 khong cap duoc
+    # may (2 lan job bi huy khi chua chay) nen chay tren macos-15 — tren
+    # image nay co san Xcode 26.0.1-26.3 (mac dinh la 16.4), buoc duoi
+    # tu chon ban Xcode 26 moi nhat tren may.
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,6 +19,9 @@ jobs:
       - name: Show Xcode version
         run: |
           ls /Applications | grep -i xcode || true
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          echo "Selecting Xcode: $XC"
+          sudo xcode-select -s "$XC"
           xcodebuild -version
 
       - name: Install XcodeGen
