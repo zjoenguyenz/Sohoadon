@@ -75,7 +75,7 @@ struct RawTextDisclosure: View {
 // một tờ đã mang dấu hiện hành cho kết quả số y hệt (cùng bộ đọc) —
 // phép so chỉ quyết định nút có hiện hay không, không đổi số.
 
-let currentParserVersion = "m1fix-reparse-1"
+let currentParserVersion = "m1fix-reparse-2"
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //
@@ -386,6 +386,9 @@ struct ReceiptDetailView: View {
                     LabeledContent("Mã chống trùng") {
                         Text(key).font(.caption).foregroundStyle(.secondary)
                     }
+                }
+                LabeledContent("Bản bộ đọc của app") {
+                    Text(currentParserVersion).font(.caption).foregroundStyle(.secondary)
                 }
             }
 
