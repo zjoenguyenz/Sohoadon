@@ -87,13 +87,11 @@ struct RawTextDisclosure: View {
 // liệu (VNDocumentCamera) ngay trong màn Chi Tiết — mã mới
 // "m1fix-reparse-4".
 //
-// OCRFIX (2026-11-10): làm lại đường đọc ảnh->OCR trong ScanView
-// (ảnh gốc là ứng viên số 1, phái sinh thi đấu theo điểm sản lượng,
-// hạ ngưỡng cắt lát cho ảnh cao) sau sự cố Mẫu 001 đọc ra rác. Đây
-// là bản sửa CỐT LÕI nên đặt mã riêng "ocrfix-1", không nối tiếp
-// dãy m1fix-reparse (dãy đó dành cho các gói sửa đường chữ).
+// P2-2 (2026-11-10): gói kích hoạt đợt làm lại cốt lõi OCR (đa pass +
+// hợp nhất mờ + chọn bộ thắng bằng đối chiếu số học) — mã mới
+// "p2-core-1". Gói này KHÔNG đổi gì ở file này ngoài dấu bản.
 
-let currentParserVersion = "ocrfix-1"
+let currentParserVersion = "p2-core-1"
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //
