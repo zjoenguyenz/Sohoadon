@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import UniformTypeIdentifiers
+import VisionKit
 
 // MARK: - Huy hiệu phân loại: 4 tín hiệu cùng lúc (màu + icon + chữ + badge đuôi thẻ)
 
@@ -81,8 +82,12 @@ struct RawTextDisclosure: View {
 // mỗi bản giao cho anh mang một mã duy nhất, in ngay trong màn Chi Tiết
 // (dòng "Bản bộ đọc của app") để ảnh chụp tự khai đang chạy bản nào.
 // IMGFIX = "m1fix-reparse-3".
+//
+// SCANPRO (2026-11-10): cộng nút chụp lại bản gốc bằng máy quét tài
+// liệu (VNDocumentCamera) ngay trong màn Chi Tiết — mã mới
+// "m1fix-reparse-4".
 
-let currentParserVersion = "m1fix-reparse-3"
+let currentParserVersion = "m1fix-reparse-4"
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //
@@ -336,6 +341,11 @@ struct ReceiptDetailView: View {
     @State private var reattachPickerItem: PhotosPickerItem? = nil
     @State private var showReattachImporter = false
     @State private var reattachError: String? = nil
+    // SCANPRO: chụp lại bản gốc bằng máy quét tài liệu ngay tại màn
+    // Chi Tiết — dùng cho cả tờ đã có ảnh (muốn bản quét phẳng, rõ
+    // chữ hơn) lẫn tờ đang thiếu ảnh (nút nằm cạnh 2 nút gắn lại).
+    @State private var showRescanCamera = false
+    @State private var rescanError: String? = nil
 
     init(receipt: Receipt) {
         self.receipt = receipt
@@ -357,6 +367,12 @@ struct ReceiptDetailView: View {
     // bản hiện hành — gồm cả dấu rỗng của bản ghi trước WP2) hoặc tờ
     // vẫn đang nằm ở Hộp Chờ. Tờ đã duyệt + dấu hiện hành thì không
     // hiện: đọc lại không thêm thông tin gì cho nó.
+    // SCANPRO: máy ảo / máy không có camera quét tài liệu thì nút
+    // chụp lại bị khoá (đúng luật ScanView đang áp ở tab CHỤP).
+    private var documentCameraSupported: Bool {
+        VNDocumentCameraViewController.isSupported
+    }
+
     private var canReparse: Bool {
         !receipt.ocrRawText.isEmpty
             && (receipt.parserVersion != currentParserVersion
@@ -372,6 +388,32 @@ struct ReceiptDetailView: View {
                         .scaledToFit()
                         .frame(maxHeight: 320)
                         .frame(maxWidth: .infinity)
+                    // SCANPRO: tờ giấy còn trong tay thì chụp lại thành
+                    // bản quét phẳng, tương phản cao, rõ chữ (như máy
+                    // scan chuyên nghiệp) ngay tại đây — thay cho ảnh
+                    // đang hiển thị. File cũ không bị xoá: nó lùi vào
+                    // originalImageFileNames giữ dấu vết bằng chứng
+                    // (xem applyRescannedOriginal).
+                    Button {
+                        rescanError = nil
+                        showRescanCamera = true
+                    } label: {
+                        Label("Chụp lại bản gốc (quét như máy scan)", systemImage: "doc.viewfinder")
+                    }
+                    .disabled(!documentCameraSupported)
+                    Text("Chụp lại chỉ thay ẢNH bằng chứng — số liệu của tờ giữ nguyên (muốn đọc lại số, anh dùng nút Đọc lại ở mục Bộ đọc).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if !documentCameraSupported {
+                        Text("Máy này không hỗ trợ quét tài liệu (thường là máy ảo) — anh dùng các nút gắn lại ảnh có sẵn.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let rescanError {
+                        Text(rescanError)
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                    }
                 }
             } else if !receiptHasOriginalImage(receipt) {
                 // IMGFIX: trước đây thiếu ảnh là app IM LẶNG (không mục
@@ -397,6 +439,21 @@ struct ReceiptDetailView: View {
                         showReattachImporter = true
                     } label: {
                         Label("Gắn lại từ Files (ảnh / PDF)", systemImage: "folder")
+                    }
+                    // SCANPRO: tờ giấy còn trong tay thì chụp lại ngay
+                    // bằng máy quét tài liệu — bản quét phẳng, rõ chữ
+                    // thành file gốc mới, cờ "Thiếu ảnh gốc" tự mất.
+                    Button {
+                        rescanError = nil
+                        showRescanCamera = true
+                    } label: {
+                        Label("Chụp lại bản gốc (quét như máy scan)", systemImage: "doc.viewfinder")
+                    }
+                    .disabled(!documentCameraSupported)
+                    if let rescanError {
+                        Text(rescanError)
+                            .font(.callout)
+                            .foregroundStyle(.red)
                     }
                     if let reattachError {
                         Text(reattachError)
@@ -595,6 +652,23 @@ struct ReceiptDetailView: View {
                 reattachError = "Không nạp được file: \(error.localizedDescription)"
             }
         }
+        // SCANPRO: mở máy quét tài liệu toàn màn hình — bám đúng mẫu
+        // tab CHỤP (DocumentCameraView của ScanView, fullScreenCover +
+        // ignoresSafeArea). Huỷ quét = đóng, KHÔNG đổi gì trên bản ghi.
+        .fullScreenCover(isPresented: $showRescanCamera) {
+            DocumentCameraView(
+                onScan: { scan in
+                    showRescanCamera = false
+                    applyRescannedOriginal(scan: scan)
+                },
+                onCancel: { showRescanCamera = false },
+                onError: { error in
+                    showRescanCamera = false
+                    rescanError = "Quét thất bại: \(error.localizedDescription)"
+                }
+            )
+            .ignoresSafeArea()
+        }
     }
 
     private func moneyText(_ cents: Int?) -> Text {
@@ -654,6 +728,48 @@ struct ReceiptDetailView: View {
         } else {
             reattachError = "File \(url.lastPathComponent) không phải PDF hay ảnh đọc được."
         }
+    }
+
+    // SCANPRO: hạ cánh bản quét lại vào CHÍNH bản ghi này. GIỚI HẠN
+    // CÓ CHỦ ĐÍCH: chụp lại CHỈ thay bằng chứng ảnh — KHÔNG chạy OCR,
+    // KHÔNG đổi số liệu, ocrRawText giữ nguyên (nút "Đọc lại" ở mục
+    // Bộ đọc là đường duy nhất đổi số, và nó đọc từ ocrRawText đó).
+    //
+    // - Trang 1 -> ImageStore.saveJPEG(quality: 0.9) -> imageFileName
+    //   MỚI (màn Chi Tiết hiển thị file này).
+    // - File chính cũ (khác rỗng) KHÔNG bị xoá: đưa vào
+    //   originalImageFileNames giữ dấu vết bằng chứng; các trang
+    //   quét thêm (2+) nối tiếp vào đó.
+    // - Toàn vẹn: mọi trang phải lưu thành công mới hạ cánh; trang
+    //   nào lưu hỏng -> xoá các file vừa lưu dở, bản ghi giữ nguyên
+    //   bộ bằng chứng cũ, báo lỗi thật — không để bản ghi trỏ tới
+    //   bộ bằng chứng nửa vời.
+    private func applyRescannedOriginal(scan: VNDocumentCameraScan) {
+        guard scan.pageCount > 0 else {
+            rescanError = "Chưa chụp được trang nào — anh thử lại giúp."
+            return
+        }
+        var newNames: [String] = []
+        for page in 0..<scan.pageCount {
+            guard let name = ImageStore.saveJPEG(scan.imageOfPage(at: page), quality: 0.9) else {
+                for saved in newNames { ImageStore.delete(fileName: saved) }
+                rescanError = "Không lưu được bản quét vào máy — anh kiểm tra dung lượng trống giúp."
+                return
+            }
+            newNames.append(name)
+        }
+        var evidence = receipt.originalImageFileNames
+        let oldMain = receipt.imageFileName
+        if !oldMain.isEmpty && !evidence.contains(oldMain) {
+            evidence.append(oldMain)
+        }
+        for name in newNames.dropFirst() where !evidence.contains(name) {
+            evidence.append(name)
+        }
+        receipt.originalImageFileNames = evidence
+        receipt.imageFileName = newNames[0]
+        try? modelContext.save()
+        rescanError = nil
     }
 
     // REPARSE: hạ cánh kết quả đọc lại vào CHÍNH bản ghi này, theo đúng
