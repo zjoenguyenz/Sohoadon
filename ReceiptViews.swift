@@ -64,8 +64,18 @@ struct RawTextDisclosure: View {
 // khi đối chiếu lỗi đọc. Giá trị hiện tại = bộ đọc Build 1 (ReceiptParser
 // chưa đổi ở WP2); WP4 (thi đấu engine) thắng/thua xong thì cập nhật
 // hằng này cùng lúc thay engine — không sửa ngược bản ghi cũ.
+//
+// REPARSE (2026-11-10): hằng này THỰC SỰ được nâng lần đầu — các engine
+// WP4/WP5/M1-FIX đã thay nhau trên main mà dấu vẫn nằm ở "build1-parser"
+// (nợ ghi nhận ở cổng WP5), nên MỌI bản ghi hiện có (kể cả bản ghi do
+// bản M1 lưu) đều mang dấu cũ hoặc rỗng. Giá trị mới "m1fix-reparse-1"
+// là mã duy nhất của thế hệ bộ đọc WP5 + M1-FIX + điểm vào reparse;
+// nút "Đọc lại" ở màn Chi Tiết dùng phép so parserVersion != hằng này
+// (cộng điều kiện status == needsReview) để nhận diện tờ "cũ". Đọc lại
+// một tờ đã mang dấu hiện hành cho kết quả số y hệt (cùng bộ đọc) —
+// phép so chỉ quyết định nút có hiện hay không, không đổi số.
 
-let currentParserVersion = "build1-parser"
+let currentParserVersion = "m1fix-reparse-1"
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //
@@ -288,11 +298,15 @@ struct ReceiptDetailView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    // REPARSE: cần danh sách đuôi thẻ để áp gợi ý phân loại đúng như
+    // ReviewView.save() khi tờ CHƯA từng có quyết định phân loại.
+    @Query private var cardTails: [CardTail]
     @State private var selectedKind: Classification
     @State private var selectedCategory: String
     @State private var purposeText: String
     @State private var showDeleteConfirm = false
     @State private var savedNote = false
+    @State private var reparsedNote = false
 
     init(receipt: Receipt) {
         self.receipt = receipt
@@ -307,6 +321,17 @@ struct ReceiptDetailView: View {
             options.append(selectedCategory)
         }
         return options
+    }
+
+    // REPARSE: nút "Đọc lại" chỉ hiện khi còn gì để đọc lại (có văn bản
+    // thô đã lưu) VÀ tờ thuộc thế hệ bộ đọc cũ (dấu parserVersion khác
+    // bản hiện hành — gồm cả dấu rỗng của bản ghi trước WP2) hoặc tờ
+    // vẫn đang nằm ở Hộp Chờ. Tờ đã duyệt + dấu hiện hành thì không
+    // hiện: đọc lại không thêm thông tin gì cho nó.
+    private var canReparse: Bool {
+        !receipt.ocrRawText.isEmpty
+            && (receipt.parserVersion != currentParserVersion
+                || receipt.status == .needsReview)
     }
 
     var body: some View {
@@ -360,6 +385,24 @@ struct ReceiptDetailView: View {
                 if let key = receipt.dedupeKey {
                     LabeledContent("Mã chống trùng") {
                         Text(key).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            // REPARSE: đọc lại tờ cũ bằng bộ đọc hiện hành, cập nhật số
+            // TẠI CHỖ trên chính bản ghi này (xem reparseReceipt()).
+            if canReparse {
+                Section("Bộ đọc") {
+                    Button { reparseReceipt() } label: {
+                        Label("Đọc lại bằng bộ đọc hiện tại", systemImage: "arrow.clockwise")
+                    }
+                    Text("Tờ này do \(receipt.parserVersion.isEmpty ? "bộ đọc đời đầu" : "bộ đọc \(receipt.parserVersion)") sinh ra; bộ đọc hiện tại là \(currentParserVersion). Đọc lại chạy bộ đọc hiện tại trên văn bản đã lưu và cập nhật số tại chỗ. Phân loại anh đã chọn và ghi chú mục đích được giữ nguyên.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if reparsedNote {
+                        Text("Đã đọc lại ✓ — số đã cập nhật theo bộ đọc hiện tại")
+                            .font(.caption)
+                            .foregroundStyle(.green)
                     }
                 }
             }
@@ -465,6 +508,127 @@ struct ReceiptDetailView: View {
 
     private func moneyText(_ cents: Int?) -> Text {
         Text(formatMoney(optionalCents: cents)).monospacedDigit()
+    }
+
+    // REPARSE: hạ cánh kết quả đọc lại vào CHÍNH bản ghi này, theo đúng
+    // ánh xạ ReviewView.save() dùng cho hoá đơn mới — trừ các điểm giữ
+    // nguyên quyết định/bằng chứng của người dùng (ghi rõ từng điểm):
+    //
+    // CẬP NHẬT (máy đọc): vendor + địa chỉ/điện thoại/mã cửa hàng, ngày
+    // (chỉ khi bộ đọc tìm thấy — save() ghi ngày anh chốt trên lịch;
+    // đọc lại không có lịch nên KHÔNG bao giờ ghi đè ngày đã lưu bằng
+    // "hôm nay" khi bộ đọc trượt), subtotal/thuế/tổng, items và
+    // taxLines (thay cả cụm), thẻ + paymentMethod, 3 độ tin cậy,
+    // dedupeKey (chỉ khi bộ đọc sinh được khoá mới — không xoá khoá cũ
+    // khi bộ đọc trượt), parserVersion -> bản hiện hành, status tính
+    // lại đúng công thức save().
+    //
+    // GIỮ NGUYÊN (người dùng/bằng chứng): stableID, createdAt,
+    // imageFileName + originalImageFileNames (ảnh gốc), sourceType +
+    // sourceFileName, transactionRef (save() suy nó từ dedupeKey cho
+    // bản ghi MỚI; bản ghi cũ giữ mã giao dịch đã lưu, không suy lại),
+    // ocrRawText (chính là đầu vào của lần đọc này — bằng chứng gốc,
+    // không ghi đè bằng bản đã chuẩn hoá của parser), businessPurpose,
+    // và phân loại + mục nếu anh ĐÃ có quyết định (xem dưới).
+    private func reparseReceipt() {
+        let result = ReceiptParser.reparse(storedText: receipt.ocrRawText)
+
+        // --- Trường máy đọc, ánh xạ như save() ---
+        receipt.vendor = result.vendor ?? ""
+        receipt.vendorAddress = result.vendorAddress ?? ""
+        receipt.vendorPhone = result.vendorPhone
+        receipt.storeNumber = result.storeNumber
+        if let date = result.date {
+            receipt.date = date
+        }
+        receipt.subtotalCents = result.subtotalCents
+        receipt.totalCents = result.totalCents
+        // Dòng thuế riêng theo đúng luật WP2 của save(): chỉ lưu chi
+        // tiết dòng khi tổng thuế "đã duyệt" khớp Σ dòng máy đọc. Đọc
+        // lại không có tay anh sửa giữa chừng, nên tổng đã duyệt chính
+        // là Σ dòng của bộ đọc -> có dòng thuế thì lưu cả cụm và
+        // taxCents = Σ dòng; không có dòng nào thì taxCents = nil
+        // (chưa đọc được) như save() khi ô thuế để trống — không gộp
+        // hai nghĩa nil/0.
+        let persistTaxLines = !result.taxes.isEmpty
+        receipt.taxCents = persistTaxLines ? result.taxTotalCents : nil
+        let oldTaxLines = receipt.taxLines
+        for line in oldTaxLines { modelContext.delete(line) }
+        if persistTaxLines {
+            for (index, parsedTax) in result.taxes.enumerated() {
+                let line = TaxLine()
+                line.label = parsedTax.label
+                line.rateText = parsedTax.rateText
+                line.amountCents = parsedTax.amountCents
+                line.sortIndex = index
+                line.receipt = receipt
+                modelContext.insert(line)
+            }
+        }
+        // Items: thay cả cụm như taxLines (bản ghi cũ giữ items của bộ
+        // đọc cũ sẽ lẫn hai thế hệ số trong cùng một tờ).
+        let oldItems = receipt.items
+        for item in oldItems { modelContext.delete(item) }
+        for (index, parsed) in result.items.enumerated() {
+            let item = LineItem()
+            item.name = parsed.name
+            item.qty = parsed.qty
+            item.unitPriceCents = parsed.unitPriceCents
+            item.amountCents = parsed.amountCents
+            item.taxFlag = parsed.taxFlag
+            item.itemCode = parsed.itemCode
+            item.sortIndex = index
+            item.receipt = receipt
+            modelContext.insert(item)
+        }
+        receipt.cardLast4 = result.cardLast4
+        receipt.cardBrand = result.cardBrand
+        // Như save(): có đuôi thẻ -> trả bằng thẻ, không có -> .unknown,
+        // không bao giờ đoán tiền mặt.
+        receipt.paymentMethod = (result.cardLast4?.isEmpty == false) ? .card : .unknown
+        if let key = result.dedupeKey {
+            receipt.dedupeKey = key
+        }
+        receipt.vendorConfidence = result.vendorConfidence
+        receipt.dateConfidence = result.dateConfidence
+        receipt.totalConfidence = result.totalConfidence
+
+        // --- Phân loại: quyết định của anh thắng gợi ý ---
+        // Đã có quyết định (loại khác "chưa rõ", hoặc chính tay anh đổi
+        // trong màn này) thì giữ nguyên loại + lý do + mục: snapshot
+        // phân loại là của anh, kể cả khi sổ thẻ đã đổi về sau. Chưa có
+        // quyết định nào thì áp gợi ý theo thẻ đúng như save() (kèm
+        // chỉnh mục về mặc định của loại mới nếu mục cũ không thuộc
+        // danh sách của loại đó — cùng luật applySuggestionOnce).
+        let userDecided = receipt.classification != .unknown
+            || receipt.classificationReason == "Anh đổi tay trong chi tiết hoá đơn"
+        if !userDecided {
+            let suggestion = suggestClassification(cardLast4: result.cardLast4,
+                                                   cardBrand: result.cardBrand,
+                                                   tails: cardTails)
+            receipt.classification = suggestion.0
+            receipt.classificationReason = suggestion.1
+            if !Categories.list(for: receipt.classification).contains(receipt.category) {
+                receipt.category = Categories.defaultValue(for: receipt.classification)
+            }
+        }
+
+        // --- Trạng thái: đúng công thức Hộp Chờ của save() ---
+        let stillNeedsReview = receipt.classification == .unknown
+            || receipt.totalCents == nil
+            || !result.warnings.isEmpty
+            || (receipt.classification == .business
+                && receipt.businessPurpose.trimmingCharacters(in: .whitespaces).isEmpty)
+        receipt.status = stillNeedsReview ? .needsReview : .reviewed
+        receipt.parserVersion = currentParserVersion
+
+        try? modelContext.save()
+        // Vẽ lại theo số mới: đồng bộ 3 state của khối Phân loại về đúng
+        // giá trị vừa hạ cánh (kể cả khi gợi ý vừa đổi loại/mục).
+        selectedKind = receipt.classification
+        selectedCategory = receipt.category
+        purposeText = receipt.businessPurpose
+        reparsedNote = true
     }
 
     private func saveChanges() {

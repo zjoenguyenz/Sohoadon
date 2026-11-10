@@ -91,6 +91,14 @@ struct ParseResult {
 // loại cụm-chữ: slogan Home Depot (bằng chứng luồng 003 thật).
 // validate() KHÔNG đổi — phần số học nguyên văn như mọi bản trước.
 // Port kiểm chứng: m1fix/port.py + m1fix/run_port.py (13/13).
+//
+// REPARSE (bản reparse, nền m1fix): cộng điểm vào reparse(storedText:)
+// — chạy lại ĐÚNG parse(lines:) hiện hành trên văn bản thô ĐÃ LƯU của
+// một hoá đơn cũ (nút "Đọc lại" ở màn Chi Tiết, xem ReceiptViews).
+// Trước gói này engine mới chỉ áp cho lần quét mới; hoá đơn lưu từ
+// Build 1 giữ số của bộ đọc cũ mãi mãi. Không fork logic: reparse chỉ
+// khôi phục [OCRLine] từ chữ đã lưu rồi gọi parse(lines:) nguyên văn.
+// validate() vẫn KHÔNG đổi. Port kiểm chứng: reparse/port_check.py.
 
 enum ReceiptParser {
 
@@ -123,6 +131,40 @@ enum ReceiptParser {
         result.rawText = lines.map { $0.text }.joined(separator: "\n")
         result.warnings = validate(result)
         return result
+    }
+
+    // MARK: - REPARSE: đọc lại hoá đơn đã lưu từ văn bản thô đã lưu
+    //
+    // OCRLine.confidence KHÔNG được lưu cùng hoá đơn (chỉ lưu chữ), nên
+    // dòng khôi phục phải gán một độ tin cậy thay thế. Truy vết mọi nơi
+    // Parser dùng confidence của dòng: nó chỉ chảy vào đúng 3 trường
+    // phái sinh — totalConfidence (mọi điểm gán TỔNG ở hai nhánh),
+    // vendorConfidence (nấc 1 của identifyVendor: exact = conf,
+    // fuzzy = conf × 0.8; nấc 2 neo phụ tự gán 0.5, không dùng tới),
+    // dateConfidence (findDateTime / findDateOnly) — và validate() đọc
+    // 3 trường đó qua ngưỡng 0.60/0.85, mọi điều kiện đều kèm "> 0".
+    // Hệ quả của từng lựa chọn: 1.0 -> validate() câm mọi cảnh báo độ
+    // tin cậy (YẾU hơn đường quét); 0.0 -> cũng câm vì vướng điều kiện
+    // "> 0" (yếu nhất); 0.5 -> nằm dưới ngưỡng 0.60 nên cả 3 trường
+    // đều nhận cảnh báo MẠNH NHẤT ("độ tin cậy THẤP — bắt buộc kiểm
+    // tra lại với giấy") — thà thêm cờ còn hơn mất cờ, đúng kỷ luật
+    // Hộp Chờ. 0.5 cũng là mức parser tự gán cho bằng chứng nấc 2
+    // ("không phải tên in trên giấy") — cùng một nghĩa: bằng chứng
+    // không còn kiểm chứng trực tiếp được. Số trích ra (tiền/món/
+    // tiệm/ngày/thẻ) không phụ thuộc confidence ở bất kỳ nhánh nào.
+
+    /// Độ tin cậy gán cho dòng khôi phục từ văn bản đã lưu (xem trên).
+    static let recoveredLineConfidence: Double = 0.5
+
+    /// Đọc lại một hoá đơn ĐÃ LƯU: tách văn bản thô đã lưu theo "\n"
+    /// thành [OCRLine] rồi gọi đúng parse(lines:) hiện hành — cùng
+    /// một bộ đọc như lần quét mới, không fork logic. Dòng rỗng/xen
+    /// khoảng trắng được parse(lines:) tự cắt/lọc như đường quét.
+    static func reparse(storedText: String) -> ParseResult {
+        let lines = storedText
+            .split(separator: "\n")
+            .map { OCRLine(text: String($0), confidence: recoveredLineConfidence) }
+        return parse(lines: lines)
     }
 
     // MARK: - SAM'S CLUB (cổng từ prototype v0.1 đã đạt Mẫu 001)
