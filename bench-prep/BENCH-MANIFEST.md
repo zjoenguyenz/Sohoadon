@@ -44,6 +44,17 @@ Ca mới (L1/L2/L3/L5, S-1/S-2…) chỉ vào danh mục khi đáp án của ch�
 | L5-01 | C × L5 | Tờ NHIỀU MÓN NHẤT trong kho thật (mục tiêu ≥ 40 dòng món). Thiếu thì ghi THIẾU — **cấm ghép ảnh giả lập** (ENGINE §5.2) | Anh chọn ở buổi chuẩn bị | gt mới |
 | PDF-SAM | N × L0 | File PDF hoá đơn Sam's Club THẬT (đường PDF mới có fixture tổng hợp — ACCEPTANCE §1.3) | Khi anh tải được từ tài khoản Sam's | gt mới (= bộ số của chính tờ đó) |
 
+### 3.1 Ô chứa 10 ảnh thật anh sắp gửi — L-R01…L-R10 (thêm 2026-11-10)
+
+Anh báo sẽ gửi **10 tấm** hoá đơn thật. BenchCatalog đã mở sẵn 10 ô
+trống `L-R01`…`L-R10` (trạng thái THIẾU, form/difficulty = "?" chưa
+phân loại, gt trống). Khi ảnh về, Leader: (1) chép ảnh vào
+`benchapp/BenchImages/L-Rnn.jpg`, (2) phân loại dạng × khó, (3) chép
+tay + kiểm số học + đóng băng gt mới, (4) điền catalog. Các ô này là
+ĐƯỜNG NẠP của các ca §3 (một tờ nhăn thật về có thể đồng thời lấp ô
+L-Rnn và ca L1-0x tương ứng khi Leader đối chiếu) — không phải 10 ca
+bắt buộc cộng thêm ngoài §3.
+
 ## 4. Ca suy biến kỹ thuật số — TỔNG HỢP, chỉ tham khảo
 
 Theo ACCEPTANCE §3.2: **3 gốc (001/002/003) × 6 phép = 18 ảnh**, đáp án
@@ -52,6 +63,14 @@ kế thừa nguyên vẹn gt của gốc. Trạng thái: **ĐÃ TẠO + ĐÓNG B
 `make_synthetic.py` + `synthetic-manifest.csv` bảng kê thông số/sha256
 từng phép + `SYNTHETIC-LEDGER.md` + tự kiểm tái lập byte-for-byte PASS).
 Một mức mỗi phép; DOWNSCALE chốt ×0.5 cho cả 3 gốc (lý do ở sổ).
+**ĐÃ ĐĂNG KÝ CATALOG 2026-11-10 (gói BENCH-CATALOG-EXT):** 18 ảnh đã
+chép nguyên byte vào `benchapp/BenchImages/` (giữ tên `SYN-*`,
+sha256 khớp manifest 18/18) và đăng ký trong `BenchCatalog.swift`
+dưới mã buổi đo **D-01…D-18** (thứ tự: gốc 001 → 002 → 003; trong mỗi
+gốc BLUR · DOWNSCALE · LIGHT · TILT · WRINKLE · NOISE), origin
+`synthetic`, gt kế thừa hạt giống — **chờ build bench cuối** để vào
+app đo. Ô tổng hợp cũ `D-SYN-18` trong catalog đã bị thay bằng 18 mục
+riêng này.
 
 | Phép | Đặc tả (mức "nặng vừa", thông số chốt khi tạo và ghi vào bảng kê) | Công cụ |
 |---|---|---|
@@ -70,9 +89,19 @@ cổng G2, không thuộc danh mục ảnh này.
 ## 5. Tóm tắt điều kiện chặn
 
 Sẵn sàng hôm nay: **4/~15 ca thật** (N-001, N-002, C-003-dự phòng, S-0)
-+ **18/18 ca suy biến** (mục 4, đóng băng 2026-11-10). Buổi đo
++ **18/18 ca suy biến** (mục 4, đóng băng 2026-11-10, đã đăng ký
+catalog D-01…D-18 + đã chép vào `benchapp/BenchImages/` — chờ build
+bench cuối) + **10 ô trống L-R01…L-R10** (mục 3.1) chờ 10 ảnh thật
+anh sắp gửi. Buổi đo
 chỉ được xin anh khi: (1) các ca THIẾU ở mục 3 đã có ảnh + đáp án đóng
 băng — **VẪN CHƯA**, (2) 18 ảnh suy biến mục 4 đã tạo và đóng băng —
-**ĐÃ XONG 2026-11-10**, (3) luồng OCR gốc
+**ĐÃ XONG 2026-11-10** (đăng ký catalog xong cùng ngày; còn chờ build
+bench cuối), (3) luồng OCR gốc
 trên máy của tờ Sam's run #26 đã về tay đội và tái hiện được tại bàn
 (ACCEPTANCE §3.5.3 — điều kiện nằm ngoài danh mục ảnh nhưng cùng chặn).
+
+## CHỐT TRỌNG SỐ (Leader, 2026-11-10 19:2x CST)
+bench_score.py đã sửa theo cờ của gói BENCH-CATALOG-EXT: trọng số ×2
+và nhãn "lớp khó thật" CHỈ áp cho origin=real (L1/L2/L5); mọi ca
+synthetic luôn ×1 bất kể difficulty được gán lớp nào. Tự kiểm: 4 ca
+đơn vị đúng kỳ vọng + selftest app-format chấm lại không đổi kết quả.

@@ -1,5 +1,40 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 18:40 CST (ca trực: **18 ẢNH SUY
+Cập nhật lần cuối: 2026-11-10 20:40 CST (ca trực: **KIỂM CHỨNG
+ĐỘC LẬP GÓI BENCH-CATALOG-EXT + CHỐT TRỌNG SỐ BỘ CHẤM — ĐẠT
+HẾT, ca tự chạy lại từ bằng chứng gốc, không dùng lời AFTER.md**:
+gói mở rộng catalog (làm 19:20–19:22 CST, chưa có dòng sổ nào)
+nay đã có kiểm chứng Leader: (1) 18 ảnh synthetic trong
+`benchapp/BenchImages/` khớp sha256 + byte-size với
+`synthetic-manifest.csv` **18/18** và byte-trùng bản gốc ở
+`bench-prep/synthetic/images/`; (2) 4 ảnh thật byte-trùng
+`samples/` **4/4**; (3) nhất quán 3 phía: BenchCatalog **45 mục
+= 22 có file** (4 thật + D-01…D-18 synthetic) **+ 23 THIẾU
+tường minh** (13 ô cũ + L-R01…L-R10) — tập file BenchImages
+(22) == tập resourceName == tập dòng sources trong project.yml
+(22), không thừa không thiếu; ánh xạ D-01=SYN-001-BLUR …
+D-18=SYN-003-NOISE đúng thứ tự manifest; ngoặc 7/7 · 85/85 ·
+5/5; **0 số đáp án** rò vào catalog/project; appBuild của
+benchapp = `benchapp-2` (bench-push/run #32 vẫn `benchapp-1`
+— bản bench cuối CHƯA đẩy/build, đúng quy trình: Wally trình
+ở chat chính). (4) **Cờ mở trong AFTER.md (trọng số synthetic)
+ĐÃ ĐÓNG**: `bench_score.py` `weight_of` nay origin≠real → ×1
+bất kể difficulty, real L1/L2/L5 → ×2 — ca kiểm đơn vị
+**10/10 tổ hợp** (hơn 4 ca sổ manifest ghi); chạy lại bộ chấm
+trên selftest app-format: exit 0, kết quả **byte-trùng** file
+đã lưu (8/8 run trọn sổ + §F). Tuyên bố trung thực — đã chứng
+minh: toàn vẹn byte + nhất quán kê khai + luật trọng số ở mức
+file/script tại bàn; chưa chứng minh: bản bench 22 ảnh CHƯA
+build cloud (biên dịch + nạp tài nguyên chỉ phán ở build bench
+cuối); chưa làm: chưa nhúng ca thật nào (L-R vẫn trống). **Bước
+tiếp theo giữ nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô
+L-R theo quy ước 5 bước trong benchapp/AFTER.md (chép tay +
+kiểm số học + đóng băng gt) → ráp bản bench cuối + build →
+buổi đo duy nhất. Điều kiện chặn (1) ca thật + (3) luồng OCR
+gốc trên máy VẪN mở; ca này không kêu anh cài/test gì. Ghi chú
+nhỏ cho lần ráp cuối: `benchapp/HONESTY.md` còn câu cũ "không
+tạo 18 ảnh suy biến" (thuộc gói benchapp gốc) — AFTER.md mục
+BENCH-CATALOG-EXT là bản hiện hành, sửa câu đó khi ráp.)
+Cập nhật trước đó: 2026-11-10 18:40 CST (ca trực: **18 ẢNH SUY
 BIẾN ĐÃ TẠO + ĐÓNG BĂNG** — việc độc lập làm song song trong lúc
 chờ anh gửi 5–8 tờ thật khó, đúng mục còn ghi CHƯA TẠO ở
 BENCH-MANIFEST §4 / điều kiện chặn buổi đo §5 mục (2):
