@@ -1,5 +1,40 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-11 12:40 CST (ca trực: **2 ĐIỂM MỞ
+Cập nhật lần cuối: 2026-11-11 14:40 CST (ca trực: **DIỄN TẬP
+RÁP LAB ĐÃ CHẠY TRỌN TRÊN BẢN SAO CÁCH LY — PASS 7/7** — việc
+độc lập làm trong lúc chờ ảnh thật: công thức ráp cơ học của
+`LAB-ASSEMBLY-DECISION.md` trước ca này mới là văn bản quyết,
+chưa từng áp thật lên catalog nào. Nay
+`bench-prep/lab-assembly/rehearsal/make_rehearsal.py` áp đúng
+3 bước lên bản sao cách ly trong `rehearsal/work/`: chép 24 ảnh
+staging → BenchImages · +24 mục catalog W (form C · LONG/TALL
+L5, DENSE/LOWRES L4 · origin `lab` · gtID rỗng · sourceFile =
+đường corpus nguyên văn · statusNote ghi tầng + LAB/không GT/
+không cổng) · +24 dòng sources project.yml → catalog **69 mục
+/ 46 có file**. Verifier độc lập **PASS 7/7** (mục W khớp Quyết
+1/2 từng trường · nhất quán ba phía 46/46/46 + YAML parse ·
+sha ảnh W 24/24 khớp staging manifest lẫn subset · ngoặc
+7/7+111/111, appBuild giữ `benchapp-2` — diễn tập không tự
+nâng dấu bản · **benchapp thật nguyên vẹn**: hash catalog/
+project khớp dòng #ORIG tiền-sao-chép, BenchImages vẫn 22 ·
+tái lập byte-trùng khi chạy lại · hồi quy bộ chấm byte-trùng
+file đã lưu). Verifier vòng đầu tự bắt lỗi của chính nó ở nhóm
+7 (truyền đường dẫn tuyệt đối làm lệch dòng tiêu đề bộ chấm —
+lỗi verifier, không phải bộ chấm), đã sửa cách gọi, chạy lại
+xanh — ghi ở `rehearsal/REHEARSAL-LEDGER.md`. `work/` 7.8 MB
+chỉ ở tại bàn, tái lập bằng script, KHÔNG đẩy (tiền lệ staging).
+Tuyên bố trung thực — đã chứng minh: công thức ráp chạy trọn ở
+mức file/kê khai trên bản sao, lần ráp cuối nay là thao tác đã
+diễn tập; chưa chứng minh: catalog 69 mục CHƯA biên dịch
+(không swiftc tại bàn — chỉ phán ở build bench cuối), diễn tập
+chưa gồm L-R + nâng dấu bản; chưa làm: 10 ca thật L-R vẫn chờ
+anh, §3.5(3) luồng OCR gốc trên máy của Sam's run #26 vẫn chưa
+về, B-04/B-05 chưa chốt tên (phụ thuộc ca thật). **Bước tiếp
+theo giữ nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô L-R
+theo quy ước 5 bước trong benchapp/AFTER.md → ráp bản bench
+cuối (nhúng 24 ca lab theo công thức ĐÃ DIỄN TẬP ở
+lab-assembly/rehearsal + chốt B-04/B-05) + build → buổi đo duy
+nhất. Ca này không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-11 12:40 CST (ca trực: **2 ĐIỂM MỞ
 CỦA LAB-STAGING ĐÃ CHỐT + BỘ CHẤM ĐÃ XỬ LÝ CA LAB TƯỜNG MINH**
 — việc độc lập làm trong lúc chờ ảnh thật, đóng đúng 2 điểm mở
 ca 06:40 ghi "để Leader chốt ở lần ráp": (1) **origin ca lab =
@@ -39,6 +74,15 @@ nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô L-R theo quy
 24 ca lab theo công thức đã chốt ở lab-assembly + chốt
 B-04/B-05) + build → buổi đo duy nhất. Ca này không kêu anh
 cài/test gì.)
+ĐẨY CUỐI CA 12:40: **THÀNH CÔNG** — đúng 1 lần, 7 file
+(WORK-STATE.md · bench-prep/bench_score.py ·
+bench-prep/BENCH-JSON-SPEC.md · bench-prep/BENCH-MANIFEST.md ·
+bench-prep/lab-assembly/LAB-ASSEMBLY-DECISION.md ·
+bench-prep/lab-assembly/verify_lab_assembly.py ·
+bench-prep/lab-assembly/verify-lab-assembly-results.txt),
+commit mới trên docs/planning:
+`1ea2123e94e55a6bf8c903aa56d8a6d2d7d6bd6f`. (Dòng này + mọi sửa
+sau thời điểm đẩy chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
 Cập nhật trước đó: 2026-11-11 10:40 CST (ca trực: **KIỂM
 CHỨNG TỪ XA BACKLOG 00:40–04:40 — CẢ 40 FILE ĐỀU VẮNG TRÊN
 docs/planning; LIỆT KÊ TƯỜNG MINH ĐỂ ĐẨY BÙ** — đúng việc ca

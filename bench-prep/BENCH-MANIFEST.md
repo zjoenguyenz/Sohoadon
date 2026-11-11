@@ -159,3 +159,18 @@ verifier độc lập **PASS 10/10**; BenchApp chưa bị đụng
 chưa có giá trị cho ca lab (nguy cơ trọng số ×2 sai nếu đăng ký
 real) và ánh xạ `difficulty` cho 4 tầng lab chưa đóng băng.
 §3.5(2) vẫn chỉ còn thiếu 10 ca thật L-R (chờ anh).
+
+## CẬP NHẬT 2026-11-11 (ca trực 14:40 CST) — DIỄN TẬP RÁP LAB ĐÃ CHẠY TRỌN TRÊN BẢN SAO
+
+Công thức ráp cơ học của `lab-assembly/LAB-ASSEMBLY-DECISION.md`
+đã được **diễn tập trọn vẹn** trên bản sao cách ly:
+`bench-prep/lab-assembly/rehearsal/` — `make_rehearsal.py` áp
+đúng 3 bước (chép 24 ảnh staging · +24 mục catalog W theo
+Quyết 1/2 · +24 dòng sources) cho catalog **69 mục / 46 có
+file**, verifier độc lập **PASS 7/7** (nhất quán ba phía 46 ·
+sha ảnh 24/24 · tái lập byte-trùng · benchapp thật nguyên vẹn
+22 file · hồi quy bộ chấm byte-trùng). Sổ:
+`rehearsal/REHEARSAL-LEDGER.md`. Hệ quả: lần ráp bản bench cuối
+nay là thao tác đã diễn tập — phần chưa diễn tập được chỉ còn
+L-R (chờ ảnh) + nâng dấu bản + build cloud phán. §3.5(2) vẫn
+chỉ còn thiếu 10 ca thật L-R (chờ anh).

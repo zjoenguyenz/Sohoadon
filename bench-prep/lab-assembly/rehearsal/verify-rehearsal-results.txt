@@ -1,0 +1,8 @@
+PASS  1-catalog-W-khop-quyet  tong muc=69 (ky vong 69); muc W dung Quyet1/2=True; statusNote=True
+PASS  2-ba-phia-46  files=46 resource=46 sources=46 yaml_ok=True
+PASS  3-anh-W-byte-trung  sha256 work == staging manifest == subset: 24/24
+PASS  4-ngoac+appBuild  {} 7/7 () 111/111 appBuild giu benchapp-2
+PASS  5-benchapp-that-nguyen  hash catalog/project khop #ORIG; BenchImages that = 22 file
+PASS  6-tai-lap-byte-trung  chay lai make_rehearsal -> work byte-trung (catalog+project+46 anh)
+PASS  7-bench-score-hoi-quy  exit=0; stdout byte-trung file da luu=True
+== TONG: 7/7 nhom PASS ==
