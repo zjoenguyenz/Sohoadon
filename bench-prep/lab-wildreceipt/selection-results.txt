@@ -1,0 +1,41 @@
+CHON TAP CON KHO WildReceipt — KET QUA CHAY select_wildreceipt.py
+Nguon: corpus/lab/wildreceipt/extracted/wildreceipt/test.txt (472 to)
+
+== PHIEU LOC (funnel) ==
+test split tong: 472
+phu nhan (doi chieu ACCEPTANCE §3.1): total 423 · date 398 · subtotal 343
+qua cua total+date+subtotal (§3.1): 266
+them cua item+price (can cho E1 noi bo): 255
+sau loai trung giao dich: 247 (loai 8 ban trung thuoc 7 nhom)
+qua cua do kho (hop >= 35 va mon >= 4): 109
+da chon: 24 ca (4 tang x 6)
+
+== DO KHO: tap da chon vs tap du dieu kien sau trung ==
+hop chu thich trung vi: da chon 60.5 vs du dieu kien 39
+dong mon trung vi: da chon 8.5 vs du dieu kien 4
+
+== DANH SACH 24 CA ==
+W-01 [LONG] hop=88 mon=20 gia=20 615x1093 aspect=1.78 chu_trung_vi=14.0px image_files/Image_69/5/15c0d4ff788941e37abbb8fc88106e813916561b.jpeg
+W-02 [LONG] hop=83 mon=19 gia=8 303x450 aspect=1.49 chu_trung_vi=8.0px image_files/Image_55/2/6fe07898eafbfba6af910a2f5281a36d60e25349.jpeg
+W-03 [LONG] hop=63 mon=18 gia=13 1936x2592 aspect=1.34 chu_trung_vi=50.0px image_files/Image_13/10/fb9e4f82f41f3540f6ae930f0519ba24280ff5b3.jpeg
+W-04 [LONG] hop=81 mon=16 gia=16 253x450 aspect=1.78 chu_trung_vi=9.0px image_files/Image_79/7/36c95886591cc6aea16d3a5f78775a27dd591567.jpeg
+W-05 [LONG] hop=42 mon=16 gia=5 254x450 aspect=1.77 chu_trung_vi=11.0px image_files/Image_70/5/3453.jpeg
+W-06 [LONG] hop=95 mon=15 gia=14 428x960 aspect=2.24 chu_trung_vi=13.0px image_files/Image_38/16/32c6def6f55ba732dd6f9275478c16ce1d61e70b.jpeg
+W-07 [DENSE] hop=120 mon=9 gia=16 506x883 aspect=1.75 chu_trung_vi=9.0px image_files/Image_17/11/fae9f5dfb4c3ff89837e18eccbc1482a0ce74166.jpeg
+W-08 [DENSE] hop=62 mon=9 gia=12 338x450 aspect=1.33 chu_trung_vi=9.0px image_files/Image_83/8/0c2ee907b32f7bccc6deedd6d780107ffeda251c.jpeg
+W-09 [DENSE] hop=60 mon=7 gia=7 253x450 aspect=1.78 chu_trung_vi=9.0px image_files/Image_2/0/6e26dc59f2dd4cb87b4abf96c799e86556fcc0ea.jpeg
+W-10 [DENSE] hop=57 mon=7 gia=7 338x450 aspect=1.33 chu_trung_vi=9.0px image_files/Image_57/20/1d0adaac8c10b806e30f5d9c77d8e050884e2772.jpeg
+W-11 [DENSE] hop=53 mon=5 gia=5 261x469 aspect=1.80 chu_trung_vi=9.0px image_files/Image_40/16/abe4a99fc868a89ff0f574748d9bc12144eca345.jpeg
+W-12 [DENSE] hop=43 mon=5 gia=5 550x413 aspect=0.75 chu_trung_vi=9.0px image_files/Image_14/11/3f915c4fd0e664ee1c6332d5cba5f8e737d71dc7.jpeg
+W-13 [LOWRES] hop=46 mon=10 gia=10 235x450 aspect=1.91 chu_trung_vi=11.0px image_files/Image_59/20/af5da612c7f1605403dac91b23da114ae70ca1b8.jpeg
+W-14 [LOWRES] hop=61 mon=9 gia=8 240x450 aspect=1.88 chu_trung_vi=11.0px image_files/Image_62/3/4fe38ece4fa1c0877994e9c0c33eaad6e13a3333.jpeg
+W-15 [LOWRES] hop=42 mon=4 gia=4 253x450 aspect=1.78 chu_trung_vi=11.0px image_files/Image_11/10/52a546ea9b2782e512ba22e6e3c11c70803c2e0f.jpeg
+W-16 [LOWRES] hop=41 mon=7 gia=6 253x450 aspect=1.78 chu_trung_vi=12.0px image_files/Image_72/5/a1e4df9446efd1e5d0fffe4b75e81b1fb01d9471.jpeg
+W-17 [LOWRES] hop=74 mon=9 gia=9 263x448 aspect=1.70 chu_trung_vi=10.0px image_files/Image_84/8/4460.jpeg
+W-18 [LOWRES] hop=39 mon=7 gia=5 275x450 aspect=1.64 chu_trung_vi=14.0px image_files/Image_12/10/7ce1623d6d1aebb79015e1d9b78edf235e611eb4.jpeg
+W-19 [TALL] hop=74 mon=8 gia=8 495x1024 aspect=2.07 chu_trung_vi=24.0px image_files/Image_36/16/03dd7bee9110ab404811a8a9a151023677998706.jpeg
+W-20 [TALL] hop=60 mon=5 gia=5 500x1024 aspect=2.05 chu_trung_vi=17.0px image_files/Image_29/14/6ef9f7a607c44e85e9ee46f73946f896ab89f56c.jpeg
+W-21 [TALL] hop=83 mon=13 gia=14 856x1720 aspect=2.01 chu_trung_vi=34.0px image_files/Image_83/7/f6b397503d69287709ba3872c7e548d45917cd2e.jpeg
+W-22 [TALL] hop=52 mon=6 gia=6 343x670 aspect=1.95 chu_trung_vi=14.0px image_files/Image_38/16/37a7fb7d45e6443352821d03cd0169f313700778.jpeg
+W-23 [TALL] hop=52 mon=8 gia=1 536x960 aspect=1.79 chu_trung_vi=22.0px image_files/Image_9/1/a43852905f43c1a8e02fff45e3a0d55fad0c5c1d.jpeg
+W-24 [TALL] hop=66 mon=7 gia=7 1840x3264 aspect=1.77 chu_trung_vi=40.0px image_files/Image_40/16/ba4c7f3e98913e0dc79747a06c542351e7b0ca38.jpeg

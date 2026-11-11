@@ -1,0 +1,12 @@
+[PASS] 1-header+71-dong — rows=71
+[PASS] 2-tap-ma-catalog-45 — catalog=45 sheet=45
+[PASS] 3-trang-thai — {'READY': 22, 'MISSING': 13, 'EMPTY-SLOT': 10, 'NOT-EMBEDDED': 24, 'SESSION-CHECK': 2}
+[PASS] 4-ready-gt-that — answers=['GT-HD-003', 'GT-SAMS-F'] bad=[]
+[PASS] 5-synthetic-18-D — n=18
+[PASS] 6-lab-24 — n=24
+[PASS] 7-m9+ho-so — 71/71 dong co luat M9, 0 trung ma
+[PASS] 8-anh-xa-ma
+[PASS] 9-tai-lap-byte-trung — rc=0
+[PASS] 10-md-so-dong-bang+chan — thieu=[]
+
+KET LUAN: PASS — 10/10 nhom PASS

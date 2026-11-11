@@ -1,0 +1,9 @@
+PASS  24 dong + case_id lien tuc  rows=24
+PASS  4 tang x 6 dung thu tu  Counter({'LONG': 6, 'DENSE': 6, 'LOWRES': 6, 'TALL': 6})
+PASS  sha256 + byte-size khop dia 24/24  
+PASS  moi ca qua cua §3.1 + cua do kho (dem lai)  
+PASS  van ban nhan tho khop tung ky tu  
+PASS  cot so khop so dem lai  
+PASS  0 cap trung giao dich trong 24 ca  []
+PASS  tai lap byte-trung CSV khi chay lai selector  7667 vs 7667 byte
+KET LUAN: PASS

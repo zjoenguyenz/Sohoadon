@@ -1,5 +1,39 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-11 08:40 CST (ca trực: **KIỂM CHỨNG
+Cập nhật lần cuối: 2026-11-11 10:40 CST (ca trực: **KIỂM
+CHỨNG TỪ XA BACKLOG 00:40–04:40 — CẢ 40 FILE ĐỀU VẮNG TRÊN
+docs/planning; LIỆT KÊ TƯỜNG MINH ĐỂ ĐẨY BÙ** — đúng việc ca
+08:40 dặn ca sau, làm trong lúc chờ ảnh thật: đọc trực tiếp
+GitHub (zjoenguyenz/Sohoadon) trong ca này: đầu nhánh
+docs/planning vẫn là `2fb3d37b8caeccba828c1ac81ca64751cce8a0f5`
+(commit ca 08:40, 2026-11-11T15:25:24Z) — khớp sổ sync tại
+bàn. Kiểm TỪNG file backlog bằng get_file_contents ở ref
+docs/planning: cả **40/40 file** đều trả "path does not point
+to a file or directory, or the file does not exist" — tức
+KHÔNG TỒN TẠI trên nhánh, đẩy bù không trùng, không ghi đè.
+Danh sách tường minh 40 file: text-degrade 28 file
+(TEXT-DEGRADE-LEDGER.md · run_text_degrade.py ·
+verify_text_degrade.py · text-degrade-results.txt ·
+flows/T01.txt…T24.txt) · lab-wildreceipt 6 file
+(LAB-WILDRECEIPT-LEDGER.md · select_wildreceipt.py ·
+verify_wildreceipt_subset.py · wildreceipt-subset.csv ·
+selection-results.txt · verify-wildreceipt-results.txt) ·
+measure-pack 6 file (MEASURE-PACK.md · MEASURE-PACK-LEDGER.md
+· gen_scoresheet.py · verify_measure_pack.py · scoresheet.csv
+· verify-measure-pack-results.txt). Kiểm lại tại bàn trong
+ca này: verifier text-degrade PASS (verdict khớp 24/24, tái
+lập flows byte-trùng) · verifier WildReceipt PASS 8/8 ·
+verifier measure-pack PASS 10/10. Tuyên bố trung thực — đã
+chứng minh: trạng thái vắng mặt 40/40 trên docs/planning +
+đầu nhánh, và 3 gói backlog vẫn PASS verifier tại bàn; chưa
+chứng minh: không có gì về build/app — ca này không đụng
+Swift/schema/pipeline; chưa làm: 10 ca thật L-R vẫn chờ anh,
+§3.5(3) luồng OCR gốc trên máy của Sam's run #26 vẫn chưa về.
+**Bước tiếp theo giữ nguyên: chờ anh gửi 10 ảnh thật** →
+Leader lấp ô L-R theo quy ước 5 bước trong benchapp/AFTER.md
+→ ráp bản bench cuối (kèm nhúng 24 ca lab từ staging + chốt
+B-04/B-05 + chốt 2 điểm mở origin/difficulty của ca 06:40) +
+build → buổi đo duy nhất. Ca này không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-11 08:40 CST (ca trực: **KIỂM CHỨNG
 TỪ XA LẦN ĐẨY MƠ HỒ 06:40 — KHÔNG LÊN ĐƯỢC CHÚT NÀO, KHÔNG
 TRÙNG; ĐẨY LẠI AN TOÀN** — đúng việc ca 06:40 dặn ca sau, làm
 trong lúc chờ ảnh thật: đọc trực tiếp GitHub
@@ -33,6 +67,12 @@ Leader lấp ô L-R theo quy ước 5 bước trong benchapp/AFTER.md
 → ráp bản bench cuối (kèm nhúng 24 ca lab từ staging + chốt
 B-04/B-05 + chốt 2 điểm mở origin/difficulty của ca 06:40) +
 build → buổi đo duy nhất. Ca này không kêu anh cài/test gì.)
+ĐẨY CUỐI CA 08:40: **THÀNH CÔNG** — đúng 1 lần, 7 file của
+danh sách 06:40, commit mới trên docs/planning:
+`2fb3d37b8caeccba828c1ac81ca64751cce8a0f5`; sổ sync snapshot
+đã ghi nhận commit này. (Dòng này + mọi sửa sau thời điểm đẩy
+chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau. Backlog tài
+liệu 00:40–04:40 nêu ở mục trên vẫn CHƯA đẩy bù.)
 Cập nhật trước đó: 2026-11-11 06:40 CST (ca trực: **STAGING
 24 ẢNH LAB ĐÃ ĐÓNG GÓI + KIỂM ĐẠT** — việc độc lập làm trong lúc
 chờ ảnh thật: phần "nhúng 24 ảnh lab" của bước 0 buổi chuẩn bị

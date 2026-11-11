@@ -1,0 +1,59 @@
+CỔNG G2 — SUY BIẾN CHỮ (ACCEPTANCE §3.3): ca x đẳng thức x cờ
+Bộ máy: m1fix/port.py parse(fixed=True) + core-redo/reconcile.py (T3+T4)
+==============================================================================================================================
+ca   ho      nguon  verdict           recon               Σmon     sub          thue   total  qty+   delta vỡ           cờ:V1/V2/V4/T-
+------------------------------------------------------------------------------------------------------------------------------
+T01  CTRL    001    CORRECT           OK                 20330   20330       390/960   21680    15       0 -            ./././.  fixes=0
+     doi chung nguyen ven 001
+T02  CTRL    003    CORRECT           OK                  9691    9691           825   10516     4       0 -            ./././.  fixes=0
+     doi chung nguyen ven 003 (gom ca BEFORE native)
+T03  SPLIT   001    CORRECT-REPAIRED  REPAIRED           20330   20330       390/960   21680    15    1948 -            Y/./Y/.  fixes=1
+     xe dong SPRITECANS thanh 2 manh (ten / tien)
+T04  SPLIT   001    CORRECT           OK                 20330   20330       390/960   21680    15       0 -            ./././.  fixes=0
+     xe dong MM WATER (ma+ten) thanh 2 manh
+T05  SPLIT   002    CORRECT           OK                 20330   20330       390/960   21680    15       0 -            ./././.  fixes=0
+     002 tai dung: xe 'SUBTOTAL 203.30' thanh nhan / tien 2 dong
+T06  SPLIT   003    CORRECT           OK                  9691    9691           825   10516     4       0 -            ./././.  fixes=0
+     xe dong ten mon BONA thanh 2 manh
+T07  DROP    001    FLAGGED           NO_SOLUTION        17632   20330       390/960   21680    14    2698 E1,E3        Y/./Y/.  fixes=0
+     mat 1 dong mon POM TISSUE 26.98
+T08  DROP    001    FLAGGED           NO_SOLUTION        16434   20330       390/960   21680    13    3896 E1,E3        Y/./Y/.  fixes=0
+     mat dong so luong/tien cua DIETCOK (2 AT ... 38.96)
+T09  DROP    001    FLAGGED           ANCHOR_CONFLICT    20330   20330           960   21680    15    None E2,GT        ./Y/./.  fixes=0
+     mat dong TAX 2 (3.90)
+T10  DROP    001    FLAGGED           TOTAL_ONLY         20330    None       390/960   21680    15    None E1,E2,GT     ./././.  fixes=0
+     mat dong SUBTOTAL
+T11  DROP    003    FLAGGED           SUGGESTION_ONLY     7694    9691           825   10516     3    1997 E1           Y/././.  fixes=0
+     mat dong tien 19.97 cua mon BONA
+T12  DROP    001    FLAGGED           NO_SOLUTION        16434   20330       390/960   21680    13    3896 E1,E3        Y/./Y/.  fixes=0
+     mat ca mon DIETCOK (ten + dong so luong) — mo phong run #26
+T13  NOISE   001    CORRECT-REPAIRED  REPAIRED           20330   20330       390/960   21680    15    1778 -            Y/./Y/.  fixes=1
+     nhieu ky tu token tien GREN: 17.78 -> 17.7B (B=8)
+T14  NOISE   001    FLAGGED           TOTAL_ONLY         20330    None       390/960   21680    15    None E1,E2,GT     ./././.  fixes=0
+     nhieu SUBTOTAL: 203.30 -> 2O3.30 (O=0)
+T15  NOISE   001    FLAGGED           NO_SOLUTION        17632   20330       390/960   21680    14    2698 E1,E3        Y/./Y/.  fixes=0
+     mat dau cham thap phan POM TISSUE: 26.98 -> 2698
+T16  NOISE   003    FLAGGED           OK                  9691    9691           825    None     4       0 E2,GT        ./././Y  fixes=0
+     nhieu TOTAL: $105.16 -> $1O5.16 (O=0)
+T17  NOISE   001    FLAGGED           ANCHOR_CONFLICT    20330   20330           390   21680    15    None E2,GT        ./Y/./.  fixes=0
+     nhieu TAX 1: 9.60 -> 9.6O (O=0)
+T18  BEFORE  001    FLAGGED           TOTAL_ONLY         20330    None       390/960   21680    15    None E1,E2,GT     ./././.  fixes=0
+     tien-truoc-nhan tren Sam's: SUBTOTAL tach tien len truoc nhan
+T19  BEFORE  003    CORRECT           OK                  9691    9691           825   10516     4       0 -            ./././.  fixes=0
+     doi chung chieu nguoc: SUBTOTAL doi sang nhan-truoc-tien
+T20  DUP     001    FLAGGED           NO_SOLUTION        22278   20330       390/960   21680    16   -1948 E1,E3        Y/./Y/.  fixes=0
+     trung nguyen dong SPRITECANS (manh chong lat cat)
+T21  DUP     001    CORRECT           OK                 20330   20330       390/960   21680    15       0 -            ./././.  fixes=0
+     trung nguyen dong SUBTOTAL (cung gia tri)
+T22  DUP     003    FLAGGED           NO_SOLUTION        10389    9691           825   10516     5    -698 E1           Y/././.  fixes=0
+     trung nguyen khoi mon 1 (tien + ma + ten)
+T23  GARB    001    CORRECT           OK                 20330   20330       390/960   21680    15       0 -            ./././.  fixes=0
+     chen 3 manh rac su co 16:19 len dau luong
+T24  GARB    003    FLAGGED           ANCHOR_CONFLICT     9691    9691           825   99999     3    None E2,GT        ./Y/./.  fixes=0
+     chen dong rac dang tong gia 'TOTAL 999.99' truoc khoi tong that
+------------------------------------------------------------------------------------------------------------------------------
+Cột cờ: V1=tổng món≠subtotal · V2=subtotal+thuế≠total · V4=số lượng≠ITEMS SOLD · T-=thiếu TỔNG (validate).
+Ca FLAGGED không có cờ validate tương ứng (T10/T14/T18) được bao phủ bởi trạng thái
+reconcile TOTAL_ONLY + regionHints đọc-lại vùng tổng — bao phủ ở TẦNG RECONCILE, không phải validate.
+TỔNG: 24 ca = 10 CORRECT/CORRECT-REPAIRED + 14 FLAGGED + 0 SILENT-WRONG
+== G2 GATE: PASS ==
