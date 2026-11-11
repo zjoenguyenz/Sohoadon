@@ -100,8 +100,46 @@ bench cuối), (3) luồng OCR gốc
 trên máy của tờ Sam's run #26 đã về tay đội và tái hiện được tại bàn
 (ACCEPTANCE §3.5.3 — điều kiện nằm ngoài danh mục ảnh nhưng cùng chặn).
 
+## CẬP NHẬT 2026-11-11 (ca trực 02:40 CST) — ca lab WildReceipt ĐÃ CHỌN
+
+Phần "danh sách ca lab đã chọn" của điều kiện §3.5(2) **ĐÃ XONG**:
+`bench-prep/lab-wildreceipt/` — 24 ca khó W-01…W-24 chọn xác định
+theo §3.1 từ test 472 (phễu 472 → 266 → 255 → 247 sau loại trùng
+giao dịch → 109 qua cửa độ khó → 24; 4 tầng LONG/DENSE/LOWRES/TALL
+× 6), bảng kê đóng băng `wildreceipt-subset.csv` (sha256 + đáp án
+nhãn nguyên văn từng ca), verifier độc lập PASS 8/8 + tái lập
+byte-trùng. Sổ: `lab-wildreceipt/LAB-WILDRECEIPT-LEDGER.md`. Các
+ảnh lab **chưa nhúng** vào BenchApp — ráp ở bản bench cuối cùng
+nhịp L-R. §3.5(2) nay chỉ còn thiếu 10 ca thật L-R (chờ anh).
+
+## CẬP NHẬT 2026-11-11 (ca trực 04:40 CST) — BẢNG CHẤM IN SẴN ĐÃ ĐÓNG BĂNG
+
+Phần "bảng chấm in sẵn (ca × chỉ số × ngưỡng)" của điều kiện
+§3.5(2) **ĐÃ XONG**: `bench-prep/measure-pack/` — `MEASURE-PACK.md`
+(gói đo đóng băng: ánh xạ mã §4.2 ↔ BenchApp, 9 hồ sơ ngưỡng
+nguyên văn §2.3, thứ tự buổi đo cố định, trang hướng dẫn chụp
+§4.3) + `scoresheet.csv` **71 dòng ca** (45 catalog + 24 lab +
+L-01/L-02) sinh xác định bởi `gen_scoresheet.py`, verifier độc
+lập **PASS 10/10** + tái lập byte-trùng. Sổ:
+`measure-pack/MEASURE-PACK-LEDGER.md`. §3.5(2) nay chỉ còn thiếu
+10 ca thật L-R (chờ anh) + nhúng 24 ảnh lab ở lần ráp bản bench
+cuối.
+
 ## CHỐT TRỌNG SỐ (Leader, 2026-11-10 19:2x CST)
 bench_score.py đã sửa theo cờ của gói BENCH-CATALOG-EXT: trọng số ×2
 và nhãn "lớp khó thật" CHỈ áp cho origin=real (L1/L2/L5); mọi ca
 synthetic luôn ×1 bất kể difficulty được gán lớp nào. Tự kiểm: 4 ca
 đơn vị đúng kỳ vọng + selftest app-format chấm lại không đổi kết quả.
+
+## CẬP NHẬT 2026-11-11 (ca trực 06:40 CST) — ẢNH LAB ĐÃ CÓ BỘ STAGING
+
+Phần "nhúng 24 ảnh lab" của lần ráp bản bench cuối nay đã có
+nguồn chép kiểm chứng sẵn: `bench-prep/lab-staging/` —
+`images/W-01.jpg`…`W-24.jpg` chép byte-trùng nguồn corpus theo
+bảng kê đã đóng băng (tổng 2.092.865 byte) + manifest +
+verifier độc lập **PASS 10/10**; BenchApp chưa bị đụng
+(BenchImages vẫn 22 file). Sổ: `lab-staging/LAB-STAGING-LEDGER.md`
+— trong đó ghi 2 điểm mở phải chốt ở lần ráp: enum `origin`
+chưa có giá trị cho ca lab (nguy cơ trọng số ×2 sai nếu đăng ký
+real) và ánh xạ `difficulty` cho 4 tầng lab chưa đóng băng.
+§3.5(2) vẫn chỉ còn thiếu 10 ca thật L-R (chờ anh).

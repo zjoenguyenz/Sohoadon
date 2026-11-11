@@ -1,5 +1,171 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 22:40 CST (ca trực: **SỬA CÂU CŨ
+Cập nhật lần cuối: 2026-11-11 08:40 CST (ca trực: **KIỂM CHỨNG
+TỪ XA LẦN ĐẨY MƠ HỒ 06:40 — KHÔNG LÊN ĐƯỢC CHÚT NÀO, KHÔNG
+TRÙNG; ĐẨY LẠI AN TOÀN** — đúng việc ca 06:40 dặn ca sau, làm
+trong lúc chờ ảnh thật: đọc trực tiếp GitHub
+(zjoenguyenz/Sohoadon) trong ca này: nhánh docs/planning vẫn ở
+đầu `6e68d02d45d8` (commit 2026-11-11T04:42:53Z = 22:40 CST
+2026-11-10, "WORK-STATE 22:40 + benchapp HONESTY") — không có
+commit nào sau đó. Kiểm từng file của danh sách đẩy 06:40 trên
+nhánh: WORK-STATE.md vẫn là bản cũ (blob `78fa5712…`, khác blob
+bản tại bàn `73a26699…`) · BENCH-MANIFEST.md vẫn là bản cũ
+(blob `86ca17ba…`, khác bản tại bàn `fa119d3e…`) · cả 5 file
+`bench-prep/lab-staging/` (LAB-STAGING-LEDGER.md,
+make_lab_staging.py, verify_lab_staging.py,
+lab-staging-manifest.csv, verify-lab-staging-results.txt)
+**KHÔNG TỒN TẠI** trên docs/planning. Kết luận: lần đẩy bị
+gián đoạn 06:40 KHÔNG lên được phần nào — đẩy lại 7 file đó
+không tạo trùng. Phát hiện phụ cùng lần kiểm (ghi nhận, chưa
+xử lý ở ca này): sổ của 3 ca 00:40/02:40/04:40
+(text-degrade/TEXT-DEGRADE-LEDGER.md,
+lab-wildreceipt/LAB-WILDRECEIPT-LEDGER.md,
+measure-pack/MEASURE-PACK.md) cũng **KHÔNG TỒN TẠI** trên
+nhánh — backlog tài liệu đó vẫn chỉ có tại bàn, ca sau nếu đẩy
+bù phải liệt kê tường minh từng file, không gộp mù vào lần đẩy
+này. Tuyên bố trung thực — đã chứng minh: trạng thái từ xa của
+docs/planning ở thời điểm kiểm (đầu nhánh + tồn tại/vắng mặt
+từng file + blob 2 file cũ) bằng đọc trực tiếp GitHub; chưa
+chứng minh: không có gì về build/app — ca này không đụng
+Swift/schema/pipeline; chưa làm: 10 ca thật L-R vẫn chờ anh,
+§3.5(3) luồng OCR gốc trên máy của Sam's run #26 vẫn chưa về.
+**Bước tiếp theo giữ nguyên: chờ anh gửi 10 ảnh thật** →
+Leader lấp ô L-R theo quy ước 5 bước trong benchapp/AFTER.md
+→ ráp bản bench cuối (kèm nhúng 24 ca lab từ staging + chốt
+B-04/B-05 + chốt 2 điểm mở origin/difficulty của ca 06:40) +
+build → buổi đo duy nhất. Ca này không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-11 06:40 CST (ca trực: **STAGING
+24 ẢNH LAB ĐÃ ĐÓNG GÓI + KIỂM ĐẠT** — việc độc lập làm trong lúc
+chờ ảnh thật: phần "nhúng 24 ảnh lab" của bước 0 buổi chuẩn bị
+trước ca này mới có bảng kê đóng băng, ảnh thật vẫn nằm rải
+trong cây corpus với tên gốc dài, lần ráp cuối sẽ phải mò lại
+24 đường dẫn + chép tay. Nay `bench-prep/lab-staging/` có bộ
+file staging mang tên ca `images/W-01.jpg`…`W-24.jpg` chép
+byte-trùng nguồn corpus bởi `make_lab_staging.py` (kiểm sha256
+trước/sau chép) + `lab-staging-manifest.csv`; tổng **2.092.865
+byte**. Verifier độc lập **PASS 10/10** (sha+bytes khớp bảng kê
+24/24 · byte-trùng nguồn 24/24 · JPEG thật + kích thước khớp
+24/24 · tái lập byte-trùng · **BenchApp không bị đụng**:
+BenchImages vẫn 22, catalog 0 mã W) + `bench_score.py` selftest
+byte-trùng file đã lưu. Sổ: `lab-staging/LAB-STAGING-LEDGER.md`
+(tuyên bố trung thực 3 phần; ghi rõ 2 điểm MỞ ca này phát hiện
+mà KHÔNG tự quyết: (1) enum `origin` của BENCH-JSON-SPEC chỉ có
+real/synthetic — ca lab đăng ký real+L1/L2/L5 sẽ bị trọng số ×2
+như ca thật, đăng ký synthetic thì sai nhãn, hướng ghi nhận là
+mở enum "lab" ×1 ở lần ráp; (2) ánh xạ difficulty cho tầng
+LONG/DENSE/LOWRES/TALL chưa đóng băng ở đâu). Hệ quả: phần
+nhúng lab ở lần ráp cuối nay chỉ còn thao tác cơ học có nguồn
+kiểm chứng (chép staging → BenchImages + đăng ký + build).
+**Bước tiếp theo giữ nguyên: chờ anh gửi 10 ảnh thật** → Leader
+lấp ô L-R theo quy ước 5 bước trong benchapp/AFTER.md → ráp bản
+bench cuối (kèm nhúng 24 ca lab từ staging này + chốt B-04/
+B-05 + chốt 2 điểm mở trên) + build → buổi đo duy nhất;
+§3.5(3) luồng OCR gốc trên máy của Sam's run #26 vẫn chưa về.
+Ca này không đụng Swift/schema/pipeline, không kêu anh
+cài/test gì.)
+CHỜ DUYỆT ĐẨY (ca 06:40): đã thử đẩy docs/planning ĐÚNG 1 LẦN
+(7 file: WORK-STATE.md, bench-prep/BENCH-MANIFEST.md,
+bench-prep/lab-staging/LAB-STAGING-LEDGER.md,
+bench-prep/lab-staging/make_lab_staging.py,
+bench-prep/lab-staging/verify_lab_staging.py,
+bench-prep/lab-staging/lab-staging-manifest.csv,
+bench-prep/lab-staging/verify-lab-staging-results.txt;
+24 ảnh staging KHÔNG đẩy — tái lập được bằng script từ corpus)
+— lần đẩy bị gián đoạn giữa chừng do dịch vụ khởi động lại,
+kết quả KHÔNG XÁC ĐỊNH (có thể đã lên một phần hoặc chưa);
+ca sau kiểm từ xa trạng thái nhánh docs/planning trước khi
+đẩy lại, không đẩy mù trùng lặp. **[ĐÃ GIẢI QUYẾT 08:40 CST:
+ca trực kiểm từ xa — lần đẩy đó KHÔNG lên được phần nào, xem
+mục mới nhất ở đầu file; ca 08:40 đẩy lại 7 file này đúng 1 lần
+ở cuối ca.]**
+Cập nhật trước đó: 2026-11-11 04:40 CST (ca trực: **GÓI ĐO
+ĐÓNG BĂNG — BẢNG CHẤM IN SẴN ĐÃ XÂY + KIỂM ĐẠT** — việc độc lập
+lấp mục cuối còn tự làm được của điều kiện chặn buổi đo
+§3.5(2), làm trong lúc chờ ảnh thật: trước ca này "bảng chấm in
+sẵn (ca × chỉ số × ngưỡng)" + thứ tự nạp cố định + hướng dẫn
+chụp 1 trang của §4.1 CHƯA TỒN TẠI thành tài liệu ở đâu cả.
+Nay `bench-prep/measure-pack/` có: `MEASURE-PACK.md` (ánh xạ mã
+buổi đo §4.2 ↔ mã BenchApp — Phần 1 lệch mã thật S-01…S-04 ↔
+N-001/N-002/C-002C/C-003, ca danh dự S-0 đứng dòng S-05-DANH-DỰ ·
+9 hồ sơ ngưỡng nguyên văn §2.3 phủ luật M9 · thứ tự buổi đo cố
+định 7 bước, làn lab ở phần 3B ghi rõ là quyết của gói này ·
+trang hướng dẫn chụp §4.3 cắt ra gửi anh tại buổi đo · bảng
+trạng thái điều kiện chặn) + `scoresheet.csv` **71 dòng ca**
+(45 catalog = 22 READY + 13 MISSING + 10 ô L-R · 24 lab W ·
+L-01/L-02) sinh xác định bởi `gen_scoresheet.py` — ca tự bắt +
+sửa 2 lỗi của bộ sinh (ghi chú C-002C/S-1 gán nhầm đường nạp
+L-R; đường chấm ca đã có đáp án bị ghi chờ-đáp-án). Verifier
+độc lập **PASS 10/10** (tập mã khớp catalog 45 · GT của ca READY
+có thật trong sổ `bench_score.py` · 18 synthetic đều hồ sơ D ·
+24 lab khớp subset · M9 71/71 · tái lập CSV byte-trùng) +
+`bench_score.py` chạy lại trên selftest cho kết quả byte-trùng
+file đã lưu. Sổ: `measure-pack/MEASURE-PACK-LEDGER.md` (tuyên
+bố trung thực 3 phần; ghi rõ hồ sơ C-REAL của L-R chỉ tạm khoá,
+2 ca B-04/B-05 chưa chốt tên, gói chưa từng dùng ở buổi đo
+thật). Hệ quả: **§3.5(2) nay chỉ còn thiếu 10 ca thật L-R chờ
+anh + nhúng 24 ảnh lab ở lần ráp cuối**; §3.5(3) luồng OCR gốc
+trên máy của Sam's run #26 vẫn chưa về. **Bước tiếp theo giữ
+nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô L-R theo quy
+ước 5 bước trong benchapp/AFTER.md → ráp bản bench cuối (kèm
+nhúng 24 ca lab + chốt B-04/B-05) + build → buổi đo duy nhất.
+Ca này không đụng Swift/schema/pipeline, không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-11 02:40 CST (ca trực: **TẬP CON KHÓ
+WildReceipt ĐÃ CHỌN + ĐÓNG BĂNG** — việc độc lập xếp hàng ở ca
+00:40, làm trong lúc chờ ảnh thật: phần "danh sách ca lab" của
+điều kiện chặn buổi đo §3.5(2) trước ca này CHƯA HỀ TỒN TẠI.
+Nay `bench-prep/lab-wildreceipt/` có bộ chọn xác định theo
+ACCEPTANCE §3.1 (cửa Total+Date+Subtotal + Item/Price · loại
+trùng giao dịch bằng khoá mờ — bắt được các cặp nhãn lệch như
+ElBorracho total 136.5/136.95, ILIO'S/ILTO'S · cửa độ khó hộp
+≥35 + món ≥4 · 4 tầng LONG/DENSE/LOWRES/TALL × 6): phễu **472 →
+266 → 255 → 247 → 109 → 24 ca W-01…W-24**; số phủ nhãn đếm lại
+khớp đúng §3.1 (Total 423 · Date 398 · Subtotal 343); độ khó
+trung vị của tập chọn vs tập đủ điều kiện: hộp **60.5 vs 39**,
+món **8.5 vs 4**. Bảng kê `wildreceipt-subset.csv` đóng băng
+sha256 + đáp án nhãn NGUYÊN VĂN từng ca (cột xu chỉ tham chiếu
+— nhãn có nhiễu thật đã ghi ở sổ: W-01 subtotal > total, W-15
+total 3 số lẻ, W-24 hai subtotal). Verifier độc lập **PASS 8/8**
+(sha256 24/24 · nhãn khớp từng ký tự · 0 cặp trùng · tái lập
+CSV byte-trùng). Sổ: `lab-wildreceipt/LAB-WILDRECEIPT-LEDGER.md`
+(tuyên bố trung thực 3 phần; ghi rõ độ khó chỉ trên 4 trục đo
+được từ nhãn/hình học — không khẳng định nhăn/mờ/phai; cách
+chấm khoá: M1/M2 đúng-hoặc-cờ + E1/E2 đẳng thức nội bộ, không
+bao giờ trình như sổ món). Hệ quả: **§3.5(2) nay chỉ còn thiếu
+10 ca thật L-R chờ anh**; 24 ảnh lab chưa nhúng BenchApp (ráp
+ở bản bench cuối cùng nhịp L-R, ca này không đụng Swift).
+**Bước tiếp theo giữ nguyên: chờ anh gửi 10 ảnh thật** → Leader
+lấp ô L-R theo quy ước 5 bước trong benchapp/AFTER.md → ráp
+bản bench cuối (kèm nhúng 24 ca lab) + build → buổi đo duy
+nhất; §3.5(3) luồng OCR gốc trên máy của Sam's run #26 vẫn
+chưa về. Ca này không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-11 00:40 CST (ca trực: **CỔNG G2 —
+BỘ SUY BIẾN CHỮ ĐÃ XÂY + CHẠY ĐẠT** — việc độc lập lấp khoảng
+trống còn lại của điều kiện chặn buổi đo §3.5(1), làm trong lúc
+chờ ảnh thật: trước ca này bộ suy biến chữ theo ACCEPTANCE §3.3
+CHƯA HỀ TỒN TẠI trong repo (chỉ có suy biến ảnh). Nay
+`bench-prep/text-degrade/` có 24 luồng đóng băng (001 THẬT ·
+003 THẬT · 002 tái dựng chỉ 1 ca, ghi nhãn) đủ 6 họ bệnh §3.3
+(SPLIT 4 · DROP 6 · NOISE 5 · BEFORE 2 · DUP 3 · GARB 2 · CTRL 2),
+chấm trên cặp mirror port(fixed=True)+reconcile (đã crosscheck
+Swift 13/13): **10 CORRECT/CORRECT-REPAIRED + 14 FLAGGED + 0
+SILENT-WRONG → G2 PASS ở tầng T3+T4** (`text-degrade-results.txt`).
+Verifier độc lập đọc từ đĩa: verdict khớp **24/24**, flows tái
+lập byte-trùng **24/24**, đủ họ. Chạy lại toàn bộ cổng chữ cũ
+trong cùng ca đều xanh: ledger PASS · m1fix 13/13 · reparse
+11/11 · rowmerge 9/9 (chạy trong wp4-fixtures/) · F2b 10/10 ·
+vendor 19/19 · extract 7/7 · reconcile 13/13 · crosscheck
+13/13 · synthetic PASS. Sổ: `text-degrade/TEXT-DEGRADE-LEDGER.md`
+(tuyên bố trung thực 3 phần; ghi rõ 3 ca TOTAL_ONLY được bao phủ
+cờ ở tầng reconcile, chưa đo ở tầng giao diện app). Hệ quả:
+**§3.5(1) nửa offline NAY ĐỦ**; buổi đo VẪN bị chặn bởi §3.5(2)
+(danh sách ca lab WildReceipt chưa chọn — việc độc lập ca sau
+làm được — và 10 ca thật L-R chờ anh) + §3.5(3) (luồng OCR gốc
+trên máy của Sam's run #26 chưa về). **Bước tiếp theo giữ
+nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô L-R theo quy
+ước 5 bước trong benchapp/AFTER.md → ráp bản bench cuối + build
+→ buổi đo duy nhất; việc độc lập xếp hàng cho ca sau: chọn tập
+con khó WildReceipt theo ACCEPTANCE §3.1 (kèm bảng kê đóng băng).
+Ca này không đụng Swift/schema/pipeline, không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-10 22:40 CST (ca trực: **SỬA CÂU CŨ
 TRONG benchapp/HONESTY.md — việc độc lập ghi sẵn ở ca 20:40,
 làm trong lúc chờ ảnh thật**: ca tự kiểm lại từ bằng chứng gốc
 trước khi sửa (không dùng lời AFTER.md): 18 ảnh synthetic khớp

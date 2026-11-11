@@ -1,0 +1,11 @@
+[PASS] 1 manifest-24-continuous (24 rows)
+[PASS] 2 manifest-matches-subset-set 
+[PASS] 3 staged sha+bytes == subset (sha 24/24, bytes 24/24)
+[PASS] 4 staged byte-identical to corpus source (24/24)
+[PASS] 5 staged are JPEG with subset dimensions (24/24)
+[PASS] 6 manifest agrees with subset (dims/stratum) (24/24)
+[PASS] 7 staging dir exactly 24 expected files (24 files)
+[PASS] 8 maker re-run reproduces pack byte-for-byte 
+[PASS] 9 BenchApp untouched (22 images, no lab in catalog/project) (BenchImages 22, catalog lab ids 0)
+[PASS] 10 total size == subset sum (2092865 bytes)
+RESULT: 10/10 groups PASS
