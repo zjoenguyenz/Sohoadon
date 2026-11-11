@@ -1,0 +1,7 @@
+PASS  1-anh-xa-24-ca  — bảng quyết có 24/24 ca; lệch luật/tầng: không
+PASS  2-trong-so-lab  — lab x1 moi difficulty=True; lab khong phai lop kho that=True; hoi quy real/synthetic=True
+PASS  3-file-tron-lab  — exit=0; dong LAN LAB dung so run (8)=True; 0 loi thieu dap an=True
+PASS  4-ca-that-khong-doi  — bo phan khong-lab cua file tron byte-trung file goc=True
+PASS  5-hoi-quy-selftest  — stdout bo cham tren selftest == file da luu: True
+PASS  6-nhat-quan-tai-lieu  — spec co lab + schema v1=True; scoresheet W origin lab 24/24
+== TONG: 6/6 nhom PASS ==

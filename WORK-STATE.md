@@ -1,5 +1,45 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-11 10:40 CST (ca trực: **KIỂM
+Cập nhật lần cuối: 2026-11-11 12:40 CST (ca trực: **2 ĐIỂM MỞ
+CỦA LAB-STAGING ĐÃ CHỐT + BỘ CHẤM ĐÃ XỬ LÝ CA LAB TƯỜNG MINH**
+— việc độc lập làm trong lúc chờ ảnh thật, đóng đúng 2 điểm mở
+ca 06:40 ghi "để Leader chốt ở lần ráp": (1) **origin ca lab =
+`lab`** — BENCH-JSON-SPEC §3 cộng enum + mục 6.6 phân loại
+thuần cộng, `schema_version` **giữ nguyên 1** (bằng chứng đọc
+trực tiếp trong ca: origin là chuỗi thuần ở cả BenchCatalog/
+BenchModels — không enum Swift phải sửa; scoresheet đóng băng
+vốn đã dùng origin `lab` 24/24); `bench_score.py` sửa tối thiểu
+ở tầng bench-prep: run origin `lab` được đếm + liệt kê ở mục
+LÀN LAB rồi bỏ qua — không lớp/trọng số/phán quyết/lỗi thiếu
+đáp án (trước sửa, ca lab nhúng vào sẽ sinh lỗi "không có đáp
+án" vì nhãn WildReceipt không thành GT dạng sổ được — đúng
+khoá ACCEPTANCE §3.1: chấm tay hồ sơ LAB). (2) **Ánh xạ
+form/difficulty 24 ca W đóng băng** ở văn bản quyết: form `C`
+cả 24 · LOWRES/DENSE → L4 · LONG/TALL → L5 — ghi rõ chỉ là
+siêu dữ liệu mô tả, không hiệu lực cổng (Quyết 1 đã loại lab
+khỏi mọi cổng). Văn bản: `bench-prep/lab-assembly/
+LAB-ASSEMBLY-DECISION.md` (kèm công thức ráp cơ học ở bước 0:
+chép staging → catalog với các giá trị đã chốt → project.yml,
+không còn quyết nào dưới áp lực). Verifier độc lập **PASS
+6/6** (ánh xạ khớp tầng gốc 24/24 · trọng số lab ×1 mọi
+difficulty + không lớp-khó-thật · file đo trộn selftest + 2 ca
+lab dòng rác: 8 run lab chỉ hiện ở mục LÀN LAB, 0 lỗi, phần
+không-lab byte-trùng file gốc · hồi quy selftest byte-trùng
+file đã lưu · nhất quán spec/scoresheet); verifier tự bắt 2
+lỗi của chính nó ở vòng chạy đầu (regex bảng 2-ca/dòng + dòng
+thừa) — đã sửa, chạy lại xanh. Tuyên bố trung thực — đã chứng
+minh: 2 điểm mở đã đóng nhất quán ở mức file/script tại bàn,
+hành vi bộ chấm với ca lab kiểm bằng file đo trộn chạy thật;
+chưa chứng minh: BenchApp chứa ca W CHƯA build (ca này không
+đụng Swift), ánh xạ difficulty là quy ước mô tả không phải đo
+độ khó; chưa làm: 10 ca thật L-R vẫn chờ anh, §3.5(3) luồng
+OCR gốc trên máy của Sam's run #26 vẫn chưa về, B-04/B-05
+chưa chốt tên (phụ thuộc ca thật). **Bước tiếp theo giữ
+nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô L-R theo quy
+ước 5 bước trong benchapp/AFTER.md → ráp bản bench cuối (nhúng
+24 ca lab theo công thức đã chốt ở lab-assembly + chốt
+B-04/B-05) + build → buổi đo duy nhất. Ca này không kêu anh
+cài/test gì.)
+Cập nhật trước đó: 2026-11-11 10:40 CST (ca trực: **KIỂM
 CHỨNG TỪ XA BACKLOG 00:40–04:40 — CẢ 40 FILE ĐỀU VẮNG TRÊN
 docs/planning; LIỆT KÊ TƯỜNG MINH ĐỂ ĐẨY BÙ** — đúng việc ca
 08:40 dặn ca sau, làm trong lúc chờ ảnh thật: đọc trực tiếp
@@ -33,6 +73,13 @@ Leader lấp ô L-R theo quy ước 5 bước trong benchapp/AFTER.md
 → ráp bản bench cuối (kèm nhúng 24 ca lab từ staging + chốt
 B-04/B-05 + chốt 2 điểm mở origin/difficulty của ca 06:40) +
 build → buổi đo duy nhất. Ca này không kêu anh cài/test gì.)
+ĐẨY CUỐI CA 10:40: **THÀNH CÔNG** — đúng 1 lần, 41 file
+(WORK-STATE.md + 40 file backlog liệt kê ở mục trên), commit
+mới trên docs/planning: `f7bef45c56d8ead9d71df0949ce0397560b1fb9d`;
+sổ sync snapshot đã ghi nhận commit này. Backlog tài liệu
+00:40–04:40 nay ĐÃ HẾT — không còn file bench-prep nào của các
+ca đó chỉ nằm tại bàn. (Dòng này + mọi sửa sau thời điểm đẩy
+chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
 Cập nhật trước đó: 2026-11-11 08:40 CST (ca trực: **KIỂM CHỨNG
 TỪ XA LẦN ĐẨY MƠ HỒ 06:40 — KHÔNG LÊN ĐƯỢC CHÚT NÀO, KHÔNG
 TRÙNG; ĐẨY LẠI AN TOÀN** — đúng việc ca 06:40 dặn ca sau, làm

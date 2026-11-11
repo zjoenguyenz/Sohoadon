@@ -16,6 +16,13 @@ E1/E2/E3) và phán theo core-redo/ENGINE-REPORT.md §5.3/§5.4:
   (×2 cho lớp khó THẬT: L1, L2-real, L5; ×1 còn lại, gồm ca tổng hợp).
 - Kết cục C (§5.5): nếu có lớp khó thật mà MỌI cấu hình đều < 50% điểm
   chính ở lớp đó → in cảnh báo kết cục C.
+- Làn LAB (origin="lab", chốt Leader 2026-11-11 — xem
+  bench-prep/lab-assembly/LAB-ASSEMBLY-DECISION.md): ca WildReceipt
+  KHÔNG chấm bằng sổ GT (nhãn không cho sổ món ngoài đáng tin) — bộ
+  chấm chỉ ĐẾM số run lab có mặt trong file đo rồi bỏ qua: không vào
+  lớp, không trọng số, không phán quyết, không sinh lỗi "thiếu đáp
+  án". Ca lab chấm TAY theo hồ sơ LAB (đúng-hoặc-cờ đối chiếu nhãn
+  nguyên văn + đẳng thức nội bộ) trong báo cáo buổi đo.
 
 Cách chạy:  python3 bench_score.py <file-ket-qua.json> [--answers a.json]
 Sổ đáp án mặc định nằm ngay trong file này (ANSWERS). --answers nạp thêm
@@ -76,8 +83,10 @@ def norm_vendor(s):
 
 def weight_of(img):
     """Trọng số §5.4.3: ×2 lớp khó THẬT (L1, L2, L5 — chỉ khi origin
-    là real; ca tổng hợp luôn ×1 dù difficulty gán lớp nào — chốt
-    Leader 2026-11-10 sau cờ của gói BENCH-CATALOG-EXT)."""
+    là real; ca tổng hợp và ca lab luôn ×1 dù difficulty gán lớp nào —
+    chốt Leader 2026-11-10 sau cờ của gói BENCH-CATALOG-EXT, mở rộng
+    cho origin=lab 2026-11-11). Ca lab thực tế không tới hàm này vì
+    bị bỏ qua từ vòng chấm (xem docstring đầu file)."""
     d, o = img["difficulty"], img.get("origin", "real")
     if o != "real":
         return 1
@@ -182,10 +191,18 @@ def main():
     # rows[(config, image)] = metrics
     rows = {}
     errors = []
+    lab_runs = 0
+    lab_images = set()
     for run in data["runs"]:
         img = images.get(run["image_id"])
         if img is None:
             errors.append(f"run trỏ ảnh không có trong images: {run['image_id']}")
+            continue
+        if img.get("origin") == "lab":
+            # Làn lab: đếm để báo cáo buổi đo biết ca đã chạy trên máy,
+            # nhưng không chấm GT (quyết đã chốt — xem docstring đầu file).
+            lab_runs += 1
+            lab_images.add(img["id"])
             continue
         gt = answers.get(img["gt_id"])
         if gt is None:
@@ -208,10 +225,16 @@ def main():
         i = images[img_id]
         return f"{i['form']}/{i['difficulty']}"
 
-    layers = sorted({layer_of(i) for i in images})
+    # Lớp chỉ từ các ca ĐÃ CHẤM (rows) — ca lab/ca lỗi không tạo lớp rỗng.
+    layers = sorted({layer_of(img_id) for (_, img_id) in rows})
     print(f"== BẢNG ĐIỂM THEO LỚP — file: {args.result_file} ==")
     print(f"   (đối chứng: {baseline}; KHÔNG có điểm trung bình chung — "
           "mỗi lớp tự đứng)\n")
+    if lab_runs:
+        print(f"-- LÀN LAB (origin=lab): {lab_runs} run trên "
+              f"{len(lab_images)} ca ({', '.join(sorted(lab_images))}) — "
+              "KHÔNG chấm GT ở bộ chấm này; chấm tay theo hồ sơ LAB "
+              "trong báo cáo buổi đo --")
 
     layer_main = {}   # (config, layer) -> (số tờ trọn sổ, tổng số tờ)
     hard_fail = {}    # (config, layer) -> [lý do]

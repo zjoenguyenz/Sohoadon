@@ -131,6 +131,22 @@ và nhãn "lớp khó thật" CHỈ áp cho origin=real (L1/L2/L5); mọi ca
 synthetic luôn ×1 bất kể difficulty được gán lớp nào. Tự kiểm: 4 ca
 đơn vị đúng kỳ vọng + selftest app-format chấm lại không đổi kết quả.
 
+## CẬP NHẬT 2026-11-11 (ca trực 12:40 CST) — 2 ĐIỂM MỞ CỦA STAGING ĐÃ CHỐT
+
+Hai điểm mở ghi ở cập nhật 06:40 dưới đây **ĐÃ ĐÓNG**:
+`bench-prep/lab-assembly/LAB-ASSEMBLY-DECISION.md` (Leader chốt) —
+(1) enum `origin` cộng thêm **`lab`** (BENCH-JSON-SPEC §3 + mục
+6.6; thay đổi thuần cộng, `schema_version` giữ nguyên 1);
+`bench_score.py` nay đếm + bỏ qua ca lab khỏi vòng chấm GT một
+cách tường minh (không lớp/trọng số/phán quyết/lỗi thiếu đáp
+án), chấm tay theo hồ sơ LAB giữ nguyên; (2) ánh xạ
+form/difficulty cho 24 ca W đã đóng băng ở văn bản quyết (form
+`C` cả 24; LOWRES/DENSE → L4, LONG/TALL → L5 — chỉ là siêu dữ
+liệu mô tả, không hiệu lực cổng). Verifier độc lập **PASS 6/6**
++ hồi quy selftest byte-trùng. Phần nhúng lab ở lần ráp cuối nay
+thuần cơ học theo công thức trong văn bản quyết. §3.5(2) vẫn chỉ
+còn thiếu 10 ca thật L-R (chờ anh).
+
 ## CẬP NHẬT 2026-11-11 (ca trực 06:40 CST) — ẢNH LAB ĐÃ CÓ BỘ STAGING
 
 Phần "nhúng 24 ảnh lab" của lần ráp bản bench cuối nay đã có
