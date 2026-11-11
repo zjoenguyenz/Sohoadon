@@ -2927,3 +2927,322 @@ struct DocumentCameraView: UIViewControllerRepresentable {
         }
     }
 }
+
+// MARK: - BENCHAPP BRIDGE (chỉ biên dịch trong biến thể Bench)
+//
+// Đoạn cộng này KHÔNG nằm trong app chính và không đổi một hành vi
+// nào của đường ống ở trên: nó chỉ phơi các pass/candidate vốn đang
+// là private của ScanView cho BenchRunner ghi JSON. Vì bridge nằm
+// trong CÙNG file, extension được chạm các thành viên private của
+// ScanView theo đúng luật truy cập của Swift. Khi cờ BENCH tắt, toàn
+// bộ khối này biến mất khỏi bản biên dịch.
+
+#if BENCH
+extension ScanView {
+
+    // MARK: Chuyển đổi OCRLine2 -> DTO đo
+
+    private static func benchCandidates(for line: OCRLine2) -> [BenchCandidateData] {
+        var out = [BenchCandidateData(text: line.text,
+                                      confidence: line.confidence)]
+        for alternate in line.alternates where alternate.text != line.text {
+            out.append(BenchCandidateData(text: alternate.text,
+                                          confidence: alternate.confidence))
+            if out.count >= 3 { break }
+        }
+        return out
+    }
+
+    private static func benchLine(_ line: OCRLine2) -> BenchLineData {
+        let box: BenchBoxData?
+        if line.box.width > 0, line.box.height > 0 {
+            box = BenchBoxData(OCRFragmentMerger.clampedBox(line.box))
+        } else {
+            box = nil
+        }
+        return BenchLineData(text: line.text,
+                             confidence: line.confidence,
+                             box: box,
+                             candidates: benchCandidates(for: line))
+    }
+
+    private static func benchVariant(for passID: OCRPassID) -> String {
+        switch passID {
+        case .original: return "original"
+        case .deskewed: return "deskewed"
+        case .derived: return "derived-gated"
+        case .upscaled: return "upscale"
+        case .document: return "document-original"
+        case .reread: return "roi-upscale"
+        case .pdfTextLayer: return "pdf-text-layer"
+        }
+    }
+
+    private static func benchEngine(for passID: OCRPassID) -> String {
+        passID == .document ? "recognize-documents" : "vision-classic"
+    }
+
+    private static func benchPass(from outcome: TracedPassOutcome,
+                                  role: String,
+                                  passID overrideID: String? = nil,
+                                  extraNotes: String? = nil) -> BenchPassData {
+        BenchPassData(
+            passID: overrideID ?? outcome.passID.rawValue,
+            role: role,
+            engine: benchEngine(for: outcome.passID),
+            variant: benchVariant(for: outcome.passID),
+            durationMS: outcome.elapsedSeconds * 1000,
+            lines: outcome.lines2.map(benchLine),
+            notes: extraNotes)
+    }
+
+    private static func mergedFinal(from outcomes: [TracedPassOutcome],
+                                    variant: String,
+                                    notes: [String]) -> BenchPassData? {
+        guard !outcomes.isEmpty else { return nil }
+        let lines2: [OCRLine2]
+        if outcomes.count == 1 {
+            lines2 = outcomes[0].lines2
+        } else {
+            let pooled = OCRFragmentMerger.uniquelyIdentified(
+                outcomes.flatMap(\.fragments))
+            lines2 = OCRFragmentMerger.assemble(pooled).lines
+        }
+        guard !lines2.isEmpty else { return nil }
+        let duration = outcomes.reduce(0) { $0 + $1.elapsedSeconds }
+        return BenchPassData(
+            passID: "final", role: "final", engine: "merged-core",
+            variant: variant, durationMS: duration * 1000,
+            lines: lines2.map(benchLine),
+            notes: (["Final = hợp nhất hình học của các raw pass; duration_ms = tổng thời gian các pass cấu thành."]
+                    + notes).joined(separator: " "))
+    }
+
+    private static func documentStructureNote(
+        _ structure: OCRDocumentStructureRecord?
+    ) -> String? {
+        guard let s = structure else { return nil }
+        return "counts: paragraphs=\(s.paragraphCount), tables=\(s.tableCount), "
+            + "tableRows=\(s.tableRowCount), tableCells=\(s.tableCellCount), "
+            + "lists=\(s.listCount), barcodes=\(s.barcodeCount), "
+            + "detectedData=\(s.detectedDataCount), lines=\(s.lineCount)"
+    }
+
+    private static func documentPassData(
+        _ document: DocumentPassOutcome
+    ) -> BenchPassData? {
+        guard var pass = document.outcome.map({
+            benchPass(from: $0, role: "raw", passID: "raw-b")
+        }) else { return nil }
+        // p2-fix chỉ giữ COUNTS của tables/detectedData trong
+        // OCRDocumentStructureRecord, không giữ nội dung ô/dữ kiện.
+        // Schema cho phép mảng rỗng kèm tables_note; tuyệt đối không
+        // chế nội dung bảng từ counts.
+        pass.tables = []
+        pass.detectedData = []
+        pass.tablesNote = "p2-fix khong xuat noi dung tables/detectedData; "
+            + (documentStructureNote(document.structure)
+               ?? "khong co OCRDocumentStructureRecord")
+        pass.notes = document.note
+        return pass
+    }
+
+    // MARK: A1 — cổ điển đa pass + hợp nhất, không (b)/reconcile/ROI
+
+    static func benchClassicRun(on cgImage: CGImage) -> BenchRunData {
+        let classic = runClassicPasses(on: cgImage)
+        let passes = classic.passOutcomes.map {
+            benchPass(from: $0, role: "raw",
+                      passID: "raw-a-\($0.passID.rawValue)")
+        }
+        var notes = classic.notes
+        if let geometry = classic.geometry {
+            notes.append("Geometry decision: \(geometry.decision)")
+        }
+        if let gate = classic.derivedGate {
+            notes.append("Derived gate passed: \(String(describing: gate.gatePassed))")
+        }
+        let final = mergedFinal(from: classic.passOutcomes,
+                                variant: "classic-multipass-merge",
+                                notes: notes)
+            ?? BenchPassData(passID: "final", role: "final",
+                             engine: "merged-core",
+                             variant: "classic-multipass-merge",
+                             durationMS: 0, lines: [],
+                             notes: "Không pass cổ điển nào cho dòng.")
+        return BenchRunData(passes: passes, finalPass: final, notes: notes)
+    }
+
+    // MARK: Pass (b) đơn độc cho A2
+
+    static func benchDocumentRun(on cgImage: CGImage) async -> BenchDocumentRunData {
+        let document = await runDocumentPass(on: cgImage)
+        return BenchDocumentRunData(
+            pass: documentPassData(document),
+            note: document.note,
+            structureNote: documentStructureNote(document.structure))
+    }
+
+    // MARK: A2 — cổ điển + (b), hợp nhất, không reconcile/ROI
+
+    static func benchMergedRun(on cgImage: CGImage) async -> BenchRunData {
+        let classic = runClassicPasses(on: cgImage)
+        let document = await runDocumentPass(on: cgImage)
+
+        var outcomes = classic.passOutcomes
+        var passes = classic.passOutcomes.map {
+            benchPass(from: $0, role: "raw",
+                      passID: "raw-a-\($0.passID.rawValue)")
+        }
+        var notes = classic.notes
+        if let documentPass = documentPassData(document) {
+            passes.append(documentPass)
+            if let outcome = document.outcome { outcomes.append(outcome) }
+        }
+        if let note = document.note { notes.append(note) }
+        if let structure = documentStructureNote(document.structure) {
+            notes.append("Document structure \(structure)")
+        }
+
+        let final = mergedFinal(from: outcomes,
+                                variant: "classic-plus-document-merge",
+                                notes: notes)
+            ?? BenchPassData(passID: "final", role: "final",
+                             engine: "merged-core",
+                             variant: "classic-plus-document-merge",
+                             durationMS: 0, lines: [],
+                             notes: "Không pass nào cho dòng.")
+        return BenchRunData(passes: passes, finalPass: final, notes: notes)
+    }
+
+    // MARK: A3 — đường đầy đủ p2-fix, có bắt vết ROI
+    //
+    // Thân vòng lặp bám finishPipeline: dựng candidate từng pass +
+    // merged, chọn winner bằng evaluateCandidate/candidateIsBetter,
+    // rồi chạy ReconcileSession và TargetedReOCRService. Khác biệt
+    // duy nhất so với finishPipeline là bridge GIỮ từng
+    // TracedPassOutcome của vòng đọc lại để xuất pass role=roi;
+    // finishPipeline chỉ giữ round records trong chẩn đoán.
+
+    static func benchFullRun(on cgImage: CGImage) async -> BenchRunData {
+        let classic = runClassicPasses(on: cgImage)
+        let document = await runDocumentPass(on: cgImage)
+
+        var passOutcomes = classic.passOutcomes
+        var passes = classic.passOutcomes.map {
+            benchPass(from: $0, role: "raw",
+                      passID: "raw-a-\($0.passID.rawValue)")
+        }
+        var notes = classic.notes
+        if let documentPass = documentPassData(document) {
+            passes.append(documentPass)
+            if let outcome = document.outcome { passOutcomes.append(outcome) }
+        }
+        if let note = document.note { notes.append(note) }
+        if let structure = documentStructureNote(document.structure) {
+            notes.append("Document structure \(structure)")
+        }
+
+        var evaluations: [CandidateEvaluation] = []
+        for outcome in passOutcomes where !outcome.lines2.isEmpty {
+            evaluations.append(evaluateCandidate(
+                name: outcome.passID.rawValue,
+                preference: preference(for: outcome.passID),
+                lines2: outcome.lines2,
+                fragments: outcome.fragments))
+        }
+        if passOutcomes.count > 1 {
+            let pooled = OCRFragmentMerger.uniquelyIdentified(
+                passOutcomes.flatMap(\.fragments))
+            let merged = OCRFragmentMerger.assemble(pooled)
+            if !merged.lines.isEmpty {
+                evaluations.append(evaluateCandidate(
+                    name: "merged", preference: 0,
+                    lines2: merged.lines,
+                    fragments: merged.representatives))
+            }
+        }
+
+        guard let winnerIndex = evaluations.indices.min(by: {
+                  candidateIsBetter(evaluations[$0], evaluations[$1])
+              }), !evaluations.isEmpty else {
+            let final = BenchPassData(
+                passID: "final", role: "final", engine: "merged-core",
+                variant: "full-v2", durationMS: 0, lines: [],
+                notes: "Mọi pass đều không đọc được dòng nào.")
+            return BenchRunData(passes: passes, finalPass: final,
+                                notes: notes + ["A3: outcome rỗng."])
+        }
+
+        let winner = evaluations[winnerIndex]
+        let session = winner.session
+        var bestLines2 = winner.lines2
+        var bestFragments = winner.fragments
+        notes.append("A3 winner candidate = \(winner.name); "
+                     + "reconcile status ban đầu = \(session.bestReport.status.rawValue)")
+
+        let reReader = TargetedReOCRService(image: cgImage)
+        var roiIndex = 0
+        var totalDuration = passOutcomes.reduce(0) { $0 + $1.elapsedSeconds }
+
+        while session.roundsUsed < ReconcileSession.maxRounds {
+            let hints = session.pendingHints
+            guard !hints.isEmpty else { break }
+            var roundFragments: [OCRFragment2] = []
+            var roundReasons: [String] = []
+
+            for hint in hints {
+                guard let target = regionHint(from: hint,
+                                              lines: bestLines2) else { continue }
+                let outcome = reReader.reReadOutcome(
+                    target, upscale: PipelineConstants.reReadUpscaleFactor)
+                if !outcome.fragments.isEmpty {
+                    roiIndex += 1
+                    totalDuration += outcome.elapsedSeconds
+                    passes.append(benchPass(
+                        from: outcome, role: "roi",
+                        passID: "roi-\(roiIndex)",
+                        extraNotes: "Vòng \(session.roundsUsed + 1); lý do hint: \(hint.reason.rawValue)"))
+                    roundFragments += outcome.fragments
+                    roundReasons.append(hint.reason.rawValue)
+                }
+            }
+
+            guard !roundFragments.isEmpty else {
+                notes.append("A3 ROI: có hint nhưng không vùng nào đọc lại được — dừng, giữ kết quả hiện tại.")
+                break
+            }
+            let pooled = OCRFragmentMerger.uniquelyIdentified(
+                bestFragments + roundFragments)
+            let assembled = OCRFragmentMerger.assemble(pooled)
+            guard !assembled.lines.isEmpty else { break }
+            let legacy = assembled.lines.legacyLines
+            let parsed = ReceiptParser.parse(lines: legacy)
+            let boxes: [CGRect?] = assembled.lines.map { $0.box }
+            let accepted = session.submitRound(result: parsed,
+                                               lines: legacy,
+                                               lineBoxes: boxes)
+            notes.append("A3 ROI round \(session.roundsUsed): "
+                         + "reasons=\(roundReasons.joined(separator: ",")); "
+                         + "accepted=\(accepted); "
+                         + "status=\(session.bestReport.status.rawValue)")
+            if accepted {
+                bestLines2 = assembled.lines
+                bestFragments = assembled.representatives
+            } else {
+                break
+            }
+        }
+
+        let final = BenchPassData(
+            passID: "final", role: "final", engine: "merged-core",
+            variant: "full-v2", durationMS: totalDuration * 1000,
+            lines: bestLines2.map(benchLine),
+            notes: "Final A3 = bộ dòng của winner sau các vòng ROI được chấp nhận. "
+                 + "Reconcile status cuối = \(session.bestReport.status.rawValue). "
+                 + "Lưu ý đo: bench_score v1 parse lại final lines bằng parser đóng băng; "
+                 + "các sửa trường ở ParseResult của reconcile không có kênh biểu diễn trong schema v1.")
+        return BenchRunData(passes: passes, finalPass: final, notes: notes)
+    }
+}
+#endif

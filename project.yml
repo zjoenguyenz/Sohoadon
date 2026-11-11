@@ -1,47 +1,53 @@
-name: SoHoaDon
+name: SoHoaDonBench
 options:
   bundleIdPrefix: com.nje
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "26.0"
 settings:
   base:
     SWIFT_VERSION: "5.9"
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
 targets:
-  SoHoaDon:
+  SoHoaDonBench:
     type: application
     platform: iOS
-    sources:
-      - SoHoaDonApp.swift
-      - Models.swift
-      - ContentView.swift
-      - HomeView.swift
-      - ScanView.swift
-      - ReceiptViews.swift
-      - CardsView.swift
-      - Parser.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon
+        PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon.bench
         INFOPLIST_FILE: Info.plist
+        # Cờ biến thể: bật bridge BENCH trong ScanView.swift và
+        # @main trong BenchApp.swift. Target app chính không có cờ
+        # này và không biên dịch các file Bench*.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: BENCH
+    sources:
+      # --- File của biến thể Bench (thư mục benchapp/) ---
+      - BenchApp.swift
+      - BenchView.swift
+      - BenchCatalog.swift
+      - BenchModels.swift
+      - BenchRunner.swift
+      - BenchLegacyOCR.swift
+      # --- File app chính dùng chung (ở cây nguồn app chính) ---
+      # ScanView.swift ở đây là BẢN THAY THẾ của benchapp/: byte-gốc
+      # p2-fix + khối bridge `#if BENCH` cộng ở cuối file (không đổi
+      # hành vi). Ba file còn lại lấy nguyên từ app chính.
+      - ScanView.swift
+      - Parser.swift
+      - ReceiptViews.swift
+      - Models.swift
+      # --- Ảnh bench nhúng (tài nguyên; tên file khớp resourceName
+      # trong BenchCatalog) ---
+      - BenchImages/N-001.jpg
+      - BenchImages/N-002.jpg
+      - BenchImages/C-003.jpg
+      - BenchImages/S-0.jpg
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: "Sổ Hóa Đơn"
-        CFBundleName: "Sổ Hóa Đơn"
-        NSCameraUsageDescription: "Dùng camera để quét hoá đơn giấy."
-        NSFaceIDUsageDescription: "Dùng Face ID để khoá hoá đơn của anh."
-        UIFileSharingEnabled: true
-        LSSupportsOpeningDocumentsInPlace: true
-        CFBundleDocumentTypes:
-          - CFBundleTypeName: "Hoá đơn"
-            CFBundleTypeRole: Viewer
-            LSHandlerRank: Alternate
-            LSItemContentTypes:
-              - com.adobe.pdf
-              - public.image
+        CFBundleDisplayName: "BenchApp — Đo OCR"
+        CFBundleName: "SoHoaDonBench"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
