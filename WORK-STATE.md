@@ -1,5 +1,32 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 20:40 CST (ca trực: **KIỂM CHỨNG
+Cập nhật lần cuối: 2026-11-10 22:40 CST (ca trực: **SỬA CÂU CŨ
+TRONG benchapp/HONESTY.md — việc độc lập ghi sẵn ở ca 20:40,
+làm trong lúc chờ ảnh thật**: ca tự kiểm lại từ bằng chứng gốc
+trước khi sửa (không dùng lời AFTER.md): 18 ảnh synthetic khớp
+sha256 + byte-size với `synthetic-manifest.csv` **18/18** và
+byte-trùng `bench-prep/synthetic/images/`; 4 ảnh thật byte-trùng
+`samples/` **4/4**; BenchImages 22 file == 22 dòng sources trong
+`project.yml`; ngoặc BenchCatalog 7/7 · 85/85 · 5/5;
+`appBuild` = `benchapp-2`; luật trọng số trong `bench_score.py`
+đọc trực tiếp: origin≠real → ×1, real L1/L2/L5 → ×2. Trên cơ sở
+đó, HONESTY.md đã sửa 4 chỗ lỗi thời: (1) bỏ "18 ca suy biến ở
+trạng thái THIẾU" khỏi mục Đã chứng minh + cộng khối cập nhật
+BENCH-CATALOG-EXT (45 mục = 22 có file + 23 THIẾU: 13 cũ +
+L-R01…L-R10); (2) điểm rủi ro XcodeGen sửa "4 file .jpg" →
+"22 file .jpg"; (3) mục Chưa chứng minh cộng rõ bản bench cuối
+22 ảnh `benchapp-2` CHƯA build cloud (run #32 xanh là
+`benchapp-1`, 4 ảnh); (4) mục Chưa làm sửa "Không tạo 18 ảnh
+suy biến" → ĐÃ TẠO + đóng băng + nhúng, phần chưa làm chỉ còn
+10 ô L-R chờ ảnh thật. Không đụng Swift/schema/pipeline nào.
+Tuyên bố trung thực — đã chứng minh: HONESTY.md nay khớp trạng
+thái file tại bàn ở các điểm trên (grep câu cũ dạng khẳng định:
+0); chưa chứng minh: bản bench 22 ảnh CHƯA build cloud; chưa
+làm: chưa nhúng ca thật nào (L-R vẫn trống). **Bước tiếp theo
+giữ nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô L-R theo
+quy ước 5 bước trong benchapp/AFTER.md → ráp bản bench cuối +
+build → buổi đo duy nhất. Điều kiện chặn (1) ca thật + (3)
+luồng OCR gốc trên máy VẪN mở; ca này không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-10 20:40 CST (ca trực: **KIỂM CHỨNG
 ĐỘC LẬP GÓI BENCH-CATALOG-EXT + CHỐT TRỌNG SỐ BỘ CHẤM — ĐẠT
 HẾT, ca tự chạy lại từ bằng chứng gốc, không dùng lời AFTER.md**:
 gói mở rộng catalog (làm 19:20–19:22 CST, chưa có dòng sổ nào)
