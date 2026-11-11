@@ -1,0 +1,28 @@
+PASS  manifest rows == 18  got 18
+PASS  image files == 18  got 18
+PASS  files on disk == files in manifest  
+PASS  sha256+bytes match manifest for all 18  
+PASS  dimensions equal root source for all 18  
+PASS  every output differs from its source  
+PASS  all 3 roots x 6 transforms present  missing=[]
+SYN-001-BLUR: 1320x2868 287845 bytes
+SYN-001-DOWNSCALE: 1320x2868 327109 bytes
+SYN-001-LIGHT: 1320x2868 352605 bytes
+SYN-001-TILT: 1320x2868 395719 bytes
+SYN-001-WRINKLE: 1320x2868 400520 bytes
+SYN-001-NOISE: 1320x2868 152919 bytes
+SYN-002-BLUR: 554x1457 89503 bytes
+SYN-002-DOWNSCALE: 554x1457 120115 bytes
+SYN-002-LIGHT: 554x1457 151864 bytes
+SYN-002-TILT: 554x1457 156875 bytes
+SYN-002-WRINKLE: 554x1457 175983 bytes
+SYN-002-NOISE: 554x1457 56538 bytes
+SYN-003-BLUR: 873x2064 243058 bytes
+SYN-003-DOWNSCALE: 873x2064 292495 bytes
+SYN-003-LIGHT: 873x2064 223049 bytes
+SYN-003-TILT: 873x2064 327765 bytes
+SYN-003-WRINKLE: 873x2064 311684 bytes
+SYN-003-NOISE: 873x2064 93197 bytes
+wrote 18 rows -> /home/hatch/workspace/receipt-app/bench-prep/synthetic/synthetic-manifest.csv
+PASS  regeneration reproduces all 18 byte-for-byte  
+RESULT: PASS

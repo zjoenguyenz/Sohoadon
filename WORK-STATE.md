@@ -1,5 +1,60 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-10 16:47 CST (chat chính: **HUY ĐỘNG
+Cập nhật lần cuối: 2026-11-10 18:40 CST (ca trực: **18 ẢNH SUY
+BIẾN ĐÃ TẠO + ĐÓNG BĂNG** — việc độc lập làm song song trong lúc
+chờ anh gửi 5–8 tờ thật khó, đúng mục còn ghi CHƯA TẠO ở
+BENCH-MANIFEST §4 / điều kiện chặn buổi đo §5 mục (2):
+`bench-prep/synthetic/` đủ 3 gốc (001/002/003) × 6 phép (BLUR ·
+DOWNSCALE ×0.5 · LIGHT · TILT · WRINKLE · NOISE) = 18 ảnh mã
+SYN-<gốc>-<phép>, origin synthetic, đáp án kế thừa gt gốc; thông
+số chốt trong `make_synthetic.py` + `synthetic-manifest.csv`
+(sha256 từng file). Tự kiểm `verify_synthetic.py` **PASS 8/8
+nhóm** (`verify-synthetic-results.txt`): đủ 18/18, hash+byte
+khớp, kích thước = gốc, mọi ảnh khác gốc, **tạo lại byte-trùng-
+hệt 18/18**. Sổ: `synthetic/SYNTHETIC-LEDGER.md` (kèm tuyên bố
+trung thực 3 phần + 1 quyết ghi rõ: DOWNSCALE chốt ×0.5 cả 3 gốc
+vì 002 vốn 554px, ×0.25 vượt "nặng vừa"). BENCH-MANIFEST §4/§5
+đã cập nhật: điều kiện (2) XONG; điều kiện (1) ca thật **VẪN
+chờ anh** và (3) luồng OCR gốc trên máy vẫn mở — buổi đo CHƯA
+đủ điều kiện, ca này không kêu anh cài/test gì. Ghi chú
+D-SYN-18 trong BenchCatalog.swift vẫn ghi "chưa tạo" — để sửa
+ở lần ráp bản bench cuối cùng lúc nhúng ca thật, ca này không
+đụng Swift.)
+Cập nhật trước đó: 2026-11-10 18:17 CST (chat chính: **APP ĐO ĐÃ
+SẴN — run #32 XANH + Wally tự soi file**: nhánh bench, artifact
+SoHoaDon-BENCH-run32-2026-11-10 (2.09 MB, sha256 e2ea0711…);
+soi ruột IPA: đủ 4 ảnh bench trong bundle (N-001/N-002/C-003/
+S-0) + nhãn giao diện đo. Một lỗi biên dịch nhỏ (Locale.Language)
+đã sửa trên nhánh. ĐIỀU KIỆN CUỐI trước buổi đo duy nhất: anh
+chụp gửi 5–8 tờ hoá đơn thật loại khó (cũ/nhăn/phai/lệch sáng)
+để Wally đọc tay + kiểm số học + ĐÓNG BĂNG đáp án + nhúng vào
+app đo + build lại bản bench cuối; buổi đo = anh cài bản bench
+cuối → bấm Chạy đo → gửi 1 file JSON. Chưa gọi anh cài run32.)
+Cập nhật trước đó: 2026-11-10 17:54 CST (chat chính: **CỔNG BIÊN
+DỊCH P2 ĐÃ XANH — run #30**: P2-2 qua cổng code; lần build đầu
+(run #28) ĐỎ 14 lỗi, truy ra 2 gốc: (1) P2-3 ghép nhầm nền
+wp4-prep thay vì nền reparse thật của main → P2-FIX ghép lại
++934/−0, harness xanh hết (crosscheck 13/13 · ledger PASS ·
+13/13 · 11/11); (2) workflow main biên dịch bằng SDK iOS 18 do
+image macos-15 mặc định Xcode 16.4 — ép chọn Xcode_26.3.0 tường
+minh (commit c41f9c8) thì XANH, artifact SoHoaDon-P2-CORE-run30
+654 KB. Đây là cổng biên dịch NỘI BỘ, không phải bản giao.
+**BENCHAPP đang xây**: app đo biến thể (4 cấu hình A0–A3 × ảnh
+bench nhúng sẵn, xuất 1 JSON theo schema bench-prep) cho buổi đo
+duy nhất; manifest còn thiếu các ca thật của anh (điều kiện tiên
+quyết buổi đo, chưa cần ngay).)
+Cập nhật trước đó: 2026-11-10 17:12 CST (chat chính: **ĐANG XÂY
+THEO PHƯƠNG ÁN ĐÃ DUYỆT** — anh duyệt 16:59. P2-1 (hình học bóng +
+OCRLine2 + chẩn đoán ghi rõ pass nào thắng/điểm bao nhiêu — đúng
+mẩu bằng chứng thiếu trong sự cố 001; không đổi model, không đổi
+hành vi đọc) + P2-3 (port trọng tài số học, Parser thuần cộng 0
+dòng xoá) + BENCH-PREP (schema JSON v1 + bộ chấm tự kiểm TRÁI
+NGƯỢC ĐÚNG KỲ VỌNG: bộ hỏng chế tay chấm ra Σ 16884 / 13 món —
+khớp từng số ca thực địa run #26) đều QUA CỔNG LEADER tự chạy lại:
+ledger PASS, crosscheck P2-3 **13/13**, ngoặc P2-1 256/256. **P2-2
+đang chạy** (kích hoạt: đa pass + engine (b) + hợp nhất mờ + chọn
+bộ thắng bằng số học + vòng đọc lại theo vùng; dấu bản p2-core-1).
+Sau P2-2: BenchApp + buổi đo duy nhất.)
+Cập nhật trước đó: 2026-11-10 16:47 CST (chat chính: **HUY ĐỘNG
 TOÀN ĐỘI LÀM LẠI CỐT LÕI OCR** theo lệnh anh 16:44 — bản OCRFIX
 đọc đúng phần đầu trên Mẫu 001 nhưng sổ món vẫn mất 2 đơn vị /
 $34.46 trên máy (anh báo 16:40) → anh lệnh: giải pháp tuyệt đối,
