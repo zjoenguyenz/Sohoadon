@@ -59,7 +59,7 @@ enum BenchRunner {
         if #available(iOS 26.0, *) {
             documents = RecognizeDocumentsRequest()
                 .supportedRecognitionLanguages
-                .map { $0.identifier }
+                .map { $0.languageCode?.identifier ?? $0.minimalIdentifier }
         }
         return BenchJSONSupportedLanguages(visionClassic: classic,
                                            recognizeDocuments: documents)
