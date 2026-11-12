@@ -60,6 +60,12 @@ jobs:
         run: |
           "$BIN" fixture harness/fixtures/L-R01-raw-a-original.json 2>&1 | tee control.log
           grep -q "SURVIVED fixture" control.log
+      - name: Thu báo cáo crash macOS (khi đỏ)
+        if: failure()
+        run: |
+          mikdir -p crashreports
+          cp ~/Library/Logs/DiagnosticReports/SoHoaDonHarness* crashreports/ 2>/dev/null || true
+          ls -la crashreports/ || true
       - name: Truy vết bisect (chỉ khi cổng control đỏ)
         if: failure()
         run: |
@@ -106,7 +112,8 @@ jobs:
             probe.log
             control.log
             bisect.log
+            crashreports/
             images.log
-            matrix-*.log
+                   matrix-*.log
             fuzz-results.txt
             fuzz-*.log
