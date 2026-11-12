@@ -496,9 +496,19 @@ case "parseonly":
     // fixture rồi thoát. Chết vì signal = lựa chọn đó gây chết.
     //   --keep i,j,k   chỉ giữ các dòng theo chỉ số 0-based
     //   --count k      giữ k dòng đầu
+    //   --text "..."   parse đúng một dòng chữ thô này (hộp lấy
+    //                  từ dòng 8 của fixture — hộp của ca chết)
     guard args.count >= 2 else { fail("parseonly cần đường dẫn file") }
     requireDataLoaded()
     let fx = loadFixture(args[1])
+    if let t = argValue("--text") {
+        let box: CGRect? = fx.boxes.indices.contains(8) ? fx.boxes[8] : nil
+        print("[parseonly] rawtext=\(t)")
+        _ = ReceiptParser.parse(lines: [OCRLine(text: t, confidence: 1.0)],
+                                boxes: [box])
+        print("SURVIVED parseonly")
+        exit(0)
+    }
     var idx = Array(fx.lines.indices)
     if let keep = argValue("--keep") {
         idx = keep.split(separator: ",").compactMap { Int($0) }
@@ -573,6 +583,45 @@ case "bisect":
         print("[bisect] line \(i): \(fx.lines[i].text)")
     }
     print("BISECT-DONE fatalPrefix=\(fatalPrefix) minimalCount=\(current.count)")
+
+case "variants":
+    // Chẻ nhỏ dòng gây chết (run #16: trap trong
+    // extractSamelineItems trên dòng 8 của L-R01) — mỗi biến
+    // thể chạy trong process con riêng qua parseonly --text;
+    // biến thể nào chết/sống sẽ chỉ ra đặc điểm kích hoạt.
+    guard args.count >= 2 else { fail("variants cần đường dẫn fixture") }
+    requireDataLoaded()
+    let fxPath = args[1]
+    let variants: [String] = [
+        "3006152 BOUNCE 400 11.49 A",   // V1 nguyên văn dòng 8
+        "BOUNCE 400 11.49 A",           // V2 bỏ mã đầu dòng
+        "3006152 BOUNCE 11.49 A",       // V3 bỏ "400"
+        "3006152 BOUNCE 400 11.49",     // V4 bỏ cờ đuôi "A"
+        "3006152 BOUNCE 400 A",         // V5 bỏ tiền
+        "BOUNCE 11.49 A",               // V6 tối thiểu tiền + cờ
+        "BOUNCE 11.49",                 // V7 tiền, không cờ
+        "1234567 XXXXX 999 22.50 B",    // V8 cùng dạng, số khác
+        "ABCDEFG BOUNCE 400 11.49 A",   // V9 chữ thay mã số
+        "3006152 BOUNCE 400 11.49 AF",  // V10 cờ đuôi 2 chữ
+    ]
+    let selfPath = CommandLine.arguments[0]
+    for (i, v) in variants.enumerated() {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: selfPath)
+        p.arguments = ["parseonly", fxPath, "--text", v]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        var note = "spawn-failed"
+        var ok = false
+        if (try? p.run()) != nil {
+            p.waitUntilExit()
+            ok = p.terminationReason == .exit && p.terminationStatus == 0
+            note = p.terminationReason == .exit
+                ? "exit \(p.terminationStatus)" : "signal \(p.terminationStatus)"
+        }
+        print("[variants] V\(i + 1) \(ok ? "ok" : "DIED (\(note))"): \(v)")
+    }
+    print("VARIANTS-DONE")
 
 case "fuzz":
     guard args.count >= 2 else { fail("fuzz cần đường dẫn fixture") }
