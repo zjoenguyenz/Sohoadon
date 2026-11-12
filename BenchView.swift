@@ -16,13 +16,21 @@ struct BenchView: View {
     @State private var documentsOutput: String = ""
 
     private var imageNames: [String] {
-        let urls = Bundle.main.urls(
+        // CI-FIX-4 (2026-11-12): XcodeGen LAM PHANG tai nguyen vao
+        // GOC bundle (bai hoc run #33) — thu muc BenchImages khong
+        // ton tai trong .app. Ban cu dung ?? tren mang: luot tra
+        // trong (khong nil) cua subdirectory khong kich hoat
+        // fallback goc -> 0 anh tren may that. Tra ca hai noi va
+        // hop nhat, khong phu thuoc nil/trong.
+        let sub = Bundle.main.urls(
             forResourcesWithExtension: "jpg",
-            subdirectory: "BenchImages")
-            ?? Bundle.main.urls(forResourcesWithExtension: "jpg",
-                                subdirectory: nil)
-            ?? []
-        return urls.map { $0.lastPathComponent }.sorted()
+            subdirectory: "BenchImages") ?? []
+        let root = Bundle.main.urls(
+            forResourcesWithExtension: "jpg",
+            subdirectory: nil) ?? []
+        let names = Set(sub.map { $0.lastPathComponent })
+            .union(root.map { $0.lastPathComponent })
+        return names.sorted()
     }
 
     /// Thư mục chẩn đoán của bench (Documents/BenchDiagnostics) —
