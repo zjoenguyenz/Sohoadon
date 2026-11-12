@@ -31,16 +31,23 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          echo "Xcode: $XC"
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
       - name: Cài XcodeGen
         run: brew install xcodegen
       - name: Sinh project harness
         run: cd harness && xcodegen generate --spec project-harness.yml
       - name: Build harness (Release)
         run: |
+          set -o pipefail
           xcodebuild -project harness/SoHoaDonHarness.xcodeproj \
             -scheme SoHoaDonHarness -configuration Release \
             -destination 'platform=macOS' \
-            -derivedDataPath harness/dd build | tail -5
+            -derivedDataPath harness/dd build 2>&1 | tee build.log | tail -20
           BIN=$(find harness/dd -name SoHoaDonHarness -type f | head -1)
           echo "BIN=$BIN" >> "$GITHUB_ENV"
           cp vendors.json lexicon.json "$(dirname "$BIN")/"
@@ -85,6 +92,7 @@ jobs:
         with:
           name: harness-evidence-${{ github.run_number }}
           path: |
+            build.log
             streams/
             probe.log
             control.log
