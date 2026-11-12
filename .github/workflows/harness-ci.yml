@@ -48,11 +48,12 @@ jobs:
             -scheme SoHoaDonHarness -configuration Release \
             -destination 'platform=macOS' \
             -derivedDataPath harness/dd build 2>&1 | tee build.log | tail -20
-          BIN=$(find harness/dd -name SoHoaDonHarness -type f | head -1)
+          BIN=$(find harness/dd/Build/Products -name SoHoaDonHarness -type f -not -path "*.dSYM*" | head -1)
           echo "BIN=$BIN" >> "$GITHUB_ENV"
           cp vendors.json lexicon.json "$(dirname "$BIN")/"
       - name: Probe (ngôn ngữ + dữ liệu nạp thật)
         run: |
+          set -o pipefail
           "$BIN" probe | tee probe.log
           ! grep -q "unloaded" probe.log
       - name: Cổng 1 — control trên luồng đã ghi L-R01
