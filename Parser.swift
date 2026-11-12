@@ -1,5 +1,49 @@
 import Foundation
 
+// MARK: - Parser v3 — TẦNG PHÂN TÍCH F4 (Pha 1, DESIGN-FINAL đã duyệt)
+//
+// Bản này là F4 của kiến trúc core-v3, xây trên nền integrate-v2
+// (tem core-v2-1) — mọi hành vi không đánh dấu PHA-1 đều giữ nguyên
+// văn của bản nền đã kiểm chứng. Các thay đổi của Pha 1 (bản gương
+// Python port_f4_mirror.py là cùng một logic, bộ kiểm
+// v3-phase1/test_f4.py):
+//  P1-SAFEMONEY: mọi phép tính tiền qua SafeMoney (Money.swift của
+//    Pha 0) — hàm moneyToCents cũ (trả 0 giả + nhân trần có thể
+//    trap) bị XOÁ; trích tiền ngoài miền -> nil, không số giả.
+//  P1-VENDOR-DATA: vendor = dữ liệu vendors.json nạp qua
+//    VendorData.swift (M7); bảng cứng trong file này bị xoá.
+//    printSemantics đi cùng vendor (P1-E3 ở validate).
+//  P1-QTYFLAG: dòng số lượng Sam's chấp nhận ký tự rác OCR ở ô cờ
+//    cuối dòng (fixture N-002).
+//  P1-CARD-TENDER: đuôi thẻ ở dòng thanh toán '<hãng> DEBIT/CREDIT-
+//    NNNN' (fixture L-R04/L-R11/S-0).
+//  P1-DATE-MERGE: ngày-không-giờ ghép giờ trong ±3 dòng (fixture
+//    L-R03).
+//  P1-MONEY-BOUNDARY: token tiền phải có biên phải (không cắt
+//    '3.91' khỏi suất '3.9170' — fixture L-R03). Áp ở
+//    lastMoneyInLine/totalCandidates/columnModel của file này;
+//    việc gấp vào SafeMoney.tokenRegex là việc nối tiếp đã ghi ở
+//    AFTER.md (Money.swift của Pha 0 không sửa trong pha này).
+//  P1-GLYPH: mẫu nhãn tổng cùng-dòng chấp nhận ký hiệu tiền bị OCR
+//    vỡ ($ -> ฿/£/€) ở ô ký hiệu (fixture L-R05).
+//  P1-FLAG-MISSING: validate() cờ tường minh khi subtotal vắng
+//    mặt mà tổng có mặt, và khi nhãn số-món có mặt mà token số
+//    chết (fixture S-0, L-R05/L-R06).
+//  P1-DOMAINCORR: DomainCorrection sửa token CHỮ (tên món, nhãn
+//    thuế) theo lexicon.json — không bao giờ chạm token số; mọi
+//    sửa ghi vào result.corrections (DiagCorrection của Pha 0).
+//  P1-CANDIDATES: result.totalCandidates + result.selectionTrace
+//    (ứng viên-trước-chọn-sau cho totals; F5 nối thật ở Pha 3).
+//  P1-GEOMETRY: khung hình học thống nhất khi có hộp dòng (cột
+//    tiền = điểm mốt cạnh phải; các dạng cặp mang tên fixture
+//    FX-SAMELINE/FX-SPLIT-NEXT/FX-BEFORE-LABEL); trọng tài: chỉ
+//    thay kết quả trích món khi hình học khép E1 còn đường chữ
+//    không khép.
+// Phần Reconcile ở cuối file GIỮ NGUYÊN VĂN của bản nền (tách
+// module M8 + nối vào parse() là điều kiện nghiệm thu của Pha 3,
+// không thuộc Pha 1) — ngoại lệ duy nhất: điểm gọi tiền trong
+// Reconcile cũng qua SafeMoney như mọi điểm gọi khác.
+
 // MARK: - Kết quả đọc 1 dòng OCR
 
 struct OCRLine {
@@ -23,12 +67,27 @@ struct ParsedLineItem {
     // tham gia cổng sổ của validate() và không phải trường model.
     var weightLb: Double? = nil
     var weightUnitCents: Int? = nil
+    // PHA 1: chỉ số dòng nguồn của món (phục vụ corrections[] +
+    // chẩn đoán v2; thuần cộng thêm, mặc định nil).
+    var lineIndex: Int? = nil
 }
 
 struct ParsedTaxLine {
     var label: String
     var rateText: String? = nil
     var amountCents: Int
+    // PHA 1: chỉ số dòng nguồn của dòng thuế (như lineIndex của món).
+    var lineIndex: Int? = nil
+}
+
+/// PHA 1 (P1-CANDIDATES): một ứng viên tiền cho các trường neo —
+/// F4 xuất TOÀN BỘ ứng viên kèm vai trò đã chọn/chưa chọn; việc
+/// chọn cuối cùng phối hợp với F5 ở Pha 3.
+struct TotalCandidate {
+    var lineIndex: Int
+    var cents: Int
+    var role: String        // subtotal | tax | total | taxSummaryCandidate | unassigned
+    var chosen: Bool
 }
 
 struct ParseResult {
@@ -41,6 +100,13 @@ struct ParseResult {
     var totalCents: Int? = nil
     var cardLast4: String? = nil
     var cardBrand: String? = nil
+    // PHA 3 (khoản treo Pha 1 — ca L-R09 đuôi "2580"): độ tin cậy
+    // của DÒNG sinh ra đuôi thẻ + dấu hiệu dòng bị gộp với dòng
+    // tổng. validate() dùng hai trường này để gắn cờ bất thường;
+    // giá trị thẻ đọc được KHÔNG bị sửa (sửa số là việc của người
+    // duyệt). 0 = không rõ (đường cũ / không có dòng thẻ).
+    var cardConfidence: Double = 0
+    var cardLineContaminated: Bool = false
     var dedupeKey: String? = nil
     var itemsSold: Int? = nil
     var warnings: [String] = []
@@ -57,8 +123,18 @@ struct ParseResult {
     var vendorSuggestion: String? = nil   // nấc 3: CHỈ gợi ý, không bao giờ tự điền
     var vendorAnchorDisputed: Bool = false
     var rawText: String = ""
+    // PHA 1 (thuần cộng thêm): vết + ứng viên + sửa chữ + ngữ nghĩa
+    // in — phục vụ chẩn đoán v2 và cổng kiểm; không phải trường
+    // model SwiftData.
+    var corrections: [DiagCorrection] = []
+    var selectionTrace: [String] = []
+    var totalCandidates: [TotalCandidate] = []
+    var geometricCandidates: [ParsedLineItem] = []
+    var itemsSoldLabelSeen: Bool = false
+    var soldContribution: String = "byQuantity"  // printSemantics của vendor
+    var vendorDataVersion: String = ""           // dataVersion của vendors.json đã dùng
 
-    var taxTotalCents: Int { taxes.reduce(0) { $0 + $1.amountCents } }
+    var taxTotalCents: Int { SafeMoney.sumCents(taxes.map { $0.amountCents }) ?? 0 }
 }
 
 // MARK: - Bộ bóc tách hoá đơn
@@ -128,9 +204,119 @@ struct ParseResult {
 //     vai trò của nó được phương trình chứng minh).
 // Đường Sam's + validate() giữ nguyên văn như bản nền.
 
+// MARK: - DomainCorrector (P1-DOMAINCORR) — sửa CHỮ bằng tri
+// thức miền (DESIGN-FINAL §3.4(b))
+//
+// Lexicon đóng băng + có phiên bản nạp từ lexicon.json (kèm app;
+// bản ở staging: v3-phase1/lexicon.json). LUẬT CỨNG: tầng này chỉ
+// chạm TOKEN TOÀN CHỮ CÁI trong trường CHỮ (tên món "itemName",
+// nhãn thuế "taxLabel") — token số (tiền, qty, ngày, đuôi thẻ,
+// mã) không bao giờ qua đây; số là lãnh địa của F5. Hai cơ chế:
+//  (A) known-variant: token trùng một biến thể đã biết của một
+//      mục -> thay bằng canonical của mục đó;
+//  (B) edit-distance-1: token dài ≥5, cách đúng MỘT biến thể đã
+//      biết của đúng MỘT mục duy nhất đúng 1 phép sửa -> canonical.
+// Mọi lần sửa ghi vào corrections[] với provenance
+// .domainCorrected(lexiconVersion) (DiagCorrection của Pha 0).
+// Nạp lexicon hỏng -> tầng TRƠ (không sửa gì): fail-closed.
+
+private struct LexiconFile: Decodable {
+    var lexiconVersion: String
+    var entries: [Entry]
+    struct Entry: Decodable {
+        var canonical: String
+        var field: String
+        var variants: [String]
+    }
+}
+
+enum DomainCorrector {
+    private static let store: (version: String, variantMap: [String: (canonical: String, field: String)]) = {
+        guard let url = Bundle.main.url(forResource: "lexicon", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let file = try? JSONDecoder().decode(LexiconFile.self, from: data) else {
+            return ("unloaded", [:])
+        }
+        var map: [String: (String, String)] = [:]
+        for e in file.entries {
+            for v in e.variants {
+                map[v.uppercased()] = (e.canonical, e.field)
+            }
+        }
+        return (file.lexiconVersion, map)
+    }()
+
+    static var lexiconVersion: String { store.version }
+
+    private static func caseLike(token: String, canonical: String) -> String {
+        if token == token.uppercased() { return canonical.uppercased() }
+        if let first = token.first, first.isUppercase {
+            let lower = canonical.lowercased()
+            return lower.prefix(1).uppercased() + lower.dropFirst()
+        }
+        return canonical.lowercased()
+    }
+
+    /// Sửa các token chữ của `text` thuộc `field`; ghi mỗi lần sửa
+    /// vào `corrections`. Trả text đã sửa.
+    static func correct(_ text: String, field: String, lineIndex: Int?,
+                        corrections: inout [DiagCorrection]) -> String {
+        guard !store.variantMap.isEmpty else { return text }
+        var out = ""
+        var i = text.startIndex
+        while i < text.endIndex {
+            if text[i].isLetter && text[i].isASCII {
+                var j = i
+                while j < text.endIndex, text[j].isLetter, text[j].isASCII {
+                    j = text.index(after: j)
+                }
+                let token = String(text[i..<j])
+                out += correctToken(token, field: field, lineIndex: lineIndex,
+                                    corrections: &corrections)
+                i = j
+            } else {
+                out.append(text[i])
+                i = text.index(after: i)
+            }
+        }
+        return out
+    }
+
+    private static func correctToken(_ token: String, field: String, lineIndex: Int?,
+                                     corrections: inout [DiagCorrection]) -> String {
+        guard token.count >= 4 else { return token }
+        let upper = token.uppercased()
+        if let hit = store.variantMap[upper], hit.field == field {
+            let canonical = hit.canonical
+            if canonical.uppercased() != upper {
+                corrections.append(DiagCorrection(
+                    field: field, itemIndex: lineIndex, from: token, to: canonical,
+                    lexiconVersion: store.version, rule: "known-variant"))
+                return caseLike(token: token, canonical: canonical)
+            }
+            return token
+        }
+        if token.count >= 5 {
+            var candidates: Set<String> = []
+            for (variant, hit) in store.variantMap
+            where hit.field == field && variant != upper
+                    && VendorData.levenshtein(upper, variant) == 1 {
+                candidates.insert(hit.canonical)
+            }
+            if candidates.count == 1, let canonical = candidates.first {
+                corrections.append(DiagCorrection(
+                    field: field, itemIndex: lineIndex, from: token, to: canonical,
+                    lexiconVersion: store.version, rule: "edit-distance-1"))
+                return caseLike(token: token, canonical: canonical)
+            }
+        }
+        return token
+    }
+}
+
 enum ReceiptParser {
 
-    static func parse(lines input: [OCRLine]) -> ParseResult {
+    static func parse(lines input: [OCRLine], boxes: [CGRect?]? = nil) -> ParseResult {
         let lines = input
             .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces), confidence: $0.confidence) }
             .filter { !$0.text.isEmpty }
@@ -140,11 +326,13 @@ enum ReceiptParser {
         // WP5: nhận diện tiệm 3 nấc chạy TRƯỚC, một hàm chung cho mọi
         // đường — kết quả quyết định rẽ nhánh Sam's/generic (thay isSams
         // khớp-chuỗi cũ) và là nguồn tên tiệm DUY NHẤT của cả parser.
+        // PHA 1: nhận diện nay đọc DỮ LIỆU vendors.json qua
+        // VendorData (M7); rẽ nhánh theo parserPath của mục dữ liệu.
         let identification = identifyVendor(lines: lines)
-        if identification.vendorKey == "sams" {
+        if identification.parserPath == "sams" {
             result = parseSams(lines: lines)
         } else {
-            result = parseGeneric(lines: lines, identifiedVendor: identification.vendor)
+            result = parseGeneric(lines: lines, identifiedVendor: identification.vendor, boxes: boxes)
         }
         result.vendor = identification.vendor
         result.vendorKey = identification.vendorKey
@@ -152,11 +340,33 @@ enum ReceiptParser {
         result.vendorSource = identification.source
         result.vendorSuggestion = identification.suggestion
         result.vendorAnchorDisputed = identification.anchorDisputed
+        result.soldContribution = identification.entry?.soldContribution ?? "byQuantity"
+        result.vendorDataVersion = VendorData.shared.dataVersion
         let contact = extractVendorContact(lines: lines)
         result.vendorAddress = contact.address
         result.vendorPhone = contact.phone
         result.storeNumber = contact.storeNumber
         result.rawText = lines.map { $0.text }.joined(separator: "\n")
+        // P1-FLAG-MISSING: bill có in nhãn số món nhưng không đọc
+        // được con số -> ghi nhận để validate() sinh cờ (không đoán).
+        if result.itemsSold == nil,
+           lines.contains(where: { $0.text.uppercased().contains("ITEMS SOLD") || $0.text.uppercased().contains("ITEM COUNT") }) {
+            result.itemsSoldLabelSeen = true
+        }
+        // P1-DOMAINCORR: sửa CHỮ sau trích xuất, trước validate —
+        // tên món + nhãn thuế; token số không qua tầng này.
+        for i in result.items.indices {
+            result.items[i].name = DomainCorrector.correct(
+                result.items[i].name, field: "itemName",
+                lineIndex: result.items[i].lineIndex,
+                corrections: &result.corrections)
+        }
+        for i in result.taxes.indices {
+            result.taxes[i].label = DomainCorrector.correct(
+                result.taxes[i].label, field: "taxLabel",
+                lineIndex: result.taxes[i].lineIndex,
+                corrections: &result.corrections)
+        }
         result.warnings = validate(result)
         return result
     }
@@ -211,7 +421,7 @@ enum ReceiptParser {
 
         // --- Dòng món ---
         var pending: ParsedLineItem? = nil
-        for line in lines {
+        for (index, line) in lines.enumerated() {
             let text = line.text
 
             // Dòng số lượng: "2 AT 1 FOR 19.48 38.96 Y"
@@ -230,8 +440,8 @@ enum ReceiptParser {
             // dù đã ráp (ảnh lệch). Không có món chờ thì dòng tiền lẻ rơi
             // tiếp xuống các luật dưới (không luật nào nhận) như cũ.
             if var p = pending,
-               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?\s*([YT])?$"#), m.count == 3 {
-                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?\s*([YT])?$"#), m.count == 3,
+               let cents = SafeMoney.parseCents(m[0] ?? "", negative: m[1] != nil) {
                 p.amountCents = cents
                 p.unitPriceCents = cents
                 if let flag = m[2] { p.taxFlag = flag }
@@ -247,9 +457,12 @@ enum ReceiptParser {
                     item.amountCents = tail.cents
                     item.unitPriceCents = tail.cents
                     item.taxFlag = tail.flag
+                    item.lineIndex = index
                     r.items.append(item)
                 } else {
-                    pending = ParsedLineItem(name: "INST SV " + rest)
+                    var item = ParsedLineItem(name: "INST SV " + rest)
+                    item.lineIndex = index
+                    pending = item
                 }
                 continue
             }
@@ -264,10 +477,12 @@ enum ReceiptParser {
                     item.amountCents = tail.cents
                     item.unitPriceCents = tail.cents
                     item.taxFlag = tail.flag
+                    item.lineIndex = index
                     r.items.append(item)
                 } else {
                     var item = ParsedLineItem(name: rest)
                     item.itemCode = code
+                    item.lineIndex = index
                     pending = item
                 }
                 continue
@@ -284,12 +499,12 @@ enum ReceiptParser {
         var pendingKind: String? = nil
         var pendingTaxLabel: String? = nil
         var pendingTaxRate: String? = nil
-        for line in lines {
+        for (index, line) in lines.enumerated() {
             let text = line.text
             // Dòng chỉ-có-tiền hoàn tất nhãn đang chờ.
             if let kind = pendingKind,
-               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
-                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2,
+               let cents = SafeMoney.parseCents(m[0] ?? "", negative: m[1] != nil) {
                 switch kind {
                 case "SUBTOTAL":
                     r.subtotalCents = cents
@@ -299,7 +514,8 @@ enum ReceiptParser {
                 default:
                     r.taxes.append(ParsedTaxLine(label: pendingTaxLabel ?? "TAX",
                                                   rateText: pendingTaxRate,
-                                                  amountCents: cents))
+                                                  amountCents: cents,
+                                                  lineIndex: index))
                 }
                 pendingKind = nil
                 pendingTaxLabel = nil
@@ -325,22 +541,24 @@ enum ReceiptParser {
             pendingKind = nil
             pendingTaxLabel = nil
             pendingTaxRate = nil
-            if let m = matchGroups(text, pattern: #"^SUBTOTAL\s+\$?(\d[\d,]*\.\d{2})(-)?$"#) {
-                r.subtotalCents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+            if let m = matchGroups(text, pattern: #"^SUBTOTAL\s+\$?(\d[\d,]*\.\d{2})(-)?$"#),
+               let cents = SafeMoney.parseCents(m[0] ?? "", negative: m[1] != nil) {
+                r.subtotalCents = cents
                 continue
             }
-            if let m = matchGroups(text, pattern: #"^TAX\s+(\d)\s+([\d.]+)\s*%\s+\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 4 {
-                let amount = moneyToCents(m[2] ?? "", negative: m[3] != nil)
-                r.taxes.append(ParsedTaxLine(label: "TAX \(m[0] ?? "")", rateText: m[1], amountCents: amount))
+            if let m = matchGroups(text, pattern: #"^TAX\s+(\d)\s+([\d.]+)\s*%\s+\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 4,
+               let amount = SafeMoney.parseCents(m[2] ?? "", negative: m[3] != nil) {
+                r.taxes.append(ParsedTaxLine(label: "TAX \(m[0] ?? "")", rateText: m[1], amountCents: amount, lineIndex: index))
                 continue
             }
-            if let m = matchGroups(text, pattern: #"^TOTAL\s+\$?(\d[\d,]*\.\d{2})(-)?$"#) {
-                r.totalCents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+            if let m = matchGroups(text, pattern: #"^TOTAL\s+\$?(\d[\d,]*\.\d{2})(-)?$"#),
+               let cents = SafeMoney.parseCents(m[0] ?? "", negative: m[1] != nil) {
+                r.totalCents = cents
                 r.totalConfidence = line.confidence
                 continue
             }
             if let m = matchGroups(text, pattern: #"^#\s*ITEMS SOLD\s+(\d+)$"#) {
-                r.itemsSold = Int(m[0] ?? "")
+                r.itemsSold = SafeMoney.parseQty(m[0] ?? "")
                 continue
             }
             if let tc = matchPrefix(text, pattern: #"^TC#\s+([\d ]+)$"#) {
@@ -354,12 +572,14 @@ enum ReceiptParser {
         let card = findCard(lines: lines)
         r.cardLast4 = card.last4
         r.cardBrand = card.brand
+        r.cardConfidence = card.confidence
+        r.cardLineContaminated = card.contaminated
         return r
     }
 
     // MARK: - GENERIC (mọi tiệm khác — Build 1 chỉ lấy trường cốt lõi)
 
-    private static func parseGeneric(lines: [OCRLine], identifiedVendor: String?) -> ParseResult {
+    private static func parseGeneric(lines: [OCRLine], identifiedVendor: String?, boxes: [CGRect?]? = nil) -> ParseResult {
         var r = ParseResult()
         r.vendorKey = "generic"
 
@@ -370,20 +590,24 @@ enum ReceiptParser {
         r.vendor = identifiedVendor
 
         // Ngày — INTEGRATE-V2: findDateTime/findDateOnly đã cộng mẫu
-        // tháng chữ (xem dưới). Thêm đường GHÉP GIỜ: hoá đơn thật có
-        // ca ngày và giờ bị OCR tách thành hai dòng rời (ngày ở một
-        // dòng, giờ đứng một mình ở dòng khác — bằng chứng buổi đo
-        // L-R03) thì ngày-không-giờ được ghép với dòng giờ độc lập
-        // duy nhất đọc được; không có dòng giờ thì giữ ngày 00:00
-        // như cũ. Đường Sam's không đổi (vẫn findDateTime trực tiếp).
+        // tháng chữ (xem dưới). Đường GHÉP GIỜ: hoá đơn thật có ca
+        // ngày và giờ bị OCR tách thành hai dòng rời thì ngày-không-
+        // giờ được ghép với giờ tìm được quanh dòng ngày.
+        // PHA 1 (P1-DATE-MERGE, DESIGN-FINAL §3.4): ghép trong ±3
+        // dòng quanh dòng ngày, chỉ xét dòng KHÔNG chứa ngày (không
+        // có ngày cạnh tranh); ưu tiên khoảng cách nhỏ nhất, cùng
+        // khoảng cách thì dòng chỉ-có-giờ thắng dòng giờ-nhúng (vd
+        // dòng TERMINAL của L-R03); độ tin cậy giảm một nấc (×0.9)
+        // và ghi vết vào selectionTrace. Đường Sam's không đổi.
         if let found = findDateTime(in: lines) {
             r.date = found.date
             r.dateConfidence = found.confidence
-        } else if let found = findDateOnly(in: lines) {
-            if let t = findStandaloneTime(in: lines),
+        } else if let found = findDateOnlyIndexed(in: lines) {
+            if let t = findTimeNear(in: lines, dateIndex: found.index),
                let merged = mergingTime(into: found.date, hour: t.hour, minute: t.minute) {
                 r.date = merged
-                r.dateConfidence = min(found.confidence, t.confidence)
+                r.dateConfidence = min(found.confidence, t.confidence) * 0.9
+                r.selectionTrace.append("date := ngày dòng \(found.index) + giờ dòng \(t.index) (\(t.standalone ? "chỉ-có-giờ" : "giờ nhúng trong dòng không-ngày"), ±3 dòng, P1-DATE-MERGE)")
             } else {
                 r.date = found.date
                 r.dateConfidence = found.confidence
@@ -400,6 +624,7 @@ enum ReceiptParser {
         // INTEGRATE-V2: sổ theo dõi cho tầng neo tổng (anchorTotals)
         // và luật dòng thuế mang suất.
         var claimedIndices = Set<Int>()   // dòng đã sinh giá trị tổng/thuế
+        var claimedRoles: [Int: String] = [:]   // PHA 1: vai trò ứng viên theo dòng (P1-CANDIDATES)
         var taxLineIndices: [Int] = []    // chỉ số dòng nguồn của r.taxes (song song)
         var totalsSeen = false            // đã gặp bất kỳ neo vùng tổng nào
         var totalTaxSummary: (index: Int, cents: Int)? = nil
@@ -416,19 +641,27 @@ enum ReceiptParser {
             }
             // F2b: dòng chỉ-có-tiền hoàn tất nhãn đang chờ.
             if let kind = pendingKind,
-               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
-                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+               let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2,
+               let cents = SafeMoney.parseCents(m[0] ?? "", negative: m[1] != nil) {
                 switch kind {
                 case "SUBTOTAL":
-                    if r.subtotalCents == nil { r.subtotalCents = cents }
+                    if r.subtotalCents == nil {
+                        r.subtotalCents = cents
+                        r.selectionTrace.append("subtotal := dòng \(index) (tiền sau nhãn trống)")
+                    }
+                    claimedRoles[index] = "subtotal"
                 case "TOTAL":
                     if !ignoreTotals, r.totalCents == nil {
                         r.totalCents = cents
                         r.totalConfidence = line.confidence
+                        r.selectionTrace.append("total := dòng \(index) (tiền sau nhãn trống)")
                     }
+                    claimedRoles[index] = "total"
                 default:
-                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents))
+                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents, lineIndex: index))
                     taxLineIndices.append(index)
+                    claimedRoles[index] = "tax"
+                    r.selectionTrace.append("tax[\(r.taxes.count - 1)] := dòng \(index) (tiền sau nhãn thuế trống)")
                 }
                 claimedIndices.insert(index)
                 totalsSeen = true
@@ -443,30 +676,39 @@ enum ReceiptParser {
             // của nhãn kế tiếp, đúng gốc hazard G4. TOTAL vẫn tôn
             // trọng vùng loại trừ như đường cùng-dòng.
             if let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2,
+               let cents = SafeMoney.parseCents(m[0] ?? "", negative: m[1] != nil),
                index + 1 < lines.count {
-                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
                 let next = lines[index + 1].text
                 let nextUpper = next.uppercased()
                 var claimed = false
                 if matchGroups(next, pattern: #"^SUBTOTAL\s*:?$"#) != nil {
-                    if r.subtotalCents == nil { r.subtotalCents = cents }
+                    if r.subtotalCents == nil {
+                        r.subtotalCents = cents
+                        r.selectionTrace.append("subtotal := dòng \(index) (tiền trước nhãn SUBTOTAL)")
+                    }
+                    claimedRoles[index] = "subtotal"
                     claimed = true
                 } else if (nextUpper.hasPrefix("TAX") || nextUpper.hasPrefix("SALES TAX")),
                           lastMoneyInLine(next) == nil {
-                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents))
+                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents, lineIndex: index))
                     taxLineIndices.append(index)
+                    claimedRoles[index] = "tax"
+                    r.selectionTrace.append("tax[\(r.taxes.count - 1)] := dòng \(index) (tiền trước nhãn thuế)")
                     claimed = true
                 } else if !ignoreTotals,
                           matchGroups(next, pattern: #"^(TOTAL|TOTAL DUE|AMOUNT DUE|BALANCE DUE)\s*:?$"#) != nil {
                     if r.totalCents == nil {
                         r.totalCents = cents
                         r.totalConfidence = line.confidence
+                        r.selectionTrace.append("total := dòng \(index) (tiền trước nhãn TOTAL)")
                     }
+                    claimedRoles[index] = "total"
                     claimed = true
                 }
                 if claimed {
                     claimedIndices.insert(index)
                     claimedIndices.insert(index + 1)
+                    claimedRoles[index + 1] = "label"
                     totalsSeen = true
                     skipNext = true
                     continue
@@ -499,19 +741,26 @@ enum ReceiptParser {
             if upper.contains("RETURN POLICY") || upper.contains("MAX REFUND VALUE") {
                 continue
             }
-            if let m = matchGroups(text, pattern: #"^SUBTOTAL\s*:?\s*\$?(\d[\d,]*\.\d{2})(-)?$"#) {
+            // P1-GLYPH: ô ký hiệu tiền chấp nhận ký hiệu bị OCR vỡ
+            // ($ -> ฿/£/€); các chữ số vẫn là số đã in (fixture L-R05).
+            if let m = matchGroups(text, pattern: #"^SUBTOTAL\s*:?\s*[$฿£€]?(\d[\d,]*\.\d{2})(-)?$"#),
+               let cents = SafeMoney.parseCents(m[0] ?? "", negative: m[1] != nil) {
                 if r.subtotalCents == nil {
-                    r.subtotalCents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+                    r.subtotalCents = cents
+                    r.selectionTrace.append("subtotal := dòng \(index) (nhãn SUBTOTAL cùng dòng)")
                 }
                 claimedIndices.insert(index)
+                claimedRoles[index] = "subtotal"
                 totalsSeen = true
                 continue
             }
             let isTaxLine = upper.hasPrefix("TAX") || upper.hasPrefix("SALES TAX")
             if isTaxLine, let cents = lastMoneyInLine(text) {
-                r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents))
+                r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: cents, lineIndex: index))
                 taxLineIndices.append(index)
                 claimedIndices.insert(index)
+                claimedRoles[index] = "tax"
+                r.selectionTrace.append("tax[\(r.taxes.count - 1)] := dòng \(index) (dòng bắt đầu TAX)")
                 totalsSeen = true
                 continue
             }
@@ -524,6 +773,7 @@ enum ReceiptParser {
                     totalTaxSummary = (index, cents)
                 }
                 claimedIndices.insert(index)
+                claimedRoles[index] = "taxSummaryCandidate"
                 totalsSeen = true
                 continue
             }
@@ -535,19 +785,24 @@ enum ReceiptParser {
             // để không vớ phải dòng món mang suất lạ).
             if let rt = matchTaxRateLine(text) {
                 if rt.taxLabeled || totalsSeen {
-                    r.taxes.append(ParsedTaxLine(label: rt.label, rateText: rt.rate, amountCents: rt.cents))
+                    r.taxes.append(ParsedTaxLine(label: rt.label, rateText: rt.rate, amountCents: rt.cents, lineIndex: index))
                     taxLineIndices.append(index)
                     claimedIndices.insert(index)
+                    claimedRoles[index] = "tax"
+                    r.selectionTrace.append("tax[\(r.taxes.count - 1)] := dòng \(index) (dòng thuế mang suất, nhãn tự do)")
                     totalsSeen = true
                     continue
                 }
             }
             if !ignoreTotals, r.totalCents == nil,
-               let m = matchGroups(text, pattern: #"^(TOTAL|TOTAL DUE|AMOUNT DUE|BALANCE DUE)\s*:?\s*\$?(\d[\d,]*\.\d{2})(-)?$"#),
-               m.count == 3 {
-                r.totalCents = moneyToCents(m[1] ?? "", negative: m[2] != nil)
+               let m = matchGroups(text, pattern: #"^(TOTAL|TOTAL DUE|AMOUNT DUE|BALANCE DUE)\s*:?\s*[$฿£€]?(\d[\d,]*\.\d{2})(-)?$"#),
+               m.count == 3,
+               let cents = SafeMoney.parseCents(m[1] ?? "", negative: m[2] != nil) {
+                r.totalCents = cents
                 r.totalConfidence = line.confidence
                 claimedIndices.insert(index)
+                claimedRoles[index] = "total"
+                r.selectionTrace.append("total := dòng \(index) (nhãn TOTAL cùng dòng)")
                 totalsSeen = true
                 continue
             }
@@ -565,8 +820,10 @@ enum ReceiptParser {
         // trường hợp đó nó LÀ dòng thuế duy nhất của bill, không
         // cộng chồng lên các thành phần.
         if r.taxes.isEmpty, let summary = totalTaxSummary {
-            r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: summary.cents))
+            r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: summary.cents, lineIndex: summary.index))
             taxLineIndices.append(summary.index)
+            claimedRoles[summary.index] = "tax"
+            r.selectionTrace.append("tax[\(r.taxes.count - 1)] := dòng \(summary.index) (dòng TỔNG THUẾ tóm tắt — không có thuế thành phần)")
         }
 
         // INTEGRATE-V2: trích món generic v2 — khối UPC + nhánh
@@ -574,6 +831,31 @@ enum ReceiptParser {
         // parseGenericItems của M1-FIX).
         let extracted = parseGenericItemsV2(lines: lines)
         r.items = extracted.items
+
+        // PHA 1 (P1-GEOMETRY): trọng tài khung hình học khi có hộp
+        // — chỉ thay món khi hình học khép E1 còn đường chữ không;
+        // cả hai cùng khép -> giữ đường chữ; không bên nào khép ->
+        // giữ đường chữ + ứng viên hình học vào geometricCandidates.
+        if let boxes = boxes {
+            let geo = geometricItems(lines: lines, boxes: boxes, stop: totalsBoundary(lines: lines))
+            if !geo.isEmpty {
+                let legacySum = SafeMoney.sumCents(r.items.map { $0.amountCents ?? 0 })
+                let geoSum = SafeMoney.sumCents(geo.map { $0.amountCents ?? 0 })
+                if let subtotal = r.subtotalCents, let ls = legacySum, let gs = geoSum {
+                    let legacyOK = abs(ls - subtotal) <= 2
+                    let geoOK = abs(gs - subtotal) <= 2
+                    if geoOK && !legacyOK {
+                        r.items = geo
+                        r.selectionTrace.append("items := KHUNG HÌNH HỌC (E1 khép; đường chữ lệch \(ls) vs subtotal \(subtotal))")
+                    } else if !geoOK {
+                        r.geometricCandidates = geo
+                    }
+                } else {
+                    r.geometricCandidates = geo
+                }
+            }
+        }
+
         if r.itemsSold == nil {
             r.itemsSold = findItemsSoldGeneric(lines: lines)
         }
@@ -582,11 +864,28 @@ enum ReceiptParser {
         // điền trường còn trống, chỉ bằng số đã in, chỉ khi khép
         // duy nhất) — xem anchorTotals.
         anchorTotals(result: &r, lines: lines, claimedIndices: claimedIndices,
+                     claimedRoles: &claimedRoles,
                      taxLineIndices: &taxLineIndices, lastItemIndex: extracted.lastItemIndex)
+
+        // P1-CANDIDATES: toàn bộ token tiền trong vùng tổng kèm vai
+        // trò — ứng viên cho F5 (Pha 3) và cho chẩn đoán.
+        let zoneStart = (extracted.lastItemIndex ?? -1) + 1
+        if zoneStart < lines.count {
+            for i in zoneStart..<lines.count {
+                for c in moneyTokensWithBoundary(in: lines[i].text) {
+                    let role = claimedRoles[i] ?? "unassigned"
+                    r.totalCandidates.append(TotalCandidate(
+                        lineIndex: i, cents: c, role: role,
+                        chosen: role != "unassigned"))
+                }
+            }
+        }
 
         let card = findCard(lines: lines)
         r.cardLast4 = card.last4
         r.cardBrand = card.brand
+        r.cardConfidence = card.confidence
+        r.cardLineContaminated = card.contaminated
 
         // Khoá chống trùng yếu cho tiệm generic: tiệm + ngày + tổng.
         if r.dedupeKey == nil, let total = r.totalCents, let date = r.date, let vendor = r.vendor {
@@ -655,17 +954,17 @@ enum ReceiptParser {
             }
             // Dòng số lượng kiểu Home Depot: "2@34.98".
             if let m = matchGroups(text, pattern: #"^(\d+)\s*@\s*(\d[\d,]*\.\d{2})$"#), m.count == 2,
-               var o = open {
-                o.qty = Int(m[0] ?? "") ?? o.qty
-                o.unitPriceCents = moneyToCents(m[1] ?? "", negative: false)
+               var o = open, let q = SafeMoney.parseQty(m[0] ?? ""),
+               let u = SafeMoney.parseCents(m[1] ?? "") {
+                o.qty = q
+                o.unitPriceCents = u
                 open = o
                 consumed.insert(index)
                 prevLineWasBlock = true
                 continue
             }
             // Dòng chỉ-có-tiền: giá kề SAU khối cho món đang mở.
-            if let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
-                let cents = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+            if let cents = bareMoneyCents(text) {
                 lastBareMoney = (index, cents)
                 if var o = open, o.amountCents == nil, prevLineWasBlock {
                     o.amountCents = cents
@@ -687,6 +986,7 @@ enum ReceiptParser {
                 closeOpen()
                 var item = ParsedLineItem(name: "")
                 item.itemCode = m[0]
+                item.lineIndex = index
                 var rest = m[1] ?? ""
                 if let fm = matchGroups(rest, pattern: #"^(.*?)\s*<([A-Z])>$"#),
                    let cleaned = fm[0] {
@@ -779,8 +1079,8 @@ enum ReceiptParser {
     /// giảm giá Costco) cho số âm.
     private static func lastCleanMoney(_ text: String) -> (name: String, cents: Int, tail: String)? {
         guard let m = matchGroups(text, pattern: #"^(.*?)\s*\$?\s*(\d[\d,]*\.\d{2})(-)?\s*([^\d\s]{0,3})$"#),
-              m.count == 4 else { return nil }
-        let cents = moneyToCents(m[1] ?? "", negative: m[2] != nil)
+              m.count == 4,
+              let cents = SafeMoney.parseCents(m[1] ?? "", negative: m[2] != nil) else { return nil }
         return ((m[0] ?? "").trimmingCharacters(in: .whitespaces), cents,
                 (m[3] ?? "").trimmingCharacters(in: .whitespaces))
     }
@@ -792,8 +1092,13 @@ enum ReceiptParser {
         guard let m = matchGroups(text, pattern: #"^(.*?)\s*\$\s*(\d+,\d{2})\s*([^\d\s]{0,3})$"#),
               m.count == 3, let money = m[1] else { return nil }
         let parts = money.split(separator: ",")
-        guard parts.count == 2, let whole = Int(parts[0]), let frac = Int(parts[1]) else { return nil }
-        return ((m[0] ?? "").trimmingCharacters(in: .whitespaces), whole * 100 + frac,
+        guard parts.count == 2 else { return nil }
+        // P1-SAFEMONEY: dạng phẩy qua SafeMoney.parseCommaCents
+        // (miền 12 chữ số như mọi token tiền; trước đây nhân trần).
+        let whole = String(parts[0])
+        let frac = String(parts[1])
+        guard let cents = SafeMoney.parseCommaCents(whole: whole, frac: frac) else { return nil }
+        return ((m[0] ?? "").trimmingCharacters(in: .whitespaces), cents,
                 (m[2] ?? "").trimmingCharacters(in: .whitespaces))
     }
 
@@ -827,9 +1132,9 @@ enum ReceiptParser {
               let w = Double(m[0] ?? "") else { return nil }
         var unit: Int? = nil
         if let mu = matchGroups(text, pattern: #"\$\s*\*?\s*(\d[\d,]*\.\d{2})"#) {
-            unit = moneyToCents(mu[0] ?? "", negative: false)
+            unit = SafeMoney.parseCents(mu[0] ?? "", negative: false)
         } else if let mu = matchGroups(text, pattern: #"(\d[\d,]*\.\d{2})\s*/l"#) {
-            unit = moneyToCents(mu[0] ?? "", negative: false)
+            unit = SafeMoney.parseCents(mu[0] ?? "", negative: false)
         }
         return (w, unit)
     }
@@ -838,9 +1143,9 @@ enum ReceiptParser {
     /// chữ cái bất kỳ (Walmart in cờ R/T thay Y/T của Sam's).
     private static func matchQtyLineGeneric(_ text: String) -> (qty: Int, unitCents: Int, amountCents: Int, flag: String?)? {
         guard let m = matchGroups(text, pattern: #"^(\d+)\s+AT\s+1\s+FOR\s+(\d[\d,]*\.\d{2})(-)?\s+(\d[\d,]*\.\d{2})(-)?\s*([A-Z]{1,2})?$"#),
-              m.count == 6, let qty = Int(m[0] ?? "") else { return nil }
-        let unit = moneyToCents(m[1] ?? "", negative: m[2] != nil)
-        let amount = moneyToCents(m[3] ?? "", negative: m[4] != nil)
+              m.count == 6, let qty = SafeMoney.parseQty(m[0] ?? ""),
+              let unit = SafeMoney.parseCents(m[1] ?? "", negative: m[2] != nil),
+              let amount = SafeMoney.parseCents(m[3] ?? "", negative: m[4] != nil) else { return nil }
         return (qty, unit, amount, m[5])
     }
 
@@ -853,14 +1158,14 @@ enum ReceiptParser {
     private static func findItemsSoldGeneric(lines: [OCRLine]) -> Int? {
         for (index, line) in lines.enumerated() {
             let text = line.text
-            if let m = matchGroups(text, pattern: #"TOTAL NUMBER OF ITEMS SOLD\s*=\s*(\d+)"#) { return Int(m[0] ?? "") }
-            if let m = matchGroups(text, pattern: #"#\s*ITEMS SOLD\s+(\d+)"#) { return Int(m[0] ?? "") }
-            if let m = matchGroups(text, pattern: #"^ITEMS SOLD:?\s+(\d+)$"#) { return Int(m[0] ?? "") }
-            if let m = matchGroups(text, pattern: #"^ITEM COUNT:?\s+(\d+)$"#) { return Int(m[0] ?? "") }
+            if let m = matchGroups(text, pattern: #"TOTAL NUMBER OF ITEMS SOLD\s*=\s*(\d+)"#) { return SafeMoney.parseQty(m[0] ?? "") }
+            if let m = matchGroups(text, pattern: #"#\s*ITEMS SOLD\s+(\d+)"#) { return SafeMoney.parseQty(m[0] ?? "") }
+            if let m = matchGroups(text, pattern: #"^ITEMS SOLD:?\s+(\d+)$"#) { return SafeMoney.parseQty(m[0] ?? "") }
+            if let m = matchGroups(text, pattern: #"^ITEM COUNT:?\s+(\d+)$"#) { return SafeMoney.parseQty(m[0] ?? "") }
             if matchGroups(text, pattern: #"^ITEM COUNT:?$"#) != nil,
                index + 1 < lines.count,
                matchGroups(lines[index + 1].text, pattern: #"^\d{1,3}$"#) != nil {
-                return Int(lines[index + 1].text)
+                return SafeMoney.parseQty(lines[index + 1].text)
             }
         }
         return nil
@@ -870,10 +1175,10 @@ enum ReceiptParser {
     /// dòng nhãn — tương đương findItemsSoldGeneric trên danh sách
     /// 1 dòng, nơi luật dòng-kế không áp dụng được).
     private static func findItemsSoldInLine(_ text: String) -> Int? {
-        if let m = matchGroups(text, pattern: #"TOTAL NUMBER OF ITEMS SOLD\s*=\s*(\d+)"#) { return Int(m[0] ?? "") }
-        if let m = matchGroups(text, pattern: #"#\s*ITEMS SOLD\s+(\d+)"#) { return Int(m[0] ?? "") }
-        if let m = matchGroups(text, pattern: #"^ITEMS SOLD:?\s+(\d+)$"#) { return Int(m[0] ?? "") }
-        if let m = matchGroups(text, pattern: #"^ITEM COUNT:?\s+(\d+)$"#) { return Int(m[0] ?? "") }
+        if let m = matchGroups(text, pattern: #"TOTAL NUMBER OF ITEMS SOLD\s*=\s*(\d+)"#) { return SafeMoney.parseQty(m[0] ?? "") }
+        if let m = matchGroups(text, pattern: #"#\s*ITEMS SOLD\s+(\d+)"#) { return SafeMoney.parseQty(m[0] ?? "") }
+        if let m = matchGroups(text, pattern: #"^ITEMS SOLD:?\s+(\d+)$"#) { return SafeMoney.parseQty(m[0] ?? "") }
+        if let m = matchGroups(text, pattern: #"^ITEM COUNT:?\s+(\d+)$"#) { return SafeMoney.parseQty(m[0] ?? "") }
         return nil
     }
 
@@ -909,7 +1214,7 @@ enum ReceiptParser {
                 || matchGroups(upper, pattern: #"\d{1,2}-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)"#) != nil { continue }
             if upper.hasPrefix("SUBTOTAL") || upper.hasPrefix("TOTAL")
                 || upper.hasPrefix("SALES TAX") || upper.hasPrefix("TAX") { break }
-            if matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#) != nil {
+            if bareMoneyCents(text) != nil {
                 // Tiền trần chưa được khối dùng = đầu vùng tổng ở họ
                 // cùng-dòng (Costco in '125.48' / '9.38' trần liên tiếp).
                 break
@@ -993,6 +1298,7 @@ enum ReceiptParser {
                 isHang = true
             }
             guard var it = item else { continue }
+            it.lineIndex = index
 
             // Chuẩn hoá tên: dòng giảm giá Costco '<mã coupon> /
             // <mã món> ...' -> tên INST SV + mã đối ứng (số âm đã
@@ -1042,11 +1348,12 @@ enum ReceiptParser {
     /// suất + tiền + cờ "có chữ TAX" (ở nhãn hoặc ở từ đệm).
     private static func matchTaxRateLine(_ text: String) -> (label: String, rate: String, cents: Int, taxLabeled: Bool)? {
         guard let m = matchGroups(text, pattern: #"^(.+?)\s+([\d.]+)\s*%\s+(?:(\S+)\s+)?\$?(\d[\d,]*\.\d{2})(-)?$"#),
-              m.count == 5, let label = m[0], let rate = m[1], let amountText = m[3] else { return nil }
+              m.count == 5, let label = m[0], let rate = m[1], let amountText = m[3],
+              let cents = SafeMoney.parseCents(amountText, negative: m[4] != nil) else { return nil }
         let taxLabeled = label.uppercased().contains("TAX")
             || (m[2]?.uppercased().contains("TAX") ?? false)
         return (label.trimmingCharacters(in: .whitespaces), rate,
-                moneyToCents(amountText, negative: m[4] != nil), taxLabeled)
+                cents, taxLabeled)
     }
 
     /// NEO TỔNG BẰNG SỐ HỌC khi nhãn tổng/thuế vỡ hoặc mất — theo
@@ -1074,6 +1381,7 @@ enum ReceiptParser {
     ///     số tiền là số in nguyên văn, chỉ vai trò là được suy).
     private static func anchorTotals(result r: inout ParseResult, lines: [OCRLine],
                                      claimedIndices: Set<Int>,
+                                     claimedRoles: inout [Int: String],
                                      taxLineIndices: inout [Int],
                                      lastItemIndex: Int?) {
         let zoneStart = (lastItemIndex ?? -1) + 1
@@ -1082,24 +1390,40 @@ enum ReceiptParser {
         var zoneAmounts: [(index: Int, cents: Int)] = []
         for i in zoneStart..<lines.count where !claimedIndices.contains(i) {
             let text = lines[i].text
-            if let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#), m.count == 2 {
-                let c = moneyToCents(m[0] ?? "", negative: m[1] != nil)
+            if let c = bareMoneyCents(text) {
                 bareZone.append((i, c))
                 zoneAmounts.append((i, c))
             } else if let c = lastMoneyInLine(text) {
                 zoneAmounts.append((i, c))
             }
         }
-        // 1) SUBTOTAL
+        // 1) SUBTOTAL — số học qua SafeMoney (P1-SAFEMONEY).
         if r.subtotalCents == nil, !r.items.isEmpty {
-            let sum = r.items.reduce(0) { $0 + ($1.amountCents ?? 0) }
-            let hits = Set(bareZone.filter { abs($0.cents - sum) <= 2 }.map { $0.cents })
-            if hits.count == 1, let v = hits.first { r.subtotalCents = v }
+            if let sum = SafeMoney.sumCents(r.items.map { $0.amountCents ?? 0 }) {
+                let hits = Set(bareZone.filter { abs($0.cents - sum) <= 2 }.map { $0.cents })
+                if hits.count == 1, let v = hits.first {
+                    r.subtotalCents = v
+                    if let src = bareZone.first(where: { $0.cents == v }) {
+                        claimedRoles[src.index] = "subtotal"
+                    }
+                    r.selectionTrace.append("subtotal := anchorTotals(Σ món) — số đã in khớp tổng món duy nhất trong vùng tổng")
+                }
+            }
         }
         if r.subtotalCents == nil, r.items.isEmpty, let total = r.totalCents, !r.taxes.isEmpty {
             let taxSum = r.taxTotalCents
-            let hits = Set(bareZone.filter { abs($0.cents + taxSum - total) <= 2 }.map { $0.cents })
-            if hits.count == 1, let v = hits.first { r.subtotalCents = v }
+            let hits = bareZone.filter { cand in
+                guard let v = SafeMoney.checkedAdd(cand.cents, taxSum) else { return false }
+                return abs(v - total) <= 2
+            }
+            let values = Set(hits.map { $0.cents })
+            if values.count == 1, let v = values.first {
+                r.subtotalCents = v
+                if let src = hits.first(where: { $0.cents == v }) {
+                    claimedRoles[src.index] = "subtotal"
+                }
+                r.selectionTrace.append("subtotal := anchorTotals(total − thuế) — khớp duy nhất trong vùng tổng")
+            }
         }
         // 2) TOTAL
         if r.totalCents == nil, let s = r.subtotalCents {
@@ -1118,25 +1442,32 @@ enum ReceiptParser {
             }
             let taxSum = r.taxTotalCents
             let passing = Set(candidates.filter { cand in
-                if !r.taxes.isEmpty && abs(s + taxSum - cand.cents) <= 2 { return true }
-                let implied = cand.cents - s
-                return s > 0 && implied >= 0 && implied * 100 <= 15 * s
+                if !r.taxes.isEmpty,
+                   let v = SafeMoney.checkedAdd(s, taxSum),
+                   abs(v - cand.cents) <= 2 { return true }
+                guard let implied = SafeMoney.checkedSubtract(cand.cents, s) else { return false }
+                return SafeMoney.withinPercent(implied: implied, ofBase: s, percent: 15)
             }.map { $0.cents })
             if passing.count == 1, let v = passing.first,
                let src = candidates.first(where: { $0.cents == v }) {
                 r.totalCents = v
                 r.totalConfidence = lines[src.index].confidence
+                claimedRoles[src.index] = "total"
+                r.selectionTrace.append("total := anchorTotals(dòng thanh toán \(src.index)) — khớp subtotal + thuế duy nhất")
             }
         }
         // 3) THUẾ còn thiếu
-        if let s = r.subtotalCents, let total = r.totalCents {
-            let missing = total - s - r.taxTotalCents
+        if let s = r.subtotalCents, let total = r.totalCents,
+           let afterSub = SafeMoney.checkedSubtract(total, s),
+           let missing = SafeMoney.checkedSubtract(afterSub, r.taxTotalCents) {
             if missing > 0 {
                 let hits = zoneAmounts.filter { abs($0.cents - missing) <= 2 }
                 let distinct = Set(hits.map { $0.cents })
                 if distinct.count == 1, let hit = hits.first {
-                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: hit.cents))
+                    r.taxes.append(ParsedTaxLine(label: "TAX", rateText: nil, amountCents: hit.cents, lineIndex: hit.index))
                     taxLineIndices.append(hit.index)
+                    claimedRoles[hit.index] = "tax"
+                    r.selectionTrace.append("taxes += anchorTotals(dòng \(hit.index)) — phần thuế còn thiếu khớp đúng một số đã in")
                     // Thuế giữ thứ tự in trên bill: sắp lại theo
                     // chỉ số dòng nguồn.
                     let paired = zip(r.taxes, taxLineIndices).sorted { $0.1 < $1.1 }
@@ -1159,22 +1490,6 @@ enum ReceiptParser {
         return monthNames[s.uppercased()]
     }
 
-    /// Dòng CHỈ có giờ ("14:09:42", "3:08 PM") — dùng để ghép vào
-    /// ngày-không-giờ khi OCR tách ngày và giờ thành hai dòng rời.
-    private static func findStandaloneTime(in lines: [OCRLine]) -> (hour: Int, minute: Int, confidence: Double)? {
-        for line in lines {
-            if let m = matchGroups(line.text, pattern: #"^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?$"#), m.count == 3 {
-                var hour = Int(m[0] ?? "") ?? 0
-                if let ampm = m[2]?.uppercased() {
-                    if ampm == "PM" && hour < 12 { hour += 12 }
-                    if ampm == "AM" && hour == 12 { hour = 0 }
-                }
-                return (hour, Int(m[1] ?? "") ?? 0, line.confidence)
-            }
-        }
-        return nil
-    }
-
     private static func mergingTime(into date: Date, hour: Int, minute: Int) -> Date? {
         var comps = Calendar.current.dateComponents([.year, .month, .day], from: date)
         comps.hour = hour
@@ -1182,225 +1497,35 @@ enum ReceiptParser {
         return Calendar.current.date(from: comps)
     }
 
-    // MARK: - WP5: Nhận diện tiệm 3 nấc (WP5-SPEC mục 3–5)
+    // MARK: - WP5: Nhận diện tiệm 3 nấc — NAY LÀ DỮ LIỆU (PHA 1)
     //
-    // Bản Swift của wp5-fixtures/vendor_port.py (port đã kiểm chứng
-    // 19/19 ở bước 1 — sửa hành vi thì sửa port + fixture TRƯỚC, không
-    // sửa một phía). Tên tiệm chỉ đến từ bằng chứng: nấc 1 khớp tên
-    // toàn-bộ-dòng (exact trước, mờ sau) hoặc nấc 2 neo phụ của tiệm
-    // đã biết; nấc 3 món đặc trưng CHỈ gợi ý (bảng seed RỖNG). Ngoài
-    // hai nấc đầu, tên tiệm để TRỐNG — không còn đường rơi dòng-đầu.
+    // Bảng cứng knownVendors/vendorAnchors/signatureItems và các
+    // hàm khớp (normalizeForVendorMatch/vendorLineMatch/
+    // tokenFuzzyEqual/levenshtein/anchorHits) của bản nền đã CHUYỂN
+    // sang VendorData.swift + vendors.json (M7, DESIGN-FINAL
+    // §3.4): hành vi phân giải 3 nấc giữ nguyên, tri thức về tiệm
+    // nằm ở dữ liệu. Hàm dưới đây chỉ là lớp uỷ thác mỏng giữ
+    // nguyên hình dạng VendorIdentification cho phần còn lại của
+    // parser.
 
     struct VendorIdentification {
         var vendor: String? = nil
         var vendorKey: String = "generic"
+        var parserPath: String = "generic"   // PHA 1: từ dữ liệu ("sams" | "generic")
         var confidence: Double = 0
         var source: String? = nil   // "tier1-exact" | "tier1-fuzzy" | "tier2-anchor"
         var suggestion: String? = nil
         var anchorDisputed: Bool = false
+        var entry: VendorEntry? = nil        // PHA 1: mục dữ liệu đã phân giải (printSemantics...)
     }
-
-    /// Danh sách tiệm đã biết — đúng seed Build 1 + Sam's, tên chuẩn
-    /// theo vendor_port.py (needle đã chuẩn hoá: apostrophe -> khoảng
-    /// trắng, vd "SAM S CLUB").
-    private static let knownVendors: [(name: String, needles: [String], key: String)] = [
-        ("Sam's Club", ["SAM S CLUB", "SAMS CLUB"], "sams"),
-        ("Walmart", ["WALMART"], "generic"),
-        ("Costco", ["COSTCO"], "generic"),
-        ("The Home Depot", ["HOME DEPOT", "THE HOME DEPOT"], "generic"),
-        ("Lowe's", ["LOWE S", "LOWES"], "generic"),
-        ("Target", ["TARGET"], "generic"),
-        ("QuikTrip", ["QUIKTRIP", "QUIK TRIP"], "generic"),
-        ("Casey's", ["CASEY S", "CASEYS"], "generic"),
-        ("Love's", ["LOVE S", "LOVES"], "generic")
-    ]
-
-    /// Token thuộc diện chỉ-khớp-đúng, cấm khớp-mờ (từ ngắn/phổ thông —
-    /// chống dương tính giả kiểu "TARGETED" thành Target).
-    private static let exactTokenOnly: Set<String> = ["TARGET", "LOWES", "LOWE"]
-
-    /// Neo phụ (nấc 2) — seed CHỈ gồm neo có bằng chứng trong bộ mẫu
-    /// đóng băng (WP5-SPEC mục 4): (tiệm, key, loại neo, giá trị đã
-    /// chuẩn hoá). Cấm chép địa chỉ chuỗi tiệm từ internet vào đây.
-    private static let vendorAnchors: [(vendor: String, key: String, kind: String, value: String)] = [
-        ("The Home Depot", "generic", "street", "9808 E 71ST ST"),
-        ("The Home Depot", "generic", "zip", "74133"),
-        ("Sam's Club", "sams", "phone", "9182529503"),
-        // M1-FIX: neo cụm chữ (phrase) — slogan in ngay dưới logo
-        // Home Depot; bằng chứng trong bộ mẫu đóng băng: 2 dòng đầu
-        // của luồng 003 thật. Khớp trên toàn văn đã chuẩn hoá nối
-        // liền vì OCR xé slogan thành 2 dòng ("How doers" /
-        // "get more done") — neo theo dòng đơn không bao giờ khớp.
-        ("The Home Depot", "generic", "phrase", "HOW DOERS GET MORE DONE")
-    ]
-
-    /// Món đặc trưng (nấc 3) — bảng seed RỖNG: chưa mẫu đóng băng nào
-    /// khoá được một món là đặc trưng của một tiệm (WP5-SPEC mục 5).
-    private static let signatureItems: [String: String] = [:]
 
     private static func identifyVendor(lines: [OCRLine]) -> VendorIdentification {
-        var result = VendorIdentification()
-
-        // NẤC 1 — quét TOÀN BỘ dòng (bỏ prefix(6) của Build 1);
-        // khớp-đúng ở BẤT KỲ dòng nào thắng khớp-mờ ở dòng sớm hơn;
-        // cùng hạng thì dòng sớm hơn thắng.
-        var best: (rank: Int, lineIndex: Int, vendor: String, key: String, confidence: Double, kind: String)? = nil
-        for (index, line) in lines.enumerated() {
-            let normalized = normalizeForVendorMatch(line.text)
-            for kv in knownVendors {
-                for needle in kv.needles {
-                    guard let kind = vendorLineMatch(normalizedLine: normalized, needle: needle) else { continue }
-                    let rank = kind == "exact" ? 2 : 1
-                    if let b = best, rank < b.rank || (rank == b.rank && index >= b.lineIndex) { continue }
-                    best = (rank, index, kv.name, kv.key, line.confidence, kind)
-                }
-            }
-        }
-        if let b = best {
-            result.vendor = b.vendor
-            result.vendorKey = b.key
-            if b.kind == "exact" {
-                result.source = "tier1-exact"
-                result.confidence = b.confidence
-            } else {
-                result.source = "tier1-fuzzy"
-                result.confidence = b.confidence * 0.8
-            }
-            return result
-        }
-
-        // NẤC 2 — neo phụ: ≥1 neo MẠNH (street/phone) hoặc ≥2 neo YẾU
-        // khác loại của CÙNG tiệm (ZIP đơn độc là yếu — không đủ). Hai
-        // tiệm khác nhau cùng khớp neo -> tranh chấp, KHÔNG điền.
-        let hits = anchorHits(lines: lines)
-        if hits.count == 1, let only = hits.first {
-            result.vendor = only.vendor
-            result.vendorKey = only.key
-            result.source = "tier2-anchor"
-            result.confidence = 0.5   // neo không phải tên in trên giấy: giới hạn 0.5
-            return result
-        }
-        if hits.count > 1 {
-            result.anchorDisputed = true
-        }
-
-        // NẤC 3 — món đặc trưng: CHỈ gợi ý, vendor vẫn để trống.
-        if !signatureItems.isEmpty {
-            let joined = lines.map { normalizeForVendorMatch($0.text) }.joined(separator: " ")
-            for (token, vendor) in signatureItems where joined.contains(token) {
-                result.suggestion = vendor
-                break
-            }
-        }
-        return result
-    }
-
-    /// Các tiệm đủ điều kiện neo: (tiệm, key). Điều kiện: có neo mạnh
-    /// hoặc ≥2 loại neo yếu khác nhau của cùng tiệm.
-    private static func anchorHits(lines: [OCRLine]) -> [(vendor: String, key: String)] {
-        var kindsByVendor: [String: Set<String>] = [:]
-        var keyByVendor: [String: String] = [:]
-        // M1-FIX: neo cụm chữ khớp trên toàn văn nối liền (slogan bị
-        // OCR xé nhiều dòng) — tính một lần trước vòng lặp.
-        let joinedNormalized = lines.map { normalizeForVendorMatch($0.text) }.joined(separator: " ")
-        for line in lines {
-            let normalized = normalizeForVendorMatch(line.text)
-            let tokens = normalized.split(separator: " ").map(String.init)
-            let digits = line.text.filter { $0.isASCII && $0.isNumber }
-            for anchor in vendorAnchors {
-                let ok: Bool
-                switch anchor.kind {
-                case "street": ok = normalized.contains(anchor.value)
-                case "phone": ok = digits.contains(anchor.value)
-                case "zip": ok = tokens.contains(anchor.value)
-                case "phrase": ok = joinedNormalized.contains(anchor.value)
-                default: ok = false
-                }
-                if ok {
-                    kindsByVendor[anchor.vendor, default: []].insert(anchor.kind)
-                    keyByVendor[anchor.vendor] = anchor.key
-                }
-            }
-        }
-        let strongKinds: Set<String> = ["street", "phone", "phrase"]
-        var qualifying: [(vendor: String, key: String)] = []
-        for (vendor, kinds) in kindsByVendor {
-            if !kinds.isDisjoint(with: strongKinds) || kinds.count >= 2 {
-                qualifying.append((vendor, keyByVendor[vendor] ?? "generic"))
-            }
-        }
-        return qualifying
-    }
-
-    /// Chuẩn hoá để khớp tiệm (bản Swift của normalize() trong port):
-    /// thống nhất apostrophe cong/thẳng, bỏ dấu tiếng Việt, viết hoa,
-    /// ký tự không phải A-Z/0-9 thành khoảng trắng, gọn khoảng trắng.
-    private static func normalizeForVendorMatch(_ text: String) -> String {
-        var t = text.replacingOccurrences(of: "\u{2019}", with: "'")
-        t = t.replacingOccurrences(of: "\u{2018}", with: "'")
-        t = t.replacingOccurrences(of: "\u{02BC}", with: "'")
-        t = t.folding(options: [.diacriticInsensitive], locale: nil).uppercased()
-        var out = ""
-        for scalar in t.unicodeScalars {
-            if (scalar.value >= 65 && scalar.value <= 90) || (scalar.value >= 48 && scalar.value <= 57) {
-                out.append(Character(scalar))
-            } else {
-                out.append(" ")
-            }
-        }
-        return out.split(separator: " ").joined(separator: " ")
-    }
-
-    /// Một dòng đã chuẩn hoá khớp một needle: "exact" khi needle xuất
-    /// hiện nguyên vẹn theo ranh giới token; "fuzzy" khi MỌI token của
-    /// needle có một token trong dòng khớp (đúng hoặc mờ-1-ký-tự) và ít
-    /// nhất một token là khớp-mờ thật; nil nếu không khớp.
-    private static func vendorLineMatch(normalizedLine: String, needle: String) -> String? {
-        let lineTokens = normalizedLine.split(separator: " ").map(String.init)
-        let needleTokens = needle.split(separator: " ").map(String.init)
-        guard !needleTokens.isEmpty, !lineTokens.isEmpty else { return nil }
-        if lineTokens.count >= needleTokens.count {
-            for i in 0...(lineTokens.count - needleTokens.count) {
-                if Array(lineTokens[i..<(i + needleTokens.count)]) == needleTokens {
-                    return "exact"
-                }
-            }
-        }
-        var usedFuzzy = false
-        for nt in needleTokens {
-            var hit: String? = nil
-            for lt in lineTokens {
-                if lt == nt { hit = "exact"; break }
-                if tokenFuzzyEqual(lineToken: lt, needleToken: nt) { hit = "fuzzy" }
-            }
-            guard let h = hit else { return nil }
-            if h == "fuzzy" { usedFuzzy = true }
-        }
-        return usedFuzzy ? "fuzzy" : nil
-    }
-
-    /// 1 token khớp-mờ: bằng nhau, hoặc cả hai dài ≥5 và Levenshtein ≤1.
-    /// Token thuộc exactTokenOnly chỉ khớp khi bằng nhau.
-    private static func tokenFuzzyEqual(lineToken: String, needleToken: String) -> Bool {
-        if lineToken == needleToken { return true }
-        if exactTokenOnly.contains(needleToken) { return false }
-        guard lineToken.count >= 5, needleToken.count >= 5 else { return false }
-        return levenshtein(lineToken, needleToken) <= 1
-    }
-
-    private static func levenshtein(_ a: String, _ b: String) -> Int {
-        let aChars = Array(a), bChars = Array(b)
-        if aChars.isEmpty { return bChars.count }
-        if bChars.isEmpty { return aChars.count }
-        var prev = Array(0...bChars.count)
-        for i in 1...aChars.count {
-            var cur = [i]
-            for j in 1...bChars.count {
-                cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (aChars[i - 1] == bChars[j - 1] ? 0 : 1)))
-            }
-            prev = cur
-        }
-        return prev[bChars.count]
+        let id = VendorData.shared.identify(lines: lines)
+        return VendorIdentification(
+            vendor: id.vendor, vendorKey: id.key, parserPath: id.parserPath,
+            confidence: id.confidence, source: id.source,
+            suggestion: id.suggestion, anchorDisputed: id.anchorDisputed,
+            entry: id.entry)
     }
 
     // MARK: - WP5: Trích địa chỉ / điện thoại / mã cửa hàng (hạ cánh WP2)
@@ -1441,24 +1566,57 @@ enum ReceiptParser {
 
     // MARK: - Thẻ: CHỈ từ dòng có ký tự che (luật toàn cục số 2)
 
-    private static func findCard(lines: [OCRLine]) -> (last4: String?, brand: String?) {
+    // PHA 3: trả kèm (confidence của dòng nguồn, contaminated).
+    // contaminated = dòng dạng tender còn chứa từ khoá TOTAL sau
+    // vị trí đuôi thẻ — bằng chứng dòng bị gộp với dòng tổng (cơ
+    // chế xé/gộp dòng của F3), tức đuôi thẻ nằm trên một dòng
+    // không sạch. Dạng che (****/XXX) neo đuôi bằng ký tự che nên
+    // không tính nhiễm. Cả hai chỉ để validate() gắn cờ.
+    private static func findCard(lines: [OCRLine]) -> (last4: String?, brand: String?,
+                                                      confidence: Double, contaminated: Bool) {
         var last4: String? = nil
+        var cardConf: Double = 0
+        var contaminated = false
         for line in lines {
             let text = line.text
             if let m = matchGroups(text, pattern: #"\*{4}\s+\*{4}\s+\*{4}\s+(\d{4})"#) {
                 last4 = m[0]
+                cardConf = line.confidence
                 break
             }
             if let m = matchGroups(text, pattern: #"\*{3,}\s*(\d{4})"#) {
                 last4 = m[0]
+                cardConf = line.confidence
                 break
             }
             if let m = matchGroups(text, pattern: #"X{3,}\s*(\d{4})"#) {
                 last4 = m[0]
+                cardConf = line.confidence
                 break
             }
         }
-        guard last4 != nil else { return (nil, nil) }
+        if last4 == nil {
+            // P1-CARD-TENDER: dạng dòng thanh toán '<hãng> DEBIT/
+            // CREDIT- NNNN' của Walmart — dòng chỉ in 4 số cuối,
+            // vẫn là dòng che theo luật toàn cục 2 (không bao giờ
+            // nhận số thẻ dài). Fixture: L-R04 'US DEBIT- 2586',
+            // L-R11 'VISA CREDIT- 7674', S-0 'US DEBIT- 2586'.
+            for line in lines {
+                if let m = matchGroups(line.text, pattern: #"\b(?:DEBIT|CREDIT)[\s\-–]*(\d{4})\b"#),
+                   let tail = m[0] {
+                    last4 = tail
+                    cardConf = line.confidence
+                    // Nhiễm gộp: phần dòng SAU lần xuất hiện cuối
+                    // của đuôi còn chứa TOTAL (gồm cả SUBTOTAL).
+                    if let r = line.text.range(of: tail, options: .backwards) {
+                        let rest = line.text[r.upperBound...].uppercased()
+                        contaminated = rest.contains("TOTAL")
+                    }
+                    break
+                }
+            }
+        }
+        guard last4 != nil else { return (nil, nil, 0, false) }
         // Brand: dòng chứa tên hãng thẻ (kèm "Debit" nếu in cùng dòng).
         let brands = ["MASTERCARD", "MASTER CARD", "VISA", "AMEX", "AMERICAN EXPRESS", "DISCOVER"]
         var brand: String? = nil
@@ -1474,7 +1632,7 @@ enum ReceiptParser {
             }
             if brand != nil { break }
         }
-        return (last4, brand)
+        return (last4, brand, cardConf, contaminated)
     }
 
     // MARK: - Ngày giờ
@@ -1512,10 +1670,17 @@ enum ReceiptParser {
     }
 
     private static func findDateOnly(in lines: [OCRLine]) -> (date: Date, confidence: Double)? {
-        for line in lines {
+        guard let f = findDateOnlyIndexed(in: lines) else { return nil }
+        return (f.date, f.confidence)
+    }
+
+    /// Như findDateOnly + trả kèm CHỈ SỐ DÒNG của ngày (P1-DATE-
+    /// MERGE cần biết ngày nằm ở đâu để ghép giờ trong ±3 dòng).
+    private static func findDateOnlyIndexed(in lines: [OCRLine]) -> (date: Date, confidence: Double, index: Int)? {
+        for (index, line) in lines.enumerated() {
             if let m = matchGroups(line.text, pattern: #"(\d{1,2})/(\d{1,2})/(\d{2,4})"#), m.count == 3 {
                 if let d = makeDate(month: Int(m[0] ?? ""), day: Int(m[1] ?? ""), year: Int(m[2] ?? "")) {
-                    return (d, line.confidence)
+                    return (d, line.confidence, index)
                 }
             }
             if let m = matchGroups(line.text, pattern: #"(\d{4})-(\d{2})-(\d{2})"#), m.count == 3 {
@@ -1525,7 +1690,7 @@ enum ReceiptParser {
                 comps.month = Int(m[1] ?? "")
                 comps.day = Int(m[2] ?? "")
                 if let d = Calendar.current.date(from: comps) {
-                    return (d, line.confidence)
+                    return (d, line.confidence, index)
                 }
             }
             // INTEGRATE-V2: ngày tháng chữ không kèm giờ
@@ -1533,11 +1698,57 @@ enum ReceiptParser {
             if let m = matchGroups(line.text, pattern: #"(\d{1,2})-([A-Za-z]{3})-(\d{2,4})"#), m.count == 3,
                let month = monthNumber(m[1]) {
                 if let d = makeDate(month: month, day: Int(m[0] ?? ""), year: Int(m[2] ?? "")) {
-                    return (d, line.confidence)
+                    return (d, line.confidence, index)
                 }
             }
         }
         return nil
+    }
+
+    /// P1-DATE-MERGE: tìm giờ trong ±3 dòng quanh dòng ngày — chỉ
+    /// xét dòng KHÔNG chứa ngày nào (không có ngày cạnh tranh).
+    /// Ưu tiên: khoảng cách nhỏ nhất; cùng khoảng cách thì dòng
+    /// chỉ-có-giờ thắng dòng chứa giờ-nhúng.
+    private static func findTimeNear(in lines: [OCRLine], dateIndex: Int) -> (hour: Int, minute: Int, confidence: Double, index: Int, standalone: Bool)? {
+        var best: (dist: Int, notStandalone: Int, index: Int, hour: Int, minute: Int, confidence: Double, standalone: Bool)? = nil
+        for (j, line) in lines.enumerated() {
+            if j == dateIndex || abs(j - dateIndex) > 3 { continue }
+            let text = line.text
+            if matchGroups(text, pattern: #"(\d{1,2})/(\d{1,2})/(\d{2,4})"#) != nil
+                || matchGroups(text, pattern: #"(\d{4})-(\d{2})-(\d{2})"#) != nil
+                || matchGroups(text.uppercased(), pattern: #"\d{1,2}-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)"#) != nil {
+                continue
+            }
+            var hourMinute: (hour: Int, minute: Int)? = nil
+            var standalone = false
+            if let m = matchGroups(text, pattern: #"^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?$"#), m.count == 3 {
+                standalone = true
+                var hour = Int(m[0] ?? "") ?? 0
+                if let ampm = m[2]?.uppercased() {
+                    if ampm == "PM" && hour < 12 { hour += 12 }
+                    if ampm == "AM" && hour == 12 { hour = 0 }
+                }
+                hourMinute = (hour, Int(m[1] ?? "") ?? 0)
+            } else if let m = matchGroups(text, pattern: #"(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?"#), m.count == 3 {
+                var hour = Int(m[0] ?? "") ?? 0
+                if let ampm = m[2]?.uppercased() {
+                    if ampm == "PM" && hour < 12 { hour += 12 }
+                    if ampm == "AM" && hour == 12 { hour = 0 }
+                }
+                hourMinute = (hour, Int(m[1] ?? "") ?? 0)
+            }
+            guard let hm = hourMinute else { continue }
+            let cand = (abs(j - dateIndex), standalone ? 0 : 1, j, hm.hour, hm.minute, line.confidence, standalone)
+            if let b = best {
+                if (cand.0, cand.1, cand.2) < (b.dist, b.notStandalone, b.index) {
+                    best = cand
+                }
+            } else {
+                best = cand
+            }
+        }
+        guard let b = best else { return nil }
+        return (b.hour, b.minute, b.confidence, b.index, b.standalone)
     }
 
     private static func makeDate(month: Int?, day: Int?, year: Int?, hour: Int = 0, minute: Int = 0) -> Date? {
@@ -1555,27 +1766,64 @@ enum ReceiptParser {
 
     // MARK: - Đối chiếu chéo (luật toàn cục số 1 — chỉ gắn cờ, không sửa số)
 
+    /// PHA 4 (điểm nối, khuyết P4-D4): định dạng tiền cho CHUỖI
+    /// CẢNH BÁO nội bộ của validate(). Trước Pha 4 hai điểm gọi
+    /// dưới đây dùng formatMoney(cents:) của Models.swift (tầng
+    /// app) — module M6 vì thế không biên dịch độc lập được
+    /// (BenchShell chỉ liên kết tập module, luật 1.6). Helper này
+    /// dùng ĐÚNG công thức NumberFormatter/USD/en_US của
+    /// formatMoney gốc nên chuỗi cảnh báo ra y hệt từng ký tự;
+    /// Models.swift giữ nguyên formatMoney cho tầng hiển thị.
+    private static func warningMoney(_ cents: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.locale = Locale(identifier: "en_US")
+        return formatter.string(from: NSNumber(value: Double(cents) / 100.0)) ?? "$0.00"
+    }
+
     private static func validate(_ r: ParseResult) -> [String] {
         var warnings: [String] = []
         if r.totalCents == nil {
             warnings.append("Không đọc được TỔNG TIỀN — anh nhập tay giúp.")
         }
+        // P1-FLAG-MISSING (fixture S-0): subtotal vắng mặt trong
+        // khi tổng có mặt — cờ tường minh để E1/E2 không thành
+        // "thiếu không cờ" (M9).
+        if r.subtotalCents == nil, r.totalCents != nil {
+            warnings.append("Không đọc được subtotal — không đối chiếu được subtotal + thuế với tổng tiền, anh kiểm tra giúp.")
+        }
+        // P1-FLAG-MISSING (fixture L-R06): bill CÓ in nhãn số món
+        // nhưng token số chết trong luồng — cờ, không đoán.
+        if r.itemsSoldLabelSeen, r.itemsSold == nil {
+            warnings.append("Số lượng: hoá đơn có in nhãn số món nhưng không đọc được con số đó — anh kiểm tra giúp.")
+        }
         if r.date == nil {
             warnings.append("Không đọc được ngày — anh chọn ngày giúp.")
         }
         if !r.items.isEmpty, let subtotal = r.subtotalCents {
-            let sum = r.items.reduce(0) { $0 + ($1.amountCents ?? 0) }
-            if abs(sum - subtotal) > 2 {
-                warnings.append("Đối chiếu: tổng các món (\(formatMoney(cents: sum))) khác subtotal (\(formatMoney(cents: subtotal))) — có thể đọc sót hoặc sai món.")
+            let sum = SafeMoney.sumCents(r.items.map { $0.amountCents ?? 0 })
+            if sum == nil || abs((sum ?? 0) - subtotal) > 2 {
+                warnings.append("Đối chiếu: tổng các món (\(warningMoney(sum ?? 0))) khác subtotal (\(warningMoney(subtotal))) — có thể đọc sót hoặc sai món.")
             }
         }
         if let subtotal = r.subtotalCents, let total = r.totalCents {
-            if abs(subtotal + r.taxTotalCents - total) > 2 {
-                warnings.append("Đối chiếu: subtotal + thuế (\(formatMoney(cents: subtotal + r.taxTotalCents))) khác tổng tiền (\(formatMoney(cents: total))).")
+            let expect = SafeMoney.checkedAdd(subtotal, r.taxTotalCents)
+            if expect == nil || abs((expect ?? 0) - total) > 2 {
+                warnings.append("Đối chiếu: subtotal + thuế (\(warningMoney(expect ?? 0))) khác tổng tiền (\(warningMoney(total))).")
             }
         }
         if let sold = r.itemsSold {
-            let qtySum = r.items.filter { ($0.amountCents ?? 0) > 0 }.reduce(0) { $0 + $1.qty }
+            // P1-E3: tổng đối chiếu theo luật in của vendor
+            // (printSemantics trong vendors.json) — Walmart
+            // 'onePerLine': mỗi dòng món dương tính 1 (fixture
+            // L-R04); mặc định 'byQuantity': cộng qty.
+            let qtySum: Int
+            if r.soldContribution == "onePerLine" {
+                qtySum = r.items.filter { ($0.amountCents ?? 0) > 0 }.count
+            } else {
+                qtySum = r.items.filter { ($0.amountCents ?? 0) > 0 }.reduce(0) { $0 + $1.qty }
+            }
             if qtySum != sold {
                 warnings.append("Số lượng: đọc được \(qtySum) món, hoá đơn ghi \(sold) món.")
             }
@@ -1585,6 +1833,23 @@ enum ReceiptParser {
                 warnings.append("Tổng tiền độ tin cậy THẤP — bắt buộc kiểm tra lại với giấy.")
             } else if r.totalConfidence >= 0.60 && r.totalConfidence < 0.85 {
                 warnings.append("Tổng tiền chưa thật chắc — anh kiểm tra giúp.")
+            }
+        }
+        // P3-FLAG-CARD (Pha 3 — khoản treo Pha 1): đuôi thẻ là
+        // khoá phân loại Personal/Business; một chữ số chết ở đuôi
+        // (ca L-R09 đọc "2580", đúng 2586) lọt qua các pha trước
+        // KHÔNG một cờ nào. Kỷ luật như cờ tổng ở ngay trên: dòng
+        // bị gộp với dòng tổng hoặc tin cậy < 0.60 -> cảnh báo
+        // mạnh; 0.60..0.85 -> cảnh báo mềm. Cờ KHÔNG sửa giá trị
+        // và KHÔNG khẳng định đuôi sai (fixture Pha 3: L-R01/S-0
+        // bị cờ dù đuôi đọc đúng — chi phí đã ghi nhận).
+        if let tail = r.cardLast4 {
+            if r.cardLineContaminated {
+                warnings.append("Đuôi thẻ \(tail) nằm trên dòng bị gộp với dòng tổng (đọc không sạch) — bắt buộc kiểm tra lại với giấy để phân loại đúng.")
+            } else if r.cardConfidence > 0 && r.cardConfidence < 0.60 {
+                warnings.append("Đuôi thẻ \(tail) độ tin cậy THẤP — bắt buộc kiểm tra lại với giấy để phân loại đúng.")
+            } else if r.cardConfidence >= 0.60 && r.cardConfidence < 0.85 {
+                warnings.append("Đuôi thẻ chưa thật chắc — anh kiểm tra giúp khi phân loại.")
             }
         }
         // WP5 — kỷ luật C-11 mở rộng cho TIỆM và NGÀY (WP5-SPEC mục 6):
@@ -1627,39 +1892,248 @@ enum ReceiptParser {
     // MARK: - Tiện ích regex / tiền
 
     /// Số tiền ở CUỐI một phần chữ: "POM TISSUE 2.00-T" -> (name: "POM TISSUE", -200, flag "T")
-    private static func trailingAmount(in text: String) -> (name: String, cents: Int, flag: String?)? {
-        guard let ns = matchWithRange(text, pattern: #"\s(\d[\d,]*\.\d{2})(-)?\s*([YT])?$"#) else { return nil }
+    static func trailingAmount(in text: String) -> (name: String, cents: Int, flag: String?)? {
+        guard let ns = matchWithRange(text, pattern: #"\s(\d[\d,]*\.\d{2})(-)?\s*([YT])?$"#),
+              let cents = SafeMoney.parseCents(ns.groups[0] ?? "", negative: ns.groups[1] != nil) else { return nil }
         let name = String(text[..<ns.nameEnd])
-        let cents = moneyToCents(ns.groups[0] ?? "", negative: ns.groups[1] != nil)
         return (name.trimmingCharacters(in: .whitespaces), cents, ns.groups[2])
     }
 
-    private static func matchQtyLine(_ text: String) -> (qty: Int, unitCents: Int, amountCents: Int, flag: String?)? {
-        guard let m = matchGroups(text, pattern: #"^(\d+)\s+AT\s+1\s+FOR\s+(\d[\d,]*\.\d{2})(-)?\s+(\d[\d,]*\.\d{2})(-)?\s*([YT])?$"#),
-              m.count == 6, let qty = Int(m[0] ?? "") else { return nil }
-        let unit = moneyToCents(m[1] ?? "", negative: m[2] != nil)
-        let amount = moneyToCents(m[3] ?? "", negative: m[4] != nil)
-        return (qty, unit, amount, m[5])
+    /// Dòng "N AT 1 FOR X Y" của Sam's. P1-QTYFLAG (fixture N-002:
+    /// "2 AT 1 FOR 2.25- 4.50-1" — khe cờ nhận BẤT KỲ một ký tự
+    /// đơn nào ("1" là cờ quét T bị đọc méo); cờ chỉ được GHI khi
+    /// là Y/T, khớp kỷ luật cờ của đường cùng-dòng; qty/tiền qua
+    /// SafeMoney, token ngoài miền -> nil.
+    static func matchQtyLine(_ text: String) -> (qty: Int, unitCents: Int, amountCents: Int, flag: String?)? {
+        guard let m = matchGroups(text, pattern: #"^(\d+)\s+AT\s+1\s+FOR\s+(\d[\d,]*\.\d{2})(-)?\s+(\d[\d,]*\.\d{2})(-)?\s*(\S)?$"#),
+              m.count == 6, let qty = SafeMoney.parseQty(m[0] ?? ""),
+              let unit = SafeMoney.parseCents(m[1] ?? "", negative: m[2] != nil),
+              let amount = SafeMoney.parseCents(m[3] ?? "", negative: m[4] != nil) else { return nil }
+        var flag: String? = nil
+        if let f = m[5], f == "Y" || f == "T" { flag = f }
+        return (qty, unit, amount, flag)
     }
 
     /// Số tiền cuối cùng xuất hiện trong dòng (cho dòng thuế generic: "TAX 1 8.517% 9.60").
+    /// P1-MONEY-BOUNDARY: ranh giới phải (?!\d) — không cắt token
+    /// tiền ma từ số thập phân 4 chữ số (fixture L-R03: suất
+    /// "3.9170" từng sinh "3.91" rồi "391"); lấy token thô CUỐI
+    /// CÙNG rồi mới qua SafeMoney — token cuối ngoài miền -> nil,
+    /// KHÔNG lùi về token trước (đúng hành vi bản gương).
     private static func lastMoneyInLine(_ text: String) -> Int? {
-        guard let re = regex(#"(\d[\d,]*\.\d{2})(-)?"#) else { return nil }
+        guard let re = regex(#"(\d[\d,]*\.\d{2})(?!\d)(-)?"#) else { return nil }
         let range = NSRange(text.startIndex..., in: text)
-        let matches = re.matches(in: text, options: [], range: range)
-        guard let last = matches.last, last.numberOfRanges >= 2,
+        guard let last = re.matches(in: text, options: [], range: range).last,
+              last.numberOfRanges >= 2,
               let r1 = Range(last.range(at: 1), in: text) else { return nil }
         let negative = last.numberOfRanges >= 3 && last.range(at: 2).location != NSNotFound
-        return moneyToCents(String(text[r1]), negative: negative)
+        return SafeMoney.parseCents(String(text[r1]), negative: negative)
     }
 
-    /// "203.30" -> 20330 ; "-" ở cuối (kiểu Sam's in giảm giá) -> âm.
-    private static func moneyToCents(_ s: String, negative: Bool) -> Int {
-        let clean = s.replacingOccurrences(of: ",", with: "")
-        let parts = clean.split(separator: ".")
-        guard parts.count == 2, let dollars = Int(parts[0]), let cents = Int(parts[1]) else { return 0 }
-        let value = dollars * 100 + cents
-        return negative ? -value : value
+    /// Mọi token tiền trong dòng theo luật biên + SafeMoney
+    /// (token ngoài miền bỏ qua — KHÔNG bao giờ giả số 0).
+    private static func moneyTokensWithBoundary(in text: String) -> [Int] {
+        guard let re = regex(#"(\d[\d,]*\.\d{2})(?!\d)(-)?"#) else { return [] }
+        let range = NSRange(text.startIndex..., in: text)
+        var out: [Int] = []
+        for match in re.matches(in: text, options: [], range: range) {
+            guard match.numberOfRanges >= 2,
+                  let r1 = Range(match.range(at: 1), in: text) else { continue }
+            let negative = match.numberOfRanges >= 3 && match.range(at: 2).location != NSNotFound
+            if let c = SafeMoney.parseCents(String(text[r1]), negative: negative) {
+                out.append(c)
+            }
+        }
+        return out
+    }
+
+    /// Dòng CHỈ chứa một số tiền ("203.30" / "$203.30" / "203.30-").
+    private static func bareMoneyCents(_ text: String) -> Int? {
+        guard let m = matchGroups(text, pattern: #"^\$?(\d[\d,]*\.\d{2})(-)?$"#),
+              m.count == 2, let amountText = m[0] else { return nil }
+        return SafeMoney.parseCents(amountText, negative: m[1] != nil)
+    }
+
+    // MARK: - PHA 1: ghép nhãn–tiền theo quan hệ hình học (§3.4 (a))
+    //
+    // Cột tiền = ĐIỂM MỐT của cạnh phải các token tiền cuối dòng
+    // (gộp thùng 1% bề rộng, mốt = trung bình thùng đông nhất);
+    // dải cột = [mode − 12% bề rộng, mode + 2%]. Ba dạng đã đo trên
+    // corpus: FX-SAMELINE (nhãn + tiền cùng dòng), FX-SPLIT-NEXT
+    // (tiền đứng dòng riêng NGAY DƯỚI nhãn), FX-BEFORE-LABEL (tiền
+    // trần đứng dòng riêng NGAY TRÊN nhãn — luồng 003). Đường hình
+    // học chỉ THAY đường chữ khi nó khép E1 trong khi đường chữ
+    // không khép; nó không bao giờ viết đè một sổ đã khép, và tập
+    // ứng viên của nó luôn được ghi lại (geometricCandidates) cho
+    // F5. Dòng cân và dòng số lượng để đường chữ xử lý. Không có
+    // boxes -> không chạy (kết quả giống hệt đường chữ, đã đo ở
+    // cổng F của bộ kiểm).
+
+    /// Ranh giới vùng tổng theo đúng điều kiện dừng của vòng trích
+    /// món khối UPC — chỉ dùng cho khung hình học.
+    private static func totalsBoundary(lines: [OCRLine]) -> Int {
+        for (i, line) in lines.enumerated() {
+            let upper = line.text.uppercased()
+            if upper.hasPrefix("SUBTOTAL") || upper.hasPrefix("TOTAL")
+                || upper.hasPrefix("SALES TAX") || upper.hasPrefix("TAX")
+                || upper.contains("RETURN POLICY") || upper.contains("MAX REFUND VALUE")
+                || upper.contains("SUGGESTED TIP") || upper.contains("TIP GUIDE") {
+                return i
+            }
+        }
+        return lines.count
+    }
+
+    /// (mode, lo, hi) của cột tiền; nil khi < 3 cạnh hoặc không hộp.
+    private static func columnModel(lines: [OCRLine], boxes: [CGRect?]) -> (mode: Double, lo: Double, hi: Double)? {
+        var edges: [Double] = []
+        for (i, line) in lines.enumerated() {
+            guard i < boxes.count, let b = boxes[i] else { continue }
+            guard lastMoneyInLine(line.text) != nil else { continue }
+            edges.append(Double(b.maxX))
+        }
+        guard edges.count >= 3 else { return nil }
+        var order: [Int] = []
+        var buckets: [Int: [Double]] = [:]
+        for e in edges {
+            let key = Int((e / 0.01).rounded())
+            if buckets[key] == nil { order.append(key) }
+            buckets[key, default: []].append(e)
+        }
+        var bestKey: Int? = nil
+        var bestCount = -1
+        for key in order {
+            if buckets[key]!.count > bestCount {
+                bestCount = buckets[key]!.count
+                bestKey = key
+            }
+        }
+        guard let bk = bestKey, let members = buckets[bk], !members.isEmpty else { return nil }
+        let mode = members.reduce(0, +) / Double(members.count)
+        return (mode, mode - 0.12, mode + 0.02)
+    }
+
+    private static func inBand(box: CGRect?, model: (mode: Double, lo: Double, hi: Double)?) -> Bool {
+        guard let model = model else { return true }
+        guard let box = box else { return false }
+        let right = Double(box.maxX)
+        return right >= model.lo && right <= model.hi
+    }
+
+    /// Tên chứa ít nhất một token chữ ≥2 ký tự (như _has_alpha_token).
+    private static func hasAlphaToken(_ s: String) -> Bool {
+        var run = 0
+        for ch in s {
+            if ch.isLetter { run += 1; if run >= 2 { return true } } else { run = 0 }
+        }
+        return false
+    }
+
+    private static func geometricItems(lines: [OCRLine], boxes: [CGRect?], stop: Int) -> [ParsedLineItem] {
+        let model = columnModel(lines: lines, boxes: boxes)
+        var tagged: [(Int, ParsedLineItem)] = []
+        var consumed: Set<Int> = []
+        var pendingBefore: (index: Int, cents: Int)? = nil
+        let n = min(stop, lines.count)
+        for i in 0..<n {
+            if consumed.contains(i) { continue }
+            let text = lines[i].text
+            let upper = text.uppercased()
+            let hasDate = matchGroups(text, pattern: #"(\d{1,2})/(\d{1,2})/(\d{2,4})"#) != nil
+                || matchGroups(text, pattern: #"(\d{4})-(\d{2})-(\d{2})"#) != nil
+                || matchGroups(upper, pattern: #"\d{1,2}-(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)"#) != nil
+            if matchWeightLine(text) != nil || matchQtyLineGeneric(text) != nil
+                || isSamelineExcluded(upper) || hasDate {
+                pendingBefore = nil
+                continue
+            }
+            if let c = bareMoneyCents(text) {
+                if inBand(box: i < boxes.count ? boxes[i] : nil, model: model) {
+                    pendingBefore = (i, c)
+                    consumed.insert(i)
+                }
+                continue
+            }
+            if let got = lastCleanMoney(text), !got.name.isEmpty,
+               hasAlphaToken(got.name),
+               matchGroups(got.name, pattern: #"\d+\.\d{2}"#) == nil {
+                var item = ParsedLineItem(name: got.name, qty: 1, unitPriceCents: got.cents,
+                                          amountCents: got.cents, taxFlag: nil, itemCode: nil,
+                                          confidence: lines[i].confidence)
+                item.lineIndex = i
+                tagged.append((i, item))
+                consumed.insert(i)
+                pendingBefore = nil
+                continue
+            }
+            if text.contains(where: { $0.isLetter }) {
+                if let pb = pendingBefore, pb.index == i - 1 {
+                    var item = ParsedLineItem(name: text.trimmingCharacters(in: .whitespaces),
+                                              qty: 1, unitPriceCents: pb.cents,
+                                              amountCents: pb.cents, taxFlag: nil, itemCode: nil,
+                                              confidence: lines[i].confidence)
+                    item.lineIndex = i
+                    tagged.append((i, item))
+                    consumed.insert(i)
+                    pendingBefore = nil
+                    continue
+                }
+                if i + 1 < n, let nc = bareMoneyCents(lines[i + 1].text),
+                   inBand(box: i + 1 < boxes.count ? boxes[i + 1] : nil, model: model) {
+                    var item = ParsedLineItem(name: text.trimmingCharacters(in: .whitespaces),
+                                              qty: 1, unitPriceCents: nc,
+                                              amountCents: nc, taxFlag: nil, itemCode: nil,
+                                              confidence: lines[i].confidence)
+                    item.lineIndex = i
+                    tagged.append((i, item))
+                    consumed.insert(i)
+                    consumed.insert(i + 1)
+                    pendingBefore = nil
+                    continue
+                }
+            }
+            pendingBefore = nil
+        }
+        return tagged.sorted { $0.0 < $1.0 }.map { $0.1 }
+    }
+
+    /// Vùng loại trừ của nhánh cùng-dòng (như _sameline_excluded
+    /// của đường chữ): tiền tố/đoạn chứa đã biết không phải món.
+    private static let samelineExcludePrefix: [String] = [
+        "ST#", "OP#", "TE#", "TR#", "TC#", "REF #", "REF#", "AID",
+        "TERMINAL", "AUTH", "NETWORK", "APPR", "SEQ#", "STATION", "ORDER",
+        "TRANSACTION", "CASHIER", "MEMBER", "DC MEMBER", "SALE", "DEBIT",
+        "CREDIT", "EFT", "VISA", "MASTERCARD", "MASTER CARD", "AMEX",
+        "DISCOVER", "FSA", "PAYMENT", "AMOUNT", "CHANGE", "CASH", "ENTRY",
+        "CONTACTLESS", "RETAIN", "THANK", "GET FREE", "SCAN TO",
+        "LOW PRICES", "POLICY", "CONTACT", "ITEM COUNT", "ITEMS SOLD",
+        "# ITEMS",
+    ]
+    private static let samelineExcludeContains: [String] = [
+        "CASH BACK", "CASH ", "PURCHASE", "TOTAL", "HTTP", ".COM",
+        "SURVEY", "FEEDBACK", "RETURN POLICY", "STORE RETUR",
+    ]
+    private static func isSamelineExcluded(_ upper: String) -> Bool {
+        if upper.contains("%") { return true }
+        if samelineExcludePrefix.contains(where: { upper.hasPrefix($0) }) { return true }
+        if samelineExcludeContains.contains(where: { upper.contains($0) }) { return true }
+        return false
+    }
+
+    /// Dòng cân 'W lb @ $U/lb' — trọng lượng KHÔNG phải qty đếm
+    /// món, chỉ là tín hiệu "đây là dòng cân" cho khung hình học.
+    /// Trả (lb, đơn giá?) — khung hình học chỉ cần biết có/không.
+    private static func matchWeightLine(_ text: String) -> (lb: Double, unitCents: Int?)? {
+        guard text.contains("/lb") || text.contains("/1b") else { return nil }
+        guard let m = matchGroups(text, pattern: #"(\d+(?:\.\d+)?)\s*(?:lb|1b|Tb)"#),
+              m.count == 1, let lb = Double(m[0] ?? "") else { return nil }
+        var unit: Int? = nil
+        if let mu = matchGroups(text, pattern: #"\$\s*\*?\s*(\d[\d,]*\.\d{2})"#) {
+            unit = SafeMoney.parseCents(mu[0] ?? "")
+        } else if let mu = matchGroups(text, pattern: #"(\d[\d,]*\.\d{2})\s*/l"#) {
+            unit = SafeMoney.parseCents(mu[0] ?? "")
+        }
+        return (lb, unit)
     }
 
     private static func regex(_ pattern: String) -> NSRegularExpression? {
@@ -1667,7 +2141,7 @@ enum ReceiptParser {
     }
 
     /// Nhóm bắt được (nil cho nhóm không tham gia). nil nếu không khớp.
-    private static func matchGroups(_ text: String, pattern: String) -> [String?]? {
+    static func matchGroups(_ text: String, pattern: String) -> [String?]? {
         guard let re = regex(pattern) else { return nil }
         let range = NSRange(text.startIndex..., in: text)
         guard let match = re.firstMatch(in: text, options: [], range: range) else { return nil }
@@ -1712,936 +2186,9 @@ enum ReceiptParser {
     }
 }
 
-// MARK: - ════════════════════════════════════════════════════════════
-// MARK: P2-3 — Lớp TRỌNG TÀI SỐ HỌC (Reconcile)
-//
-// Phần này CỘNG THÊM THUẦN vào cuối file: không một hàm nào ở trên bị
-// sửa. parse()/validate() giữ nguyên 100% — luật toàn cục số 1 ("chỉ
-// gắn cờ, TUYỆT ĐỐI không tự sửa số") vẫn là luật của parse().
-//
-// Lớp trọng tài là một tầng RIÊNG chạy SAU parse (điểm vào:
-// ReceiptParser.reconcile / parseAndReconcile), port trung thực từ
-// mirror đã kiểm chứng core-redo/reconcile.py (13/13 ca — xem
-// core-redo/RECONCILE-DESIGN.md và core-redo/case-results.txt).
-// Tư tưởng: hoá đơn tự mang số kiểm tra (subtotal / thuế / total /
-// # ITEMS SOLD). Lớp này dùng chúng làm ĐÍCH để truy vết và sửa CÓ
-// MỤC TIÊU, với ranh giới trung thực cứng (R1–R7 của thiết kế):
-//   - Số neo KHÔNG BAO GIỜ bị sửa; neo mâu thuẫn -> ANCHOR_CONFLICT.
-//   - Chỉ ÁP DỤNG sửa khi nghiệm khớp từng xu là DUY NHẤT ở mức sửa
-//     tối thiểu VÀ mọi sửa đều có bằng chứng tại chỗ trên dòng (kênh
-//     FORCE/TOKEN/ORPHAN). Nghiệm thuần số học (DIGIT/SIGN/DEFICIT)
-//     chỉ thành GỢI Ý trình anh ở Review — khớp tổng là điều kiện
-//     cần, không bao giờ là điều kiện đủ (ca bẫy C6).
-//   - Mất hẳn dòng -> KHÔNG bịa món; chỉ báo thiếu + khoanh vùng
-//     đọc lại. Mất subtotal/thuế còn total (dạng thực địa 16:50) ->
-//     TOTAL_ONLY: TUYỆT ĐỐI không suy ngược số từ total.
-//   - Mọi giá trị bị can thiệp đều được ghi trong ReconcileReport
-//     (kênh + giá trị gốc) để tầng lưu/Hiển thị gắn cờ "suy luận" —
-//     ParsedLineItem và model SwiftData KHÔNG đổi ở gói này.
-//   - Mọi trạng thái khác OK đều requiresReview = true -> tầng lưu
-//     giữ Receipt.status = .needsReview (Hộp Chờ Duyệt hiện có).
-
-import CoreGraphics
-
-// MARK: P2-3 — Kiểu dữ liệu của lớp trọng tài
-
-/// Trạng thái kết luận của một lượt đối chiếu (khớp mirror).
-enum ReconcileStatus: String {
-    case ok = "OK"
-    case repaired = "REPAIRED"
-    case suggestionOnly = "SUGGESTION_ONLY"
-    case ambiguous = "AMBIGUOUS"
-    case noSolution = "NO_SOLUTION"
-    case anchorConflict = "ANCHOR_CONFLICT"
-    case totalOnly = "TOTAL_ONLY"
-    case noAnchor = "NO_ANCHOR"
-    case partial = "PARTIAL"
-    case tooComplex = "TOO_COMPLEX"
-}
-
-/// Kênh sinh ứng viên sửa. Tier càng thấp bằng chứng càng "tại chỗ".
-enum ReconcileChannel: String {
-    case force = "FORCE"     // bộ ba qty×unit=amount của chính món tự mâu thuẫn
-    case token = "TOKEN"     // token tiền đọc-bao-dung nằm trong cửa sổ dòng của món
-    case orphan = "ORPHAN"   // dòng mã món có trong luồng thô nhưng parser đánh rơi
-    case digit = "DIGIT"     // biến thể 1 chữ số theo cặp nhầm OCR — thuần số học
-    case sign = "SIGN"       // mất dấu trừ — thuần số học
-    case deficit = "DEFICIT" // gán đúng phần thiếu cho món duy nhất chưa có tiền
-
-    var tier: Int {
-        switch self {
-        case .force: return 1
-        case .token, .orphan: return 2
-        case .digit, .sign: return 3
-        case .deficit: return 4
-        }
-    }
-
-    /// Kênh có bằng chứng tại chỗ trên dòng — điều kiện để được ÁP DỤNG.
-    var isSiteEvidenced: Bool {
-        self == .force || self == .token || self == .orphan
-    }
-}
-
-/// Một sửa (đã áp dụng) hoặc một ứng viên trong tổ hợp gợi ý.
-/// Với field == .insert (kênh ORPHAN): itemIndex là vị trí món chèn
-/// trong mảng items của kết quả ĐÃ sửa (= số món gốc + thứ tự slot).
-struct ReconcileFix {
-    enum Field: String {
-        case amount, qty, unit, insert
-    }
-    var itemIndex: Int
-    var field: Field
-    var oldValue: Int?
-    var newValue: Int
-    var delta: Int
-    var channel: ReconcileChannel
-    var tier: Int
-    // Payload riêng cho .insert (ORPHAN) — nil ở mọi field khác.
-    var insertName: String? = nil
-    var insertQty: Int? = nil
-    var insertUnitCents: Int? = nil
-    var insertCode: String? = nil
-    /// Vết bằng chứng tại chỗ, vd "line 4: 19.4B" (TOKEN/ORPHAN).
-    var evidence: String? = nil
-}
-
-/// Yêu cầu khoanh vùng đọc lại có mục tiêu — phát cho tầng OCR
-/// (P2-1/P2-2 thực thi qua ReOCRService). `band` là dải chuẩn hoá
-/// (gốc dưới-trái như Vision) tính từ hộp dòng khi caller cấp
-/// lineBoxes; chưa có hình học thì band = nil và `block` + `lineRange`
-/// là neo định vị. `priority` tăng theo thứ tự phát (1 = trước nhất).
-struct ReconcileRegionHint {
-    enum Block: String {
-        case items = "items-block"
-        case totals = "totals-block"
-    }
-    enum Reason: String {
-        case missingOrUnrepairable = "missing-or-unrepairable"
-        case qtyMismatch = "qty-mismatch"
-        case anchorConflict = "anchor-conflict"
-        case totalOnlyAnchor = "total-only-anchor"
-    }
-    var block: Block
-    var reason: Reason
-    var priority: Int = 0
-    /// Phần tiền còn thiếu (xu) — chỉ có ở .missingOrUnrepairable.
-    var deltaCents: Int? = nil
-    var lineRange: ClosedRange<Int>? = nil
-    var band: CGRect? = nil
-}
-
-/// Báo cáo một lượt đối chiếu. `fixes` là các sửa ĐÃ ÁP DỤNG vào kết
-/// quả trả kèm (mang kênh + giá trị gốc = vết kiểm toán; đây cũng là
-/// nguồn gắn cờ "suy luận" cho tầng lưu — xem AFTER.md của gói P2-3).
-/// `suggestions` là các tổ hợp KHÔNG áp dụng, trình anh ở Review.
-struct ReconcileReport {
-    var status: ReconcileStatus = .partial // sentinel — mọi đường ra đều gán lại
-    var moneyDeltaCents: Int? = nil
-    var qtyDelta: Int? = nil
-    var fixes: [ReconcileFix] = []
-    var suggestions: [[ReconcileFix]] = []
-    var solutionCount: Int = 0
-    var regionHints: [ReconcileRegionHint] = []
-    var notes: [String] = []
-    var nodesVisited: Int = 0
-    var taxMissing: Bool = false
-    /// Thuế hàm ý (total − subtotal) — CHỈ để kiểm tra hợp lý, không
-    /// bao giờ được ghi thành dòng thuế (thiết kế §5.3).
-    var impliedTaxCents: Int? = nil
-    var anchorsPresent: [String] = []
-    var anchorsMissing: [String] = []
-    var requiresReview: Bool = false
-
-    /// Sửa đã áp dụng cho món ở vị trí `index` trong kết quả đã sửa.
-    func appliedFix(forItemAt index: Int) -> ReconcileFix? {
-        fixes.first { $0.itemIndex == index }
-    }
-}
-
-/// Giao diện đọc-lại-có-mục-tiêu (thiết kế §6). Gói P2-3 chỉ ĐỊNH
-/// NGHĨA giao diện + phát ReconcileRegionHint; bản thực thi (ROI /
-/// cắt vùng phóng to) thuộc P2-1/P2-2 và phải đo trên máy thật.
-protocol ReOCRService {
-    func recognizeRegion(_ hint: ReconcileRegionHint, upscale: Double) -> [OCRLine]
-}
-
-// MARK: P2-3 — Hằng số (lấy đúng giá trị của mirror)
-
-enum ReconcileConstants {
-    static let maxEdits = 3            // ngân sách sửa cho 1 lượt đối chiếu tiền
-    static let maxQtyEdits = 2         // ngân sách sửa cho lượt đối chiếu số lượng
-    static let nodeCap = 100_000       // ngân sách nút DFS — vượt = TOO_COMPLEX
-    static let maxVariantsPerItem = 16
-    static let maxAmountCents = 1_000_000  // trần sanity: 1 món < $10,000
-    static let searchSolutionCap = 4   // thu tối đa 4 nghiệm thô mỗi mức
-}
-
-/// Cặp chữ số OCR kinh điển (đối xứng): 0–6, 0–8, 0–9, 1–7, 2–7,
-/// 3–8, 4–9, 5–6, 5–8, 6–8, 8–9. (Mirror: CONFUSE.)
-private let reconcileConfusePartners: [Int: [Int]] = {
-    var map: [Int: Set<Int>] = [:]
-    for (a, b) in [(0, 6), (0, 8), (0, 9), (1, 7), (2, 7), (3, 8),
-                   (4, 9), (5, 6), (5, 8), (6, 8), (8, 9)] {
-        map[a, default: []].insert(b)
-        map[b, default: []].insert(a)
-    }
-    return map.mapValues { $0.sorted() }
-}()
-
-/// Chữ cái OCR hay lẫn vào token tiền -> chữ số (mirror: LETTER_DIGIT).
-private let reconcileLetterDigit: [String: String] = [
-    "O": "0", "Q": "0", "S": "5", "Z": "2",
-    "G": "6", "B": "8", "I": "1", "L": "1"
-]
-
-// MARK: P2-3 — DFS chọn tập con có ràng buộc (port của Search trong mirror)
-//
-// Tìm tổ hợp ứng viên (mỗi món tối đa 1 sửa) cho tổng delta cần đạt,
-// theo mức số-sửa tăng dần 1..maxEdits; dừng ở mức tối thiểu đầu tiên
-// có nghiệm; thu tối đa searchSolutionCap nghiệm thô ở mức đó. Cắt
-// tỉa bằng khoảng delta hậu tố còn đạt được + ngân sách nút.
-
-private final class ReconcileSearch {
-    let byItem: [[ReconcileFix]]
-    let maxEdits: Int
-    let nodeCap: Int
-    let solCap: Int
-    private(set) var nodes = 0
-    private(set) var overflow = false
-    private let sufMin: [Int]
-    private let sufMax: [Int]
-
-    init(candsByItem: [[ReconcileFix]], maxEdits: Int,
-         nodeCap: Int = ReconcileConstants.nodeCap,
-         solCap: Int = ReconcileConstants.searchSolutionCap) {
-        self.byItem = candsByItem.filter { !$0.isEmpty }
-        self.maxEdits = maxEdits
-        self.nodeCap = nodeCap
-        self.solCap = solCap
-        let n = self.byItem.count
-        var sMin = [Int](repeating: 0, count: n + 1)
-        var sMax = [Int](repeating: 0, count: n + 1)
-        if n > 0 {
-            for j in stride(from: n - 1, through: 0, by: -1) {
-                let ds = self.byItem[j].map { $0.delta }
-                sMin[j] = sMin[j + 1] + min(0, ds.min() ?? 0)
-                sMax[j] = sMax[j + 1] + max(0, ds.max() ?? 0)
-            }
-        }
-        self.sufMin = sMin
-        self.sufMax = sMax
-    }
-
-    func run(target: Int) -> (solutions: [[ReconcileFix]], overflow: Bool) {
-        for level in 1...maxEdits {
-            var sols: [[ReconcileFix]] = []
-            var chosen: [ReconcileFix] = []
-            dfs(0, target, level, &chosen, &sols)
-            if overflow { return (sols, true) }
-            if !sols.isEmpty { return (sols, false) }
-        }
-        return ([], false)
-    }
-
-    private func dfs(_ j: Int, _ remaining: Int, _ editsLeft: Int,
-                     _ chosen: inout [ReconcileFix],
-                     _ sols: inout [[ReconcileFix]]) {
-        if sols.count >= solCap || overflow { return }
-        nodes += 1
-        if nodes > nodeCap {
-            overflow = true
-            return
-        }
-        if remaining == 0 && !chosen.isEmpty {
-            sols.append(chosen)
-            return
-        }
-        if j >= byItem.count || editsLeft == 0 { return }
-        if remaining < sufMin[j] || remaining > sufMax[j] { return }
-        // Nhánh "bỏ qua món j" chạy TRƯỚC nhánh "lấy ứng viên" — đúng
-        // thứ tự duyệt của mirror (thứ tự này quyết định nghiệm nào
-        // được thu khi có hơn solCap nghiệm thô).
-        dfs(j + 1, remaining, editsLeft, &chosen, &sols)
-        for c in byItem[j] {
-            chosen.append(c)
-            dfs(j + 1, remaining - c.delta, editsLeft - 1, &chosen, &sols)
-            chosen.removeLast()
-            if sols.count >= solCap || overflow { return }
-        }
-    }
-}
-
-// MARK: - P2-3 — Lớp trọng tài (extension: dùng lại được các helper
-// private của ReceiptParser trong cùng file — moneyToCents,
-// trailingAmount, matchQtyLine, matchGroups)
-
-extension ReceiptParser {
-
-    // MARK: Điểm vào
-
-    /// parse() nguyên vẹn + một lượt trọng tài. Cảnh báo trả về =
-    /// cảnh báo validate() gốc (tính trên kết quả CHƯA sửa) + ghi chú
-    /// của lớp trọng tài — validate() không bị sửa, lớp này chỉ bổ
-    /// sung. Quyết định trình bày cuối cùng thuộc gói tích hợp.
-    static func parseAndReconcile(lines: [OCRLine], lineBoxes: [CGRect?]? = nil)
-        -> (result: ParseResult, report: ReconcileReport) {
-        let parsed = parse(lines: lines)
-        let (report, reconciled) = reconcile(result: parsed, lines: lines,
-                                             lineBoxes: lineBoxes)
-        var out = reconciled
-        out.warnings = reconciled.warnings + report.notes
-        return (out, report)
-    }
-
-    /// Một lượt đối chiếu trên kết quả parse có sẵn. Hàm THUẦN: không
-    /// chạm OCR, không sửa kết quả đầu vào (struct — làm việc trên bản
-    /// sao). Trả (báo cáo, kết quả): kết quả chỉ khác đầu vào khi có
-    /// sửa được ÁP DỤNG (status REPAIRED/PARTIAL); mọi đường từ chối
-    /// đều trả kết quả nguyên vẹn.
-    ///
-    /// `lines` là cùng danh sách dòng đã đưa vào parse(); hàm tự chuẩn
-    /// hoá (cắt khoảng trắng + bỏ dòng rỗng) đúng như parse() để chỉ
-    /// số dòng trong báo cáo khớp result.rawText. `lineBoxes` (tuỳ
-    /// chọn) song song với danh sách dòng SAU chuẩn hoá — chỉ dùng để
-    /// tính band cho RegionHint, không ảnh hưởng quyết định.
-    static func reconcile(result r: ParseResult, lines rawLines: [OCRLine],
-                          lineBoxes: [CGRect?]? = nil)
-        -> (report: ReconcileReport, result: ParseResult) {
-        let lines = rawLines
-            .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces), confidence: $0.confidence) }
-            .filter { !$0.text.isEmpty }
-        let texts = lines.map { $0.text }
-        let items = r.items
-        let lineOf = reconcileItemLineMap(items: items, texts: texts)
-
-        var rep = ReconcileReport()
-        // Trạng thái "chưa kết luận" ở giữa lượt (Pha B được đặt
-        // .partial) — mirror giữ rep["status"] = None tới Pha kết
-        // luận; bản Swift dùng biến cục bộ tương đương.
-        var status: ReconcileStatus? = nil
-        var rawHints: [(block: ReconcileRegionHint.Block,
-                        reason: ReconcileRegionHint.Reason,
-                        delta: Int?)] = []
-
-        // Đóng gói hint khi ra: priority theo thứ tự phát, lineRange
-        // theo khối, band khi caller cấp hộp dòng (nới 50% chiều cao
-        // mỗi phía, kẹp [0,1] — thiết kế §6).
-        func blockRange(_ block: ReconcileRegionHint.Block) -> ClosedRange<Int>? {
-            let idx: [Int]
-            switch block {
-            case .items:
-                idx = lineOf.compactMap { $0 }
-            case .totals:
-                idx = texts.indices.filter {
-                    let u = texts[$0].uppercased()
-                    return u.contains("SUBTOTAL") || u.contains("TOTAL") || u.contains("TAX")
-                }
-            }
-            guard let lo = idx.min(), let hi = idx.max() else { return nil }
-            return lo...hi
-        }
-        func band(for range: ClosedRange<Int>) -> CGRect? {
-            guard let boxes = lineBoxes else { return nil }
-            let ys = range.compactMap { i -> CGRect? in
-                (i >= 0 && i < boxes.count) ? boxes[i] : nil
-            }
-            guard let lo = ys.map({ $0.minY }).min(),
-                  let hi = ys.map({ $0.maxY }).max() else { return nil }
-            let h = hi - lo
-            let y0 = max(0.0, lo - h / 2)
-            let y1 = min(1.0, hi + h / 2)
-            return CGRect(x: 0, y: y0, width: 1, height: max(0, y1 - y0))
-        }
-        func finalizeHints() -> [ReconcileRegionHint] {
-            var out: [ReconcileRegionHint] = []
-            for (i, h) in rawHints.enumerated() {
-                let range = blockRange(h.block)
-                out.append(ReconcileRegionHint(block: h.block, reason: h.reason,
-                                               priority: i + 1, deltaCents: h.delta,
-                                               lineRange: range,
-                                               band: range.flatMap { band(for: $0) }))
-            }
-            return out
-        }
-
-        // ── Pha 0: neo. Số neo KHÔNG BAO GIỜ bị lớp này sửa. ──────
-        if r.subtotalCents == nil && r.totalCents == nil {
-            rep.status = .noAnchor
-            rep.notes.append("Không có cả subtotal lẫn total — không có đích đối chiếu; chỉ giữ cảnh báo của validate().")
-            // Thiết kế §2: mọi trạng thái khác OK đều vào Hộp Chờ.
-            // (Mirror trả sớm ở đây trước khi gán requiresReview.)
-            rep.requiresReview = true
-            return (rep, r)
-        }
-        if r.subtotalCents == nil, let total = r.totalCents {
-            // DẠNG CA THỰC ĐỊA 16:50 (bản giấy quét): mất subtotal +
-            // thuế, thường mất cả khối món, chỉ còn total (+ ITEMS
-            // SOLD). Total là NEO TREO — TUYỆT ĐỐI không suy ngược
-            // subtotal/thuế từ total (thiết kế §5.1: hoá đơn Sam's có
-            // 2 suất thuế + món miễn thuế -> thiếu phương trình).
-            rep.status = .totalOnly
-            rep.anchorsPresent = ["total"] + (r.itemsSold != nil ? ["itemsSold"] : [])
-            rep.anchorsMissing = ["subtotal", "taxes"]
-            rep.notes.append("Chỉ còn total \(total) xu (+ ITEMS SOLD \(r.itemsSold.map { String($0) } ?? "không rõ")) — subtotal/thuế/món không suy diễn. Total được giữ làm neo treo: khi đọc lại được khối món, Σ món + thuế hàm ý sẽ được kiểm với total trong dải suất hợp lý (xem §5).")
-            rawHints.append((.items, .totalOnlyAnchor, nil))
-            rawHints.append((.totals, .totalOnlyAnchor, nil))
-            rep.regionHints = finalizeHints()
-            rep.requiresReview = true
-            return (rep, r)
-        }
-        // Từ đây subtotal chắc chắn có mặt.
-        let subtotal = r.subtotalCents!
-        if let total = r.totalCents, !r.taxes.isEmpty {
-            let taxSum = r.taxes.reduce(0) { $0 + $1.amountCents }
-            if abs(subtotal + taxSum - total) > 2 {
-                rep.status = .anchorConflict
-                rep.notes.append("Chính các số neo mâu thuẫn nhau (subtotal + thuế != total) — đích không đáng tin, từ chối sửa; cần đọc lại vùng tổng hoặc anh kiểm với giấy.")
-                rawHints.append((.totals, .anchorConflict, nil))
-                rep.regionHints = finalizeHints()
-                rep.requiresReview = true
-                return (rep, r)
-            }
-        }
-        if let total = r.totalCents, r.taxes.isEmpty {
-            // Có subtotal + total nhưng mất hẳn dòng thuế: thuế hàm ý
-            // CHỈ dùng kiểm tra hợp lý (suất pha trộn trong 0..15%),
-            // KHÔNG ghi thành dòng thuế (thiết kế §5.3).
-            let implied = total - subtotal
-            if implied < 0 || (subtotal > 0 && implied * 100 > 15 * subtotal) {
-                rep.status = .anchorConflict
-                rep.notes.append("Thuế hàm ý từ total - subtotal = \(implied) xu nằm ngoài dải hợp lý (âm hoặc suất pha trộn > 15%) — một trong hai số neo đáng ngờ, từ chối sửa.")
-                rawHints.append((.totals, .anchorConflict, nil))
-                rep.regionHints = finalizeHints()
-                rep.requiresReview = true
-                return (rep, r)
-            }
-            rep.taxMissing = true
-            rep.impliedTaxCents = implied
-            let pct = subtotal != 0
-                ? String(format: "%.2f", 100.0 * Double(implied) / Double(subtotal))
-                : "0.00"
-            rep.notes.append("Mất dòng thuế; thuế hàm ý \(implied) xu (suất pha trộn \(pct)%) nằm trong dải hợp lý — chỉ là kiểm tra hợp lý, KHÔNG ghi thuế suy diễn vào hoá đơn.")
-        }
-
-        let sumItems = items.reduce(0) { $0 + ($1.amountCents ?? 0) }
-        let delta = subtotal - sumItems
-        rep.moneyDeltaCents = delta
-        if let sold = r.itemsSold {
-            rep.qtyDelta = sold - reconcileQtySum(items)
-        }
-
-        var r2 = r
-        var applied: [ReconcileFix] = []
-
-        // ── Pha A: khớp tiền (E1) ─────────────────────────────────
-        if delta != 0 {
-            var anchorAmounts = Set<Int>()
-            anchorAmounts.insert(subtotal)
-            if let t = r.totalCents { anchorAmounts.insert(t) }
-            for t in r.taxes { anchorAmounts.insert(t.amountCents) }
-            let knownAmounts = Set(items.compactMap { $0.amountCents })
-            let noneItems = items.indices.filter { items[$0].amountCents == nil }
-            var cands: [[ReconcileFix]] = items.map { _ in [] }
-
-            for k in items.indices {
-                let it = items[k]
-                let (full, consistent) = reconcileTriple(it)
-                if let amount = it.amountCents {
-                    if full && !consistent {
-                        let forced = it.qty * (it.unitPriceCents ?? 0)
-                        if forced != amount && abs(forced) < ReconcileConstants.maxAmountCents {
-                            cands[k].append(ReconcileFix(itemIndex: k, field: .amount,
-                                                         oldValue: amount, newValue: forced,
-                                                         delta: forced - amount,
-                                                         channel: .force, tier: 1))
-                        }
-                    }
-                    // KHOÁ bộ ba chỉ khi unit là bằng chứng ĐỘC LẬP:
-                    // dòng số lượng qty >= 2 (unit đọc từ "N AT 1 FOR
-                    // X"). Món qty = 1 có unit bị parser sao chép từ
-                    // chính amount — bộ ba "nhất quán" thoái hoá,
-                    // không khoá được gì (bài học ca C6/C7 của mirror).
-                    let locked = full && consistent && it.qty >= 2
-                    if !locked {
-                        for v in reconcileDigitVariants(amount) {
-                            cands[k].append(ReconcileFix(itemIndex: k, field: .amount,
-                                                         oldValue: amount, newValue: v,
-                                                         delta: v - amount,
-                                                         channel: .digit, tier: 3))
-                        }
-                        cands[k].append(ReconcileFix(itemIndex: k, field: .amount,
-                                                     oldValue: amount, newValue: -amount,
-                                                     delta: -2 * amount,
-                                                     channel: .sign, tier: 3))
-                    }
-                } else {
-                    // Món chưa có tiền: cửa sổ dòng của nó (dòng nhãn
-                    // -> trước dòng nhãn món kế tiếp) — token tiền lạc
-                    // trong cửa sổ là bằng chứng tại chỗ (dòng xé
-                    // mảnh / token hỏng ký tự).
-                    let start = lineOf[k] ?? 0
-                    let later = lineOf.compactMap { $0 }.filter { $0 > start }
-                    let end = later.min().map { $0 - 1 } ?? (texts.count - 1)
-                    var seen = Set<Int>()
-                    if end >= start {
-                        for li in start...end {
-                            for tok in reconcileTolerantTokens(texts[li]) {
-                                if seen.contains(tok.cents) || anchorAmounts.contains(tok.cents) { continue }
-                                if knownAmounts.contains(tok.cents) && !tok.hasLetter { continue }
-                                seen.insert(tok.cents)
-                                cands[k].append(ReconcileFix(itemIndex: k, field: .amount,
-                                                             oldValue: nil, newValue: tok.cents,
-                                                             delta: tok.cents,
-                                                             channel: .token, tier: 2,
-                                                             evidence: "line \(li): \(tok.raw)"))
-                            }
-                        }
-                    }
-                    if noneItems.count == 1 {
-                        cands[k].append(ReconcileFix(itemIndex: k, field: .amount,
-                                                     oldValue: nil, newValue: delta,
-                                                     delta: delta,
-                                                     channel: .deficit, tier: 4))
-                    }
-                }
-            }
-
-            // Kênh ORPHAN: dòng mã món CÓ trong luồng thô nhưng
-            // parser đã đánh rơi (điển hình: món đang chờ bị dòng mã
-            // kế tiếp ghi đè). Mã + nhãn lấy nguyên từ dòng; tiền từ
-            // token trên dòng / dòng số lượng sau / mảnh xé sau. Hiện
-            // chỉ có mẫu cho định dạng Sam's (mã 10 số) — định dạng
-            // khác kênh này tắt (giới hạn đã ghi ở thiết kế §3).
-            if r.vendorKey == "sams" {
-                let parsedCodes = Set(items.compactMap { $0.itemCode })
-                var slotNo = 0
-                for li in texts.indices {
-                    let text = texts[li]
-                    guard let m = matchGroups(text, pattern: #"^(\d{10})\s+(.+)$"#),
-                          m.count == 2, let code = m[0], let rest = m[1] else { continue }
-                    if parsedCodes.contains(code) { continue }
-                    var ocands: [(amount: Int, name: String, qty: Int, unit: Int)] = []
-                    if let tail = trailingAmount(in: rest), !tail.name.isEmpty {
-                        ocands.append((tail.cents, tail.name, 1, tail.cents))
-                    } else {
-                        for tok in reconcileTolerantTokens(rest) {
-                            let nm = reconcileCollapseName(rest.replacingOccurrences(of: tok.raw, with: ""))
-                            ocands.append((tok.cents, nm, 1, tok.cents))
-                        }
-                        if li + 1 < texts.count {
-                            let ntext = texts[li + 1]
-                            if let q = matchQtyLine(ntext) {
-                                ocands.append((q.amountCents, rest, q.qty, q.unitCents))
-                            } else {
-                                for tok in reconcileTolerantTokens(ntext) {
-                                    let frag = reconcileCollapseName(ntext.replacingOccurrences(of: tok.raw, with: ""))
-                                    ocands.append((tok.cents,
-                                                   (rest + " " + frag).trimmingCharacters(in: .whitespaces),
-                                                   1, tok.cents))
-                                }
-                            }
-                        }
-                    }
-                    var slot: [ReconcileFix] = []
-                    var seenAmt = Set<Int>()
-                    for oc in ocands {
-                        if oc.amount == 0 || anchorAmounts.contains(oc.amount) || seenAmt.contains(oc.amount) { continue }
-                        seenAmt.insert(oc.amount)
-                        slot.append(ReconcileFix(itemIndex: items.count + slotNo, field: .insert,
-                                                 oldValue: nil, newValue: oc.amount,
-                                                 delta: oc.amount,
-                                                 channel: .orphan, tier: 2,
-                                                 insertName: oc.name, insertQty: oc.qty,
-                                                 insertUnitCents: oc.unit, insertCode: code,
-                                                 evidence: "line \(li): \(text)"))
-                    }
-                    if !slot.isEmpty {
-                        cands.append(slot)
-                        slotNo += 1
-                    }
-                }
-            }
-
-            let search = ReconcileSearch(candsByItem: cands, maxEdits: ReconcileConstants.maxEdits)
-            let (rawSols, overflow) = search.run(target: delta)
-            let sols = reconcileDedupe(rawSols)
-            rep.nodesVisited = search.nodes
-            if overflow {
-                rep.status = .tooComplex
-                rep.notes.append("Vượt ngân sách tìm kiếm (\(ReconcileConstants.nodeCap) nút) — từ chối sửa, giữ nguyên + cảnh báo.")
-                rep.requiresReview = true
-                rep.regionHints = finalizeHints()
-                return (rep, r)
-            }
-            rep.solutionCount = sols.count
-            if sols.count >= 2 {
-                rep.status = .ambiguous
-                rep.suggestions = sols
-                rep.notes.append("Có >=2 tổ hợp cùng khớp đúng từng xu ở mức sửa tối thiểu — mơ hồ, không áp dụng tổ hợp nào; cả hai được trình anh ở Review.")
-                rep.requiresReview = true
-                rep.regionHints = finalizeHints()
-                return (rep, r)
-            }
-            if sols.isEmpty {
-                rep.status = .noSolution
-                rep.notes.append("Lệch \(delta) xu nhưng không tổ hợp sửa nào (<= \(ReconcileConstants.maxEdits) sửa) khớp — KHÔNG bịa món. Nghi mất dòng: vùng đọc lại = khối món.")
-                rawHints.append((.items, .missingOrUnrepairable, delta))
-                rep.regionHints = finalizeHints()
-                rep.requiresReview = true
-                return (rep, r)
-            }
-            let sol = sols[0]
-            if sol.allSatisfy({ $0.channel.isSiteEvidenced }) {
-                for c in sol {
-                    if c.field == .insert {
-                        var ni = ParsedLineItem(name: c.insertName ?? "")
-                        ni.qty = c.insertQty ?? 1
-                        ni.unitPriceCents = c.insertUnitCents
-                        ni.amountCents = c.newValue
-                        ni.itemCode = c.insertCode
-                        r2.items.append(ni)
-                        applied.append(c)
-                        continue
-                    }
-                    var it2 = r2.items[c.itemIndex]
-                    it2.amountCents = c.newValue
-                    // Mirror: unit bị sao chép thoái hoá (thiếu, hoặc
-                    // qty = 1) thì đồng bộ theo amount mới.
-                    if it2.unitPriceCents == nil || it2.qty == 1 {
-                        it2.unitPriceCents = c.newValue
-                    }
-                    r2.items[c.itemIndex] = it2
-                    applied.append(c)
-                }
-                rep.fixes = sol
-            } else {
-                rep.status = .suggestionOnly
-                rep.suggestions = [sol]
-                rep.notes.append("Tồn tại đúng 1 tổ hợp khớp từng xu nhưng ít nhất một sửa thuần số học (không bằng chứng tại chỗ trên dòng) — KHÔNG áp dụng; trình làm gợi ý ở Review kèm phép tính.")
-                rep.requiresReview = true
-                rep.regionHints = finalizeHints()
-                return (rep, r)
-            }
-        }
-
-        // ── Pha B: khớp số lượng (E3) — chạy trên r2, đã gồm sửa
-        // tiền đã áp ở Pha A. Cùng cơ chế, ngân sách 2 sửa; nghiệm
-        // thuần số học -> gợi ý, không áp dụng. ────────────────────
-        if let sold = r.itemsSold {
-            let qd = sold - reconcileQtySum(r2.items)
-            rep.qtyDelta = qd
-            if qd != 0 {
-                var qcands: [[ReconcileFix]] = r2.items.map { _ in [] }
-                for k in r2.items.indices {
-                    let it = r2.items[k]
-                    guard let amount = it.amountCents, amount > 0 else { continue }
-                    let (full, consistent) = reconcileTriple(it)
-                    if full && !consistent, let unit = it.unitPriceCents, unit != 0,
-                       amount % unit == 0 {
-                        let nq = amount / unit
-                        if nq > 0 && nq != it.qty {
-                            qcands[k].append(ReconcileFix(itemIndex: k, field: .qty,
-                                                          oldValue: it.qty, newValue: nq,
-                                                          delta: nq - it.qty,
-                                                          channel: .force, tier: 1))
-                        }
-                    }
-                    for v in reconcileDigitVariants(it.qty) where v > 0 {
-                        qcands[k].append(ReconcileFix(itemIndex: k, field: .qty,
-                                                      oldValue: it.qty, newValue: v,
-                                                      delta: v - it.qty,
-                                                      channel: .digit, tier: 3))
-                    }
-                }
-                let qs = ReconcileSearch(candsByItem: qcands, maxEdits: ReconcileConstants.maxQtyEdits)
-                let (qRaw, qOverflow) = qs.run(target: qd)
-                let qsols = reconcileDedupe(qRaw)
-                rep.nodesVisited += qs.nodes
-                if !qOverflow && qsols.count == 1 && qsols[0].allSatisfy({ $0.channel.isSiteEvidenced }) {
-                    for c in qsols[0] {
-                        r2.items[c.itemIndex].qty = c.newValue
-                        applied.append(c)
-                    }
-                    rep.fixes = applied
-                } else if !qOverflow && !qsols.isEmpty {
-                    rep.suggestions = rep.suggestions + [qsols[0]]
-                    rep.notes.append("Số lượng còn lệch \(qd) và nghiệm khớp số lượng không đủ điều kiện áp dụng (mơ hồ hoặc thuần số học) — để gợi ý.")
-                    if status == nil { status = .partial }
-                } else {
-                    rep.notes.append("Số lượng còn lệch \(qd), không sửa được — cần đọc lại vùng món hoặc anh kiểm với giấy.")
-                    rawHints.append((.items, .qtyMismatch, nil))
-                    if status == nil { status = .partial }
-                }
-            }
-        }
-
-        // ── Pha C: quét bộ ba khi tiền & lượng đã khớp. Suy trường
-        // còn lại của bộ ba mâu thuẫn CHỈ khi phép chia hết (không
-        // làm lệch lại tổng tiền vì amount không đổi). ─────────────
-        for k in r2.items.indices {
-            let it = r2.items[k]
-            let (full, consistent) = reconcileTriple(it)
-            if !full || consistent { continue }
-            guard let amount = it.amountCents, let unit = it.unitPriceCents else { continue }
-            var fixedField: ReconcileFix.Field? = nil
-            var fixedValue = 0
-            if it.qty != 0 && amount % it.qty == 0 {
-                let nu = amount / it.qty
-                if it.qty * nu == amount {
-                    r2.items[k].unitPriceCents = nu
-                    fixedField = .unit
-                    fixedValue = nu
-                }
-            } else if unit != 0 && amount % unit == 0 {
-                let nq = amount / unit
-                if nq > 0 {
-                    r2.items[k].qty = nq
-                    fixedField = .qty
-                    fixedValue = nq
-                }
-            }
-            if let ff = fixedField {
-                // Mirror ghi old = None cho sửa Pha C (giữ nguyên
-                // hành vi đó; giá trị cũ vẫn truy được từ kết quả gốc).
-                applied.append(ReconcileFix(itemIndex: k, field: ff,
-                                            oldValue: nil, newValue: fixedValue,
-                                            delta: 0, channel: .force, tier: 1))
-                rep.fixes = applied
-            } else {
-                rep.notes.append("Món #\(k) bộ ba qty×unit!=amount và không chia hết để suy ra trường còn lại — để nguyên, gắn cờ.")
-            }
-        }
-
-        // ── Kết luận ──────────────────────────────────────────────
-        let sum2 = r2.items.reduce(0) { $0 + ($1.amountCents ?? 0) }
-        if let s = status {
-            rep.status = s
-        } else if !applied.isEmpty && sum2 == subtotal {
-            rep.status = .repaired
-        } else if applied.isEmpty && delta == 0 {
-            rep.status = .ok
-        } else {
-            rep.status = .partial
-        }
-        rep.requiresReview = !applied.isEmpty || rep.status != .ok
-        rep.regionHints = finalizeHints()
-        return (rep, r2)
-    }
-
-    // MARK: P2-3 — Helper của lớp trọng tài (port từ mirror)
-
-    /// (có đủ bộ ba?, có nhất quán?) cho qty/unit/amount. qty trong
-    /// ParsedLineItem luôn có (mặc định 1) như port — nên "đủ" chỉ
-    /// còn phụ thuộc unit/amount.
-    static func reconcileTriple(_ it: ParsedLineItem) -> (full: Bool, consistent: Bool) {
-        guard let unit = it.unitPriceCents, let amount = it.amountCents else {
-            return (false, false)
-        }
-        return (true, it.qty * unit == amount)
-    }
-
-    /// Σ số lượng các món tiền dương (đích E3).
-    static func reconcileQtySum(_ its: [ParsedLineItem]) -> Int {
-        its.reduce(0) { $0 + (($1.amountCents ?? 0) > 0 ? $1.qty : 0) }
-    }
-
-    /// Biến thể 1-chữ-số của |cents| theo cặp nhầm OCR; giữ dấu, giữ
-    /// độ dài (không tạo số 0 ở đầu), bỏ trùng/gốc/0, sắp tăng dần,
-    /// trần maxVariantsPerItem. (Mirror: digit_variants.)
-    static func reconcileDigitVariants(_ cents: Int) -> [Int] {
-        if cents == 0 { return [] }
-        let sign = cents < 0 ? -1 : 1
-        let digits = Array(String(abs(cents)))
-        var out = Set<Int>()
-        for i in digits.indices {
-            guard let d = Int(String(digits[i])) else { continue }
-            for nd in reconcileConfusePartners[d] ?? [] {
-                if i == 0 && nd == 0 { continue }
-                var t = digits
-                t[i] = Character(String(nd))
-                guard let v = Int(String(t)) else { continue }
-                if v != abs(cents) && v > 0 && v < ReconcileConstants.maxAmountCents {
-                    out.insert(sign * v)
-                }
-            }
-        }
-        return Array(out.sorted().prefix(ReconcileConstants.maxVariantsPerItem))
-    }
-
-    /// Mọi token dạng tiền trong 1 dòng, gồm token chứa chữ cái lẫn
-    /// (vd "19.4B" -> 1948 qua B->8). Trả (cents, raw, có-chữ) — token
-    /// toàn chữ số cũng được trả (có-chữ = false) để kênh ORPHAN/mảnh
-    /// xé dùng lại. (Mirror: tolerant_money_tokens.)
-    static func reconcileTolerantTokens(_ text: String) -> [(cents: Int, raw: String, hasLetter: Bool)] {
-        guard let re = try? NSRegularExpression(
-            pattern: #"(\$?)([0-9OQSZGBIL][0-9OQSZGBIL,]*\.[0-9OQSZGBIL]{2})(-)?"#,
-            options: [.caseInsensitive]) else { return [] }
-        let ns = text as NSString
-        let fullRange = NSRange(location: 0, length: ns.length)
-        var out: [(cents: Int, raw: String, hasLetter: Bool)] = []
-        for m in re.matches(in: text, options: [], range: fullRange) {
-            guard m.numberOfRanges >= 4 else { continue }
-            let token = ns.substring(with: m.range(at: 2))
-            let hasLetter = token.contains { $0.isLetter }
-            let norm = token.map { ch -> String in
-                reconcileLetterDigit[ch.uppercased()] ?? String(ch)
-            }.joined()
-            let digitsOnly = norm.filter { $0 != "," && $0 != "." }
-            if digitsOnly.isEmpty || !digitsOnly.allSatisfy({ $0.isNumber }) { continue }
-            let negative = m.range(at: 3).location != NSNotFound
-            let cents = moneyToCents(norm, negative: negative)
-            if cents != 0 {
-                out.append((cents, ns.substring(with: m.range(at: 0)), hasLetter))
-            }
-        }
-        return out
-    }
-
-    /// Gán mỗi món về chỉ số dòng thô (theo mã món, rồi theo tiền tố
-    /// tên 10 ký tự) — neo cho cửa sổ TOKEN và lineRange của hint.
-    /// (Mirror: item_line_map.)
-    static func reconcileItemLineMap(items: [ParsedLineItem], texts: [String]) -> [Int?] {
-        var idxs: [Int?] = []
-        for it in items {
-            var found: Int? = nil
-            if let code = it.itemCode {
-                for i in texts.indices where texts[i].contains(code) {
-                    found = i
-                    break
-                }
-            }
-            if found == nil {
-                let key = String(it.name.trimmingCharacters(in: .whitespaces).uppercased().prefix(10))
-                if !key.isEmpty {
-                    for i in texts.indices where texts[i].uppercased().contains(key) {
-                        found = i
-                        break
-                    }
-                }
-            }
-            idxs.append(found)
-        }
-        return idxs
-    }
-
-    /// Thu gọn khoảng trắng + bỏ cờ Y/T ở cuối — dọn tên món mồ côi
-    /// như mirror (re.sub "\\s+" -> " ", rồi bỏ "\\s+[YT]$").
-    static func reconcileCollapseName(_ s: String) -> String {
-        var out = s.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-        if out.hasSuffix(" Y") || out.hasSuffix(" T") {
-            out = String(out.dropLast(2))
-        }
-        return out
-    }
-
-    /// Gộp nghiệm trùng chữ ký (item, field, new) — hai ứng viên khác
-    /// kênh cùng gán một giá trị cho một món là MỘT nghiệm vật lý; giữ
-    /// bản bằng chứng mạnh hơn (ưu tiên toàn kênh tại chỗ, rồi tier
-    /// thấp hơn). (Mirror: dedupe_sols — bản Swift thu nghiệm riêng
-    /// biệt theo chữ ký đúng khuyến nghị ở thiết kế §4.)
-    static func reconcileDedupe(_ sols: [[ReconcileFix]]) -> [[ReconcileFix]] {
-        func signature(_ sol: [ReconcileFix]) -> String {
-            sol.map { "\($0.itemIndex)|\($0.field.rawValue)|\($0.newValue)" }
-                .sorted()
-                .joined(separator: ";")
-        }
-        func isBetter(_ a: [ReconcileFix], than b: [ReconcileFix]) -> Bool {
-            let aAll = a.allSatisfy { $0.channel.isSiteEvidenced }
-            let bAll = b.allSatisfy { $0.channel.isSiteEvidenced }
-            if aAll != bAll { return aAll }
-            let aTier = a.map { $0.tier }.max() ?? 0
-            let bTier = b.map { $0.tier }.max() ?? 0
-            return aTier < bTier
-        }
-        var best: [String: [ReconcileFix]] = [:]
-        var order: [String] = []
-        for s in sols {
-            let sg = signature(s)
-            if let existing = best[sg] {
-                if isBetter(s, than: existing) { best[sg] = s }
-            } else {
-                best[sg] = s
-                order.append(sg)
-            }
-        }
-        return order.map { best[$0]! }
-    }
-}
-
-// MARK: - P2-3 — Phiên đối chiếu nhiều vòng (đọc-lại-có-mục-tiêu)
-//
-// Vòng lặp ở mức DỮ LIỆU (thiết kế §6): tầng OCR (P2-1/P2-2) đọc lại
-// vùng theo pendingHints, gộp dòng mới vào tập dòng đầy đủ (khử trùng
-// theo (text, hộp giao nhau) — việc của tầng OCR), parse lại toàn bộ
-// rồi nộp kết quả qua submitRound. Tối đa 2 vòng, mỗi vòng tối đa 2
-// vùng theo priority.
-
-final class ReconcileSession {
-    static let maxRounds = 2
-    static let maxRegionsPerRound = 2
-
-    private(set) var bestReport: ReconcileReport
-    private(set) var bestResult: ParseResult
-    private(set) var roundsUsed = 0
-    private(set) var isFinished = false
-
-    init(result: ParseResult, lines: [OCRLine], lineBoxes: [CGRect?]? = nil) {
-        let (rep, res) = ReceiptParser.reconcile(result: result, lines: lines,
-                                                 lineBoxes: lineBoxes)
-        bestReport = rep
-        bestResult = res
-    }
-
-    /// Vùng nên đọc lại ở vòng kế (đã cắt theo ngân sách vùng/vòng).
-    var pendingHints: [ReconcileRegionHint] {
-        Array(bestReport.regionHints.prefix(ReconcileSession.maxRegionsPerRound))
-    }
-
-    /// Nhận kết quả một vòng đọc lại. QUY TẮC ĐƠN ĐIỆU (chống dao
-    /// động): chỉ nhận khi đối chiếu tốt hơn hẳn theo isBetter; không
-    /// tốt hơn -> giữ kết quả vòng trước và KẾT THÚC phiên.
-    /// Trả true khi kết quả mới được nhận làm best mới.
-    @discardableResult
-    func submitRound(result: ParseResult, lines: [OCRLine],
-                     lineBoxes: [CGRect?]? = nil) -> Bool {
-        if isFinished || roundsUsed >= ReconcileSession.maxRounds { return false }
-        roundsUsed += 1
-        let (rep, res) = ReceiptParser.reconcile(result: result, lines: lines,
-                                                 lineBoxes: lineBoxes)
-        if ReconcileSession.isBetter(newReport: rep, newResult: res,
-                                     oldReport: bestReport, oldResult: bestResult) {
-            bestReport = rep
-            bestResult = res
-            if roundsUsed >= ReconcileSession.maxRounds { isFinished = true }
-            return true
-        }
-        isFinished = true
-        return false
-    }
-
-    /// Thứ tự "tốt hơn" (thiết kế §6): |lệch tiền| giảm -> số món
-    /// khôi phục tăng -> trạng thái neo cải thiện. Bằng nhau ở cả ba
-    /// = KHÔNG tốt hơn. Lệch tiền nil (TOTAL_ONLY/NO_ANCHOR) tính là
-    /// xấu nhất (Int.max).
-    static func isBetter(newReport: ReconcileReport, newResult: ParseResult,
-                         oldReport: ReconcileReport, oldResult: ParseResult) -> Bool {
-        let nd = newReport.moneyDeltaCents.map { abs($0) } ?? Int.max
-        let od = oldReport.moneyDeltaCents.map { abs($0) } ?? Int.max
-        if nd != od { return nd < od }
-        if newResult.items.count != oldResult.items.count {
-            return newResult.items.count > oldResult.items.count
-        }
-        return anchorRank(newReport) > anchorRank(oldReport)
-    }
-
-    private static func anchorRank(_ rep: ReconcileReport) -> Int {
-        switch rep.status {
-        case .noAnchor, .anchorConflict: return 0
-        case .totalOnly: return 1
-        default: return 2
-        }
-    }
-}
+// MARK: - P2-3 — Lớp trọng tài ĐÃ TÁCH SANG Reconcile.swift (Pha 3)
+// Khối reconcile giữ-nguyên-văn của Pha 1 (các dòng 2125-3057 của
+// bản Pha 1) nay là module riêng Reconcile.swift + gia cố SafeMoney
+// + nối luật in + kênh CANDIDATE. Ba helper dùng chung dưới đây ở
+// mức internal để module đó gọi: matchGroups, matchQtyLine,
+// trailingAmount. Mọi symbol khác của file này giữ nguyên.

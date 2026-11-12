@@ -1,0 +1,64 @@
+{
+ "comment": "Lexicon cho DomainCorrection (DESIGN-FINAL §3.4(b)) — tầng sửa CHỮ bằng tri thức miền. LUẬT CỨNG: chỉ áp lên trường CHỮ (tên món, nhãn thuế); token SỐ (tiền, số lượng, ngày giờ, đuôi thẻ, mã hàng) KHÔNG bao giờ qua tầng này — bộ lọc token của tầng chỉ nhận token toàn chữ cái. Hai cơ chế: (A) token trùng một BIẾN THỂ ĐÃ BIẾT (kể cả dạng OCR vỡ đã quan sát) -> thay bằng dạng CANONICAL của mục đó; (B) token ngoài lexicon, dài >= 5, cách đúng MỘT biến thể đã biết đúng 1 phép sửa và chỉ thuộc về một mục duy nhất -> đề xuất canonical của mục đó. Mọi lần sửa ghi corrections[] (field, lineIndex, original, corrected) + provenance .domainCorrected(lexiconVersion). Mỗi MỤC phải có ca corpus sinh ra nó (fixture) và ít nhất một biến thể của mục phải xuất hiện thật trong luồng của ca đó — kiểm hai chiều trong bộ kiểm Pha 1. ĐÃ GỠ mục CUCUMBERS trong chính Pha 1: đo trên corpus cho thấy cơ chế A biến tên in đúng 'ORG CUCUMBER' (L-R03) thành 'CUCUMBERS' — sửa oan một tên in hợp lệ; kỷ luật lexicon: mục chỉ tồn tại khi có dạng VỠ đã quan sát, không tồn tại để 'chuẩn hoá' biến thể in hợp lệ.",
+ "entries": [
+  {
+   "canonical": "PKGD",
+   "field": "itemName",
+   "fixture": "L-R09",
+   "note": "A0 L-R09 có 'CORN RKGD 077512701330' — RKGD là dạng vỡ đã quan sát của PKGD (dạng đúng có ở L-R03/L-R04 'CORN PKGD'). Cơ chế A.",
+   "variants": [
+    "PKGD",
+    "RKGD"
+   ]
+  },
+  {
+   "canonical": "CRAWFISH",
+   "field": "itemName",
+   "fixture": "L-R08",
+   "note": "A0 L-R08 có 'L.e Crawfuh $131 57' — Crawfuh là dạng vỡ đã quan sát. Sửa CHỮ không cứu được số: món vẫn amount=None chờ F5 (kênh DIGIT). Cơ chế A.",
+   "variants": [
+    "CRAWFISH",
+    "CRAWFUH"
+   ]
+  },
+  {
+   "canonical": "COWETA",
+   "field": "taxLabel",
+   "fixture": "L-R08",
+   "note": "A0 L-R08 có 'Covreta seles tax 10.05% 1.23' — Covreta là dạng vỡ của tên thị trấn trong nhãn thuế tự do. Chỉ sửa chuỗi nhãn; tiền/suất của dòng thuế không qua tầng này. Cơ chế A.",
+   "variants": [
+    "COWETA",
+    "COVRETA"
+   ]
+  },
+  {
+   "canonical": "SALES",
+   "field": "taxLabel",
+   "fixture": "L-R08",
+   "note": "Cùng dòng L-R08: 'seles' là dạng vỡ của 'sales'. Cơ chế A.",
+   "variants": [
+    "SALES",
+    "SELES"
+   ]
+  },
+  {
+   "canonical": "VERMICELLI",
+   "field": "itemName",
+   "fixture": "L-R06",
+   "note": "A0 L-R06 'JIANGXI VERMICELLI' — dạng chuẩn neo lexicon cho họ hàng Á; không kỳ vọng lần sửa nào trên corpus hiện tại.",
+   "variants": [
+    "VERMICELLI"
+   ]
+  },
+  {
+   "canonical": "SAUSAGE",
+   "field": "itemName",
+   "fixture": "L-R02",
+   "note": "A0 L-R02 'Down Home Sausage', L-R08 'Smoked Spicy Sausage' — dạng chuẩn; không kỳ vọng lần sửa trên corpus hiện tại.",
+   "variants": [
+    "SAUSAGE"
+   ]
+  }
+ ],
+ "lexiconVersion": "lexicon-2026-11-11-p1"
+}

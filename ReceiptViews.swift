@@ -92,8 +92,13 @@ struct RawTextDisclosure: View {
 // nhánh trích món cùng-dòng + vá tầng totals/ngày (xem Parser.swift).
 // Mã mới "core-v2-1". Gói này KHÔNG đổi gì ở file này ngoài dấu bản:
 // nút Đọc lại, mục Ảnh gốc và nút Chụp lại bản gốc giữ nguyên.
+//
+// CORE-V3 (Pha 4): tem lấy từ NGUỒN DUY NHẤT ReadCoreVersion trong
+// ReadPipeline.swift — cùng giá trị được ghi vào hồ sơ chẩn đoán
+// v2 (identity.parserVersion) của mọi lần đọc, nên tem trong app
+// và tem trong hồ sơ không thể lệch nhau. Mã "core-v3-1".
 
-let currentParserVersion = "core-v2-1"
+let currentParserVersion = ReadCoreVersion.parserVersion
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //
@@ -114,6 +119,27 @@ func vendorSourceText(_ source: String?) -> String? {
         return "Nguồn tên tiệm: nhận qua địa chỉ/số điện thoại — anh kiểm tra giúp."
     default:
         return nil
+    }
+}
+
+/// V3 (Pha 4): chú thích provenance một trường cho tầng hiển thị —
+/// trả nil cho "đọc thẳng" (không cần nói), còn lại nói rõ số đó
+/// đến từ đâu để anh cân nhắc khi duyệt (luật §3.7: số suy luận
+/// không bao giờ trông giống hệt số đọc thẳng).
+func provenanceCaption(_ provenance: FieldProvenance) -> String? {
+    switch provenance.kind {
+    case "read":
+        return nil
+    case "inferred":
+        return "Số này do đối chiếu số học suy ra (kênh \(provenance.detail ?? "?")) — anh kiểm tra giúp."
+    case "roiRecovered":
+        return "Số này khôi phục nhờ đọc lại vùng ảnh (vòng \(provenance.detail ?? "?"))."
+    case "domainCorrected":
+        return "Chữ đã sửa theo từ điển lĩnh vực (bản \(provenance.detail ?? "?")) — chỉ sửa chữ, không sửa số."
+    case "anchored":
+        return "Số này là neo số học của tờ."
+    default:
+        return "Nguồn gốc số: \(provenance.kind)."
     }
 }
 
@@ -341,6 +367,10 @@ struct ReceiptDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var savedNote = false
     @State private var reparsedNote = false
+    /// V3 (Pha 4): hồ sơ chẩn đoán v2 tải theo yêu cầu (nút trong
+    /// mục "Chẩn đoán lần đọc") — không đọc file ở mọi lần vẽ.
+    @State private var loadedDiagnostics: ReadDiagnostics? = nil
+    @State private var diagnosticsMissing = false
     // IMGFIX: gắn lại ảnh gốc cho tờ bị mất file bằng chứng (mục "Ảnh
     // gốc" chỉ hiện khi tờ không còn file gốc nào tải được).
     @State private var showReattachPicker = false
@@ -533,6 +563,53 @@ struct ReceiptDetailView: View {
                 }
             }
 
+            // V3 (Pha 4, M12): hồ sơ chẩn đoán v2 của lần đọc gần
+            // nhất sinh ra tờ này (file phụ cạnh ảnh gốc). Tải theo
+            // yêu cầu; tờ đọc trước bản v3 thì chưa có hồ sơ — ghi
+            // rõ như vậy, không dựng hồ sơ ngược từ số đã lưu.
+            Section("Chẩn đoán lần đọc") {
+                if let diag = loadedDiagnostics {
+                    LabeledContent("Bộ đọc sinh hồ sơ") {
+                        Text(diag.identity.parserVersion)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Nguồn nạp", value: diag.input.source)
+                    LabeledContent("Engine") {
+                        Text("\(diag.config.engineManifest.family) \(diag.config.engineManifest.revision)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Ứng viên thắng") {
+                        Text(diag.candidates.first(where: { $0.winner })?.kind ?? "—")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    LabeledContent("Đối chiếu (F5)", value: diag.reconcile.status)
+                    if !diag.roiRounds.isEmpty {
+                        LabeledContent("Vòng đọc lại vùng (ROI)",
+                                       value: "\(diag.roiRounds.count)")
+                    }
+                    ForEach(nonReadProvenanceRows(diag), id: \.0) { row in
+                        LabeledContent(row.0) {
+                            Text(row.1).font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    if let exportURL = diagnosticsExportURL(diag) {
+                        ShareLink(item: exportURL) {
+                            Label("Xuất hồ sơ chẩn đoán (JSON)",
+                                  systemImage: "square.and.arrow.up")
+                        }
+                    }
+                } else if diagnosticsMissing {
+                    Text("Tờ này chưa có hồ sơ chẩn đoán — nó được đọc trước bản v3, hoặc lần đọc gần nhất ghi hồ sơ thất bại (tờ khi đó đã bị ép vào Kiểm Lại).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button { loadDiagnostics() } label: {
+                        Label("Tải hồ sơ chẩn đoán", systemImage: "waveform.path.ecg")
+                    }
+                }
+            }
+
             // F3 (WP1): văn bản đọc thô đã lưu — chỉ hiện khi có chữ (CODE-AUDIT
             // F3 mục 2). WP3 đóng F3 mục 3: nhãn trung thực theo nguồn —
             // hoá đơn nạp từ PDF lớp chữ thì ghi "Văn bản trong PDF", còn
@@ -624,6 +701,10 @@ struct ReceiptDetailView: View {
         .confirmationDialog("Xoá hẳn hoá đơn này và ảnh gốc?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Xoá", role: .destructive) {
                 ImageStore.delete(fileName: receipt.imageFileName)
+                // V3 (Pha 4): dọn cả file phụ chẩn đoán của tờ —
+                // không để hồ sơ mồ côi trong thư mục bằng chứng.
+                ImageStore.delete(fileName: DiagnosticsStore.fileName(
+                    forImageFileName: receipt.imageFileName))
                 modelContext.delete(receipt)
                 try? modelContext.save()
                 dismiss()
@@ -798,8 +879,65 @@ struct ReceiptDetailView: View {
     // ocrRawText (chính là đầu vào của lần đọc này — bằng chứng gốc,
     // không ghi đè bằng bản đã chuẩn hoá của parser), businessPurpose,
     // và phân loại + mục nếu anh ĐÃ có quyết định (xem dưới).
+
+    /// V3 (Pha 4): tải file phụ chẩn đoán của tờ này (nil -> ghi
+    /// nhận thiếu để mục Chẩn đoán nói thật lý do).
+    private func loadDiagnostics() {
+        if let diag = DiagnosticsStore.load(
+            directory: ImageStore.directory,
+            imageFileName: receipt.imageFileName) {
+            loadedDiagnostics = diag
+            diagnosticsMissing = false
+        } else {
+            diagnosticsMissing = true
+        }
+    }
+
+    /// Các dòng provenance KHÁC "đọc thẳng" trong snapshot của hồ
+    /// sơ (suy luận/ROI/sửa chữ) — trình ở mức dữ liệu cho anh đối
+    /// chiếu; trường đọc thẳng không liệt kê (mặc định im lặng).
+    private func nonReadProvenanceRows(_ diag: ReadDiagnostics)
+        -> [(String, String)] {
+        diag.parse.provenance
+            .filter { $0.value.kind != "read" }
+            .sorted { $0.key < $1.key }
+            .map { ($0.key, provenanceCaption($0.value) ?? $0.value.kind) }
+    }
+
+    /// Ghi JSON hồ sơ ra file tạm để ShareLink xuất (xuất đúng
+    /// exportJSON của giản đồ v2 — không định dạng lại ở UI).
+    private func diagnosticsExportURL(_ diag: ReadDiagnostics) -> URL? {
+        guard let data = try? diag.exportJSON() else { return nil }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                DiagnosticsStore.fileName(
+                    forImageFileName: receipt.imageFileName))
+        do {
+            try data.write(to: url, options: [.atomic])
+            return url
+        } catch {
+            return nil
+        }
+    }
+
     private func reparseReceipt() {
-        let result = ReceiptParser.reparse(storedText: receipt.ocrRawText)
+        // V3 (Pha 4): Đọc lại đi qua ĐƯỜNG ĐỌC DUY NHẤT
+        // (ReceiptReader, nguồn storedText — cùng F4+F5 như lần
+        // quét mới, kèm hồ sơ chẩn đoán v2 cho lần đọc này);
+        // ReceiptParser.reparse (đường tắt chỉ-F4 của các bản
+        // trước) không còn được UI gọi nữa. Độ tin cậy dòng 0.5
+        // giữ đúng ngữ nghĩa của đường reparse di sản.
+        let outcome = ReceiptReader.read(ReadRequest(
+            source: .storedText,
+            imageFileName: receipt.imageFileName,
+            textLines: receipt.ocrRawText
+                .split(separator: "\n")
+                .map { OCRLine(text: String($0),
+                               confidence: ReceiptParser
+                                   .recoveredLineConfidence) },
+            diagnosticsDirectory: receipt.imageFileName.isEmpty
+                ? nil : ImageStore.directory))
+        let result = outcome.result
 
         // --- Trường máy đọc, ánh xạ như save() ---
         receipt.vendor = result.vendor ?? ""
@@ -882,9 +1020,14 @@ struct ReceiptDetailView: View {
         }
 
         // --- Trạng thái: đúng công thức Hộp Chờ của save() ---
+        // V3 (Pha 4): cộng outcome.requiresReview của pipeline —
+        // trọng tài F5 đòi kiểm lại, hoặc ghi chẩn đoán thất bại
+        // (ReadOutcome.requiresReview đã gồm cả hai) thì tờ ở lại
+        // Kiểm Lại dù các số có vẻ đủ.
         let stillNeedsReview = receipt.classification == .unknown
             || receipt.totalCents == nil
             || !result.warnings.isEmpty
+            || outcome.requiresReview
             || (receipt.classification == .business
                 && receipt.businessPurpose.trimmingCharacters(in: .whitespaces).isEmpty)
         receipt.status = stillNeedsReview ? .needsReview : .reviewed
@@ -988,6 +1131,38 @@ struct ReviewView: View {
                     }
                 }
 
+                // V3 (Pha 4, §7): pill hiện diện trường — mức dữ
+                // liệu tối thiểu để anh thấy ngay trường nào bộ đọc
+                // KHÔNG tìm thấy trên tờ này (không suy, không điền).
+                Section("Trường đọc được") {
+                    HStack(spacing: 6) {
+                        presencePill("Tiệm", draft.result.vendor != nil)
+                        presencePill("Ngày", draft.result.date != nil)
+                        presencePill("Tạm tính", draft.result.subtotalCents != nil)
+                        presencePill("Thuế", !draft.result.taxes.isEmpty)
+                        presencePill("Tổng", draft.result.totalCents != nil)
+                        presencePill("Thẻ", draft.result.cardLast4 != nil)
+                    }
+                }
+
+                // V3 (Pha 4): gợi ý đối chiếu của F5 — bộ đọc KHÔNG
+                // tự áp các tổ hợp này (luật không bịa số); trình để
+                // anh cân nhắc khi sửa tay ở mục Thông tin dưới.
+                if let report = draft.reconcileReport,
+                   !report.suggestions.isEmpty {
+                    Section("Gợi ý đối chiếu (chưa áp dụng)") {
+                        ForEach(Array(report.suggestions.enumerated()),
+                                id: \.offset) { _, solution in
+                            ForEach(Array(solution.enumerated()),
+                                    id: \.offset) { _, fix in
+                                Text("Món #\(fix.itemIndex + 1): \(fix.field.rawValue) \(fix.oldValue.map { formatMoney(cents: $0) } ?? "—") → \(formatMoney(cents: fix.newValue)) [kênh \(fix.channel.rawValue)]")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
                 Section("Thông tin đọc được") {
                     TextField("Tiệm / Vendor", text: $vendorText)
                     DatePicker("Ngày", selection: $dateValue, displayedComponents: [.date, .hourAndMinute])
@@ -1040,6 +1215,18 @@ struct ReviewView: View {
                     } else {
                         LabeledContent("Thẻ đọc được", value: "Không thấy dòng thẻ")
                     }
+                    // V3 (Pha 4): provenance của các trường tiền —
+                    // chỉ hiện khi số KHÔNG phải đọc thẳng (suy
+                    // luận F5 / đọc lại vùng), để anh biết số nào
+                    // cần mắt người xác nhận trước khi lưu.
+                    ForEach(["subtotal", "taxes", "total"], id: \.self) { key in
+                        if let prov = draft.provenance[key],
+                           let caption = provenanceCaption(prov) {
+                            Text("\(key == "subtotal" ? "Tạm tính" : key == "taxes" ? "Thuế" : "Tổng"): \(caption)")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    }
                 }
 
                 Section("Phân loại — gợi ý theo thẻ, anh đổi được") {
@@ -1066,13 +1253,28 @@ struct ReviewView: View {
 
                 if !draft.result.items.isEmpty {
                     Section("Từng món đọc được (\(draft.result.items.count))") {
-                        ForEach(Array(draft.result.items.enumerated()), id: \.offset) { _, item in
+                        ForEach(Array(draft.result.items.enumerated()), id: \.offset) { index, item in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.name).font(.callout)
                                     Text("SL \(item.qty)" + (item.taxFlag.map { " · cờ \($0)" } ?? ""))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    // V3 (Pha 4): provenance mức món
+                                    // (tên bị sửa chữ theo từ điển /
+                                    // tiền suy luận / khôi phục ROI).
+                                    if let prov = draft.provenance["items[\(index)].name"],
+                                       let caption = provenanceCaption(prov) {
+                                        Text(caption)
+                                            .font(.caption)
+                                            .foregroundStyle(.orange)
+                                    }
+                                    if let prov = draft.provenance["items[\(index)].amount"],
+                                       let caption = provenanceCaption(prov) {
+                                        Text(caption)
+                                            .font(.caption)
+                                            .foregroundStyle(.orange)
+                                    }
                                 }
                                 Spacer()
                                 Text(formatMoney(optionalCents: item.amountCents))
@@ -1104,6 +1306,20 @@ struct ReviewView: View {
                 Text("Mã chống trùng của tờ này khớp \(duplicateCount) hoá đơn đã lưu (cùng mã TC#). Anh kiểm tra kẻo tính trùng 2 lần.")
             }
         }
+    }
+
+    /// V3 (Pha 4): pill hiện diện trường đọc được — ✓ xanh khi bộ
+    /// đọc tìm thấy trường, — xám khi không (không suy diễn).
+    private func presencePill(_ label: String, _ present: Bool) -> some View {
+        Text("\(present ? "✓" : "—") \(label)")
+            .font(.caption2)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                Capsule().fill(present
+                    ? Color.green.opacity(0.18)
+                    : Color.gray.opacity(0.15)))
+            .foregroundStyle(present ? .green : .secondary)
     }
 
     private func moneyField(_ binding: Binding<String>) -> some View {
@@ -1212,9 +1428,14 @@ struct ReviewView: View {
         }
         // Kỷ luật Hộp Chờ: còn cảnh báo / chưa rõ loại / business thiếu mục đích
         // -> ở trạng thái chờ duyệt, chưa phải chứng từ chính thức.
+        // V3 (Pha 4): cộng hai điều kiện của đường đọc mới — trọng
+        // tài F5 đòi kiểm lại, hoặc ghi chẩn đoán thất bại (hợp
+        // đồng fail-closed: không hồ sơ = không "sạch").
         let stillNeedsReview = selectedKind == .unknown
             || receipt.totalCents == nil
             || !draft.result.warnings.isEmpty
+            || (draft.reconcileReport?.requiresReview ?? false)
+            || draft.diagnosticsWriteFailed
             || (selectedKind == .business && purposeText.trimmingCharacters(in: .whitespaces).isEmpty)
         receipt.status = stillNeedsReview ? .needsReview : .reviewed
 

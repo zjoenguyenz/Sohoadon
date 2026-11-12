@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.nje
   deploymentTarget:
     iOS: "17.0"
+  createIntermediateGroups: true
 settings:
   base:
     SWIFT_VERSION: "5.9"
@@ -14,6 +15,7 @@ targets:
     type: application
     platform: iOS
     sources:
+      # --- Tầng app (giữ nguyên từ main) ---
       - SoHoaDonApp.swift
       - Models.swift
       - ContentView.swift
@@ -21,27 +23,120 @@ targets:
       - ScanView.swift
       - ReceiptViews.swift
       - CardsView.swift
+      # --- Tập module đường đọc v3 (Pha 0-3, dùng CHUNG với
+      # target SoHoaDonBench ở dưới — luật 1.6: một nguồn duy
+      # nhất, không fork). Parser.swift là bản Pha 3 (M6+M8 đã
+      # tách Reconcile.swift riêng). ---
+      - Money.swift
+      - ReadDiagnostics.swift
+      - CaptureIntake.swift
+      - OCREngine.swift
+      - LineAssembly.swift
+      - VendorData.swift
       - Parser.swift
+      - Reconcile.swift
+      - RegionReReader.swift
+      - ReadPipeline.swift
+      # --- Dữ liệu bundle của M7 (tiệm) + DomainCorrection ---
+      - vendors.json
+      - lexicon.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon
         INFOPLIST_FILE: Info.plist
+        TARGETED_DEVICE_FAMILY: "1"
     info:
       path: Info.plist
       properties:
         CFBundleDisplayName: "Sổ Hóa Đơn"
-        CFBundleName: "Sổ Hóa Đơn"
-        NSCameraUsageDescription: "Dùng camera để quét hoá đơn giấy."
-        NSFaceIDUsageDescription: "Dùng Face ID để khoá hoá đơn của anh."
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSCameraUsageDescription: "App dùng camera để chụp hoá đơn giấy và đọc thông tin trên hoá đơn ngay trên máy."
+        NSFaceIDUsageDescription: "App dùng Face ID để khoá sổ hoá đơn của anh; tắt được trong mục Cài đặt của app."
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
         CFBundleDocumentTypes:
-          - CFBundleTypeName: "Hoá đơn"
+          - CFBundleTypeName: "Hoá đơn nạp vào Sổ Hóa Đơn"
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes:
               - com.adobe.pdf
               - public.image
+  # ==========================================================
+  # BenchShell (Pha 4): app ĐO dùng chung ĐÚNG tập module ở
+  # trên + hai file vỏ riêng (BenchApp/BenchView). KHÔNG liên
+  # kết tầng app (Models/ScanView/ReceiptViews/...) — module
+  # phải đứng độc lập được; đây cũng là phép kiểm sống của
+  # luật 1.6 ở cổng CI. Bundle riêng như tiền lệ bench.
+  # deploymentTarget 26.0 (như project bench tiền lệ) vì vỏ đo
+  # chạm họ documents iOS 26; tập module tự nó tương thích 17.0.
+  # ==========================================================
+  SoHoaDonBench:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - BenchApp.swift
+      - BenchView.swift
+      - Money.swift
+      - ReadDiagnostics.swift
+      - CaptureIntake.swift
+      - OCREngine.swift
+      - LineAssembly.swift
+      - VendorData.swift
+      - Parser.swift
+      - Reconcile.swift
+      - RegionReReader.swift
+      - ReadPipeline.swift
+      - vendors.json
+      - lexicon.json
+      - BenchImages/C-003.jpg
+      - BenchImages/L-R01.jpg
+      - BenchImages/L-R02.jpg
+      - BenchImages/L-R03.jpg
+      - BenchImages/L-R04.jpg
+      - BenchImages/L-R05.jpg
+      - BenchImages/L-R06.jpg
+      - BenchImages/L-R07.jpg
+      - BenchImages/L-R08.jpg
+      - BenchImages/L-R09.jpg
+      - BenchImages/L-R10.jpg
+      - BenchImages/L-R11.jpg
+      - BenchImages/N-001.jpg
+      - BenchImages/N-002.jpg
+      - BenchImages/S-0.jpg
+      - BenchImages/SYN-001-BLUR.jpg
+      - BenchImages/SYN-001-DOWNSCALE.jpg
+      - BenchImages/SYN-001-LIGHT.jpg
+      - BenchImages/SYN-001-NOISE.jpg
+      - BenchImages/SYN-001-TILT.jpg
+      - BenchImages/SYN-001-WRINKLE.jpg
+      - BenchImages/SYN-002-BLUR.jpg
+      - BenchImages/SYN-002-DOWNSCALE.jpg
+      - BenchImages/SYN-002-LIGHT.jpg
+      - BenchImages/SYN-002-NOISE.jpg
+      - BenchImages/SYN-002-TILT.jpg
+      - BenchImages/SYN-002-WRINKLE.jpg
+      - BenchImages/SYN-003-BLUR.jpg
+      - BenchImages/SYN-003-DOWNSCALE.jpg
+      - BenchImages/SYN-003-LIGHT.jpg
+      - BenchImages/SYN-003-NOISE.jpg
+      - BenchImages/SYN-003-TILT.jpg
+      - BenchImages/SYN-003-WRINKLE.jpg
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon.bench
+        INFOPLIST_FILE: Info-Bench.plist
+        TARGETED_DEVICE_FAMILY: "1"
+    # Info.plist RIÊNG cho bench: nếu dùng chung path "Info.plist"
+    # với target chính, XcodeGen sinh file hai lần vào cùng một
+    # đường và bản sinh sau ghi đè bản trước (mất chuỗi quyền của
+    # app chính). Đây là lệch bắt buộc so với tiền lệ một-target.
+    info:
+      path: Info-Bench.plist
+      properties:
+        CFBundleDisplayName: "BenchApp — Đo OCR"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

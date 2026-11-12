@@ -1,0 +1,225 @@
+{
+ "comment": "Vendor = DỮ LIỆU (DESIGN-FINAL §3.4 / M7). Seed: 9 hãng của WP5 (giữ nguyên tên hiển thị + tên khớp đã kiểm chứng) + T-Johnnys Seafood + Pan-Asia trích TỪ CORPUS ĐÓNG BĂNG (dòng header thật trong answers-lr.json / luồng A0 buổi đo 2026-11-11), không gõ từ trí nhớ. Neo phụ: địa chỉ/điện thoại/cụm chữ đọc từ chính các ca corpus ghi kèm ở trường note của từng neo. Thêm vendor mới = thêm mục dữ liệu + ca sinh nó thành fixture hồi quy + bump dataVersion — KHÔNG sửa code.",
+ "dataVersion": "vendors-2026-11-11-p1",
+ "vendors": [
+  {
+   "anchors": [
+    {
+     "kind": "phone",
+     "note": "Dòng '9182529503' trong luồng đóng băng 001/002 và A0 của N-001/N-002/S-0 (Sam's Tulsa).",
+     "value": "9182529503",
+     "weight": "strong"
+    }
+   ],
+   "displayName": "Sam's Club",
+   "key": "sams",
+   "matchNames": [
+    "SAM S CLUB",
+    "SAMS CLUB"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "sams"
+  },
+  {
+   "anchors": [
+    {
+     "kind": "phrase",
+     "note": "Dòng đầu 'Give us feedback @ survey.walmart.com' ở L-R03/L-R04/L-R09/L-R11 (A0).",
+     "value": "SURVEY WALMART COM",
+     "weight": "weak"
+    }
+   ],
+   "displayName": "Walmart",
+   "key": "walmart",
+   "matchNames": [
+    "WALMART"
+   ],
+   "printSemantics": {
+    "atLineSoldContribution": "onePerLine",
+    "note": "Ngoại lệ E3 (DESIGN-FINAL §3.4): dòng 'N AT 1 FOR X' của Walmart đóng góp 1 vào tổng số-món-đã-bán in trên bill, KHÔNG đóng góp N. Ca sinh: L-R04 (CUCUMBERS '2 AT 1 FOR 0.98' = 1.96 nhưng bill in '# ITEMS SOLD 8' = số DÒNG)."
+   },
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [
+    {
+     "kind": "phrase",
+     "note": "Hai dòng đầu 'COSTCO / WHOLESALE' của L-R01 (A0) — cụm sau khi nối dòng liên tiếp.",
+     "value": "COSTCO WHOLESALE",
+     "weight": "weak"
+    }
+   ],
+   "displayName": "Costco",
+   "key": "costco",
+   "matchNames": [
+    "COSTCO"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [
+    {
+     "kind": "address",
+     "note": "Dòng địa chỉ trong luồng OCR thô đóng băng của Mẫu 003 ('9808 E 71ST ST TULSA OK 74133').",
+     "value": "9808 E 71ST ST",
+     "weight": "strong"
+    },
+    {
+     "kind": "address",
+     "note": "ZIP trên cùng dòng địa chỉ Mẫu 003 (neo yếu: chỉ tính khi đi cùng một neo khác loại).",
+     "value": "74133",
+     "weight": "weak"
+    },
+    {
+     "kind": "phrase",
+     "note": "Logo bị OCR đọc thành khẩu hiệu 'How doers get more done' — tên tiệm VẮNG MẶT trong luồng 003 đóng băng; cụm này là neo cứu ca 003/L-R10.",
+     "value": "HOW DOERS GET MORE DONE",
+     "weight": "strong"
+    }
+   ],
+   "displayName": "The Home Depot",
+   "key": "homedepot",
+   "matchNames": [
+    "HOME DEPOT",
+    "THE HOME DEPOT"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [],
+   "displayName": "Lowe's",
+   "exactTokenOnly": [
+    "LOWES",
+    "LOWE"
+   ],
+   "key": "lowes",
+   "matchNames": [
+    "LOWE S",
+    "LOWES"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [],
+   "displayName": "Target",
+   "exactTokenOnly": [
+    "TARGET"
+   ],
+   "key": "target",
+   "matchNames": [
+    "TARGET"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [],
+   "displayName": "QuikTrip",
+   "key": "quiktrip",
+   "matchNames": [
+    "QUIKTRIP",
+    "QUIK TRIP"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [],
+   "displayName": "Casey's",
+   "key": "caseys",
+   "matchNames": [
+    "CASEY S",
+    "CASEYS"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [],
+   "displayName": "Love's",
+   "key": "loves",
+   "matchNames": [
+    "LOVE S",
+    "LOVES"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [
+    {
+     "kind": "address",
+     "note": "Dòng 2 của L-R02/L-R08 (A0): '309 EAST OAK ST, COWETA, OK 74429' (answers-lr GT-LR-02/08 notes).",
+     "value": "309 EAST OAK ST",
+     "weight": "strong"
+    },
+    {
+     "kind": "phone",
+     "note": "Dòng '918 406 4870' trong A0 của L-R02/L-R08.",
+     "value": "9184064870",
+     "weight": "strong"
+    },
+    {
+     "kind": "phrase",
+     "note": "Thị trấn Coweta trên cả hai hoá đơn T-Johnnys của corpus — neo yếu, chỉ đi kèm.",
+     "value": "COWETA",
+     "weight": "weak"
+    }
+   ],
+   "displayName": "T-Johnnys Seafood Co.",
+   "key": "tjohnnys",
+   "matchNames": [
+    "T JOHNNYS SEAFOOD",
+    "T JOHNNYS",
+    "TJOHNNYS SEAFOOD"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  },
+  {
+   "anchors": [
+    {
+     "kind": "address",
+     "note": "Dòng 2 của L-R06/L-R07 (A0): '10003 E 71st Street, Tulsa' (L-R05 OCR đọc '10003 E 71st Street' cùng dạng).",
+     "value": "10003 E 71ST STREET",
+     "weight": "strong"
+    },
+    {
+     "kind": "phone",
+     "note": "Dòng '(918)940-7570' trong A0 của L-R05/L-R06/L-R07.",
+     "value": "9189407570",
+     "weight": "strong"
+    },
+    {
+     "kind": "phrase",
+     "note": "Email chân bill 'PanAsiaTulsa@gmail.com' (L-R06; các ca khác OCR vỡ địa chỉ này nên chỉ là neo yếu).",
+     "value": "PANASIATULSA",
+     "weight": "weak"
+    }
+   ],
+   "displayName": "Pan-Asia Supermarket",
+   "key": "panasia",
+   "matchNames": [
+    "PAN ASIA SUPERMARKET",
+    "PAN ASIA",
+    "PANASIA"
+   ],
+   "printSemantics": null,
+   "signatureItems": [],
+   "parserPath": "generic"
+  }
+ ]
+}

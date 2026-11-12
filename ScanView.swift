@@ -33,14 +33,34 @@ struct ScanDraft: Identifiable {
     /// quyết theo cờ này (CODE-AUDIT F3 mục 3: nhãn phải nói đúng đường
     /// nào sinh ra chữ). ReviewView.save() chép vào Receipt.
     var rawTextIsPDFTextLayer: Bool = false
+    /// V3 (Pha 4): provenance từng trường của lần đọc (đọc thẳng /
+    /// suy luận F5 / đọc-lại-ROI / sửa chữ theo từ điển) — ReviewView
+    /// hiển thị ở mức dữ liệu cạnh trường tương ứng (M12, §7 Pha 4).
+    var provenance: [String: FieldProvenance] = [:]
+    /// V3 (Pha 4): báo cáo trọng tài của lần đọc — ReviewView dùng
+    /// requiresReview cho công thức trạng thái và suggestions để
+    /// trình gợi ý đối chiếu (chỉ trình, không tự áp).
+    var reconcileReport: ReconcileReport? = nil
+    /// V3 (Pha 4): mã hồ sơ chẩn đoán v2 của lần đọc (nil khi ghi
+    /// chẩn đoán thất bại hoặc không có thư mục ghi).
+    var diagnosticsID: String? = nil
+    /// V3 (Pha 4): ghi chẩn đoán THẤT BẠI -> tờ bị ép vào Kiểm Lại
+    /// khi lưu (hợp đồng fail-closed §1.5: không có lần đọc nào
+    /// "sạch" mà không có bản ghi kiểm chứng được).
+    var diagnosticsWriteFailed: Bool = false
 }
 
 /// Màn Chụp: camera quét tài liệu của Apple (VisionKit) -> lưu ảnh gốc vào
-/// thư mục của app -> đọc chữ bằng Vision NGAY TRÊN MÁY (offline) -> Parser
-/// -> màn Review. Không có bước nào gửi ảnh ra ngoài iPhone.
+/// thư mục của app -> đọc bằng ĐƯỜNG ĐỌC V3 (ReceiptReader trong
+/// ReadPipeline.swift: F1->F2->F3->F4->F5+ROI, chẩn đoán v2 bắt buộc) ->
+/// màn Review. Không có bước nào gửi ảnh ra ngoài iPhone.
 /// WP3 thêm đường nạp file từ Files: PDF có lớp chữ -> trích thẳng vào cùng
-/// bộ bóc tách (không qua OCR); PDF không lớp chữ -> render trang -> OCR;
-/// file ảnh -> OCR như đường chọn ảnh.
+/// đường đọc (không qua OCR); PDF không lớp chữ -> render trang -> đọc;
+/// file ảnh -> đọc như đường chọn ảnh.
+/// V3 (Pha 4): file này chỉ còn là VỎ UI + hàng chờ nạp — toàn bộ cơ chế
+/// đọc cũ (recognizeLines/yieldScore/cắt lát/ứng viên phái sinh kiểu
+/// OCRFIX) đã GỠ sang module dùng chung; không còn bộ đọc thứ hai nào
+/// trong app (luật 1.6).
 struct ScanView: View {
     /// WP3 bước 2: file anh mở bằng "Mở bằng Sổ Hóa Đơn" / Share Sheet —
     /// ContentView nhận qua onOpenURL rồi truyền xuống đây; ScanView hút
@@ -57,6 +77,10 @@ struct ScanView: View {
     /// WP3: hàng chờ nạp NHIỀU file một lúc (Master Plan WP3) — xử lý lần
     /// lượt từng file, mỗi file một màn Review; đóng Review thì nạp tiếp.
     @State private var importQueue: [URL] = []
+    /// V3 (Pha 4): cổng chất lượng lúc chụp — MỘT instance cho cả phiên
+    /// (trạng thái fail-safe đếm lần từ chối liên tiếp nằm trong nó;
+    /// quyết định chặn mặc định TẮT, xem QualityThresholds của Pha 2).
+    @State private var qualityGate = QualityGate()
 
     private var cameraSupported: Bool {
         VNDocumentCameraViewController.isSupported
@@ -153,8 +177,11 @@ struct ScanView: View {
                             errorText = "Chưa chụp được trang nào — anh thử lại giúp."
                             return
                         }
-                        // Build 1: xử lý trang đầu (hoá đơn dài nhiều trang -> bản sau).
-                        process(image: scan.imageOfPage(at: 0), source: .camera)
+                        // V3 (Pha 4): đọc MỌI trang của lượt quét
+                        // (hoá đơn dài nhiều trang — nối chữ ở tầng
+                        // ráp dòng của pipeline), thay giới hạn
+                        // trang đầu của Build 1.
+                        process(scan: scan)
                     },
                     onCancel: { showCamera = false },
                     onError: { error in
@@ -233,34 +260,145 @@ struct ScanView: View {
         processNextImportedFile()
     }
 
-    // MARK: Pipeline: lưu ảnh gốc -> OCR trên máy -> Parser -> bản nháp
 
+    // MARK: Pipeline V3: lưu ảnh gốc -> ReceiptReader (đường đọc duy
+    // nhất) -> bản nháp. Mọi đường nạp đều qua runRead ở dưới.
+
+    /// Ánh xạ nguồn nạp của app (SourceType) sang nguồn nạp của
+    /// pipeline (IntakeSource — ghi vào hồ sơ chẩn đoán).
+    private func intakeSource(for source: SourceType) -> IntakeSource {
+        switch source {
+        case .camera: return .documentScanner
+        case .photoLibrary: return .photoLibrary
+        case .fileImport, .pdfImport: return .fileImport
+        case .screenshot, .unknown: return .photoLibrary
+        }
+    }
+
+    /// Đường quét tài liệu: lưu MỌI trang làm bằng chứng TRƯỚC
+    /// (trang 1 = ảnh chính, mọi trang vào originalFileNames —
+    /// cùng luật toàn-hay-không của applyRescannedOriginal: lưu
+    /// dở dang thì xoá phần đã lưu và báo lỗi, không đọc nửa vời),
+    /// rồi đọc đa trang qua pipeline (nối chữ ở tầng ráp dòng).
+    private func process(scan: VNDocumentCameraScan) {
+        var names: [String] = []
+        var images: [UIImage] = []
+        for index in 0..<scan.pageCount {
+            let image = scan.imageOfPage(at: index)
+            guard let name = ImageStore.saveJPEG(image) else {
+                for saved in names { ImageStore.delete(fileName: saved) }
+                errorText = "Không lưu được ảnh gốc vào máy — anh kiểm tra dung lượng trống giúp."
+                return
+            }
+            names.append(name)
+            images.append(image)
+        }
+        guard let firstName = names.first else { return }
+        let pageCG = images.compactMap { ReceiptReader.uprightCGImage(from: $0) }
+        guard pageCG.count == images.count, let firstCG = pageCG.first else {
+            errorText = "Không dựng được ảnh đã quét để đọc."
+            return
+        }
+        runRead(request: ReadRequest(
+                    source: .documentScanner,
+                    imageFileName: firstName,
+                    image: firstCG,
+                    pageImages: pageCG,
+                    diagnosticsDirectory: ImageStore.directory,
+                    qualityGate: qualityGate),
+                sourceType: .camera,
+                originalFileNames: names)
+    }
+
+    /// Đường ảnh đơn (chọn ảnh / file ảnh / trang PDF đã render):
+    /// lưu JPEG gốc trước, dựng thẳng ở pixel gốc, rồi đọc.
     private func process(image: UIImage, source: SourceType,
                          sourceFileName: String? = nil,
-                         originalFileNames: [String] = []) {
+                         originalFileNames: [String] = [],
+                         pdfRenderScale: Double? = nil) {
         guard let fileName = ImageStore.saveJPEG(image) else {
             errorText = "Không lưu được ảnh gốc vào máy — anh kiểm tra dung lượng trống giúp."
             processNextImportedFile()
             return
         }
+        guard let cg = ReceiptReader.uprightCGImage(from: image) else {
+            errorText = "Không dựng được ảnh để đọc."
+            processNextImportedFile()
+            return
+        }
+        runRead(request: ReadRequest(
+                    source: intakeSource(for: source),
+                    imageFileName: fileName,
+                    image: cg,
+                    pdfRenderScale: pdfRenderScale,
+                    diagnosticsDirectory: ImageStore.directory,
+                    qualityGate: qualityGate),
+                sourceType: source,
+                sourceFileName: sourceFileName,
+                originalFileNames: originalFileNames)
+    }
+
+    /// Chạy MỘT lần đọc trên hàng đợi nền (pipeline gồm nhiều ứng
+    /// viên + tối đa 2 vòng ROI — không chạy trên main) rồi hạ
+    /// cánh thành bản nháp trên main, đúng kỷ luật bất đồng bộ
+    /// của đường đọc cũ.
+    private func runRead(request: ReadRequest,
+                         sourceType: SourceType,
+                         sourceFileName: String? = nil,
+                         originalFileNames: [String] = [],
+                         rawTextIsPDFTextLayer: Bool = false) {
         isProcessing = true
         statusText = "Đang đọc hoá đơn…"
         errorText = nil
-        recognizeLines(in: image) { lines in
+        let gate = qualityGate
+        var request = request
+        if request.qualityGate == nil { request.qualityGate = gate }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let outcome = ReceiptReader.read(request)
             DispatchQueue.main.async {
                 isProcessing = false
-                if lines.isEmpty {
+                // Không dòng chữ nào đọc được -> cùng thông báo lỗi
+                // như đường cũ, không mở Review với tờ rỗng.
+                if outcome.result.rawText
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty {
                     statusText = nil
                     errorText = "Không đọc được chữ nào trong ảnh — anh chụp lại rõ hơn, đủ sáng giúp."
                     processNextImportedFile()
                     return
                 }
-                let result = ReceiptParser.parse(lines: lines)
-                statusText = nil
-                draft = ScanDraft(result: result, imageFileName: fileName, sourceType: source,
-                                  sourceFileName: sourceFileName, originalFileNames: originalFileNames)
+                statusText = qualityNote(outcome.qualityOutcome)
+                draft = ScanDraft(
+                    result: outcome.result,
+                    imageFileName: request.imageFileName,
+                    sourceType: sourceType,
+                    sourceFileName: sourceFileName,
+                    originalFileNames: originalFileNames,
+                    rawTextIsPDFTextLayer: rawTextIsPDFTextLayer,
+                    provenance: outcome.provenance,
+                    reconcileReport: outcome.report,
+                    diagnosticsID: outcome.diagnosticsID,
+                    diagnosticsWriteFailed: outcome.diagnosticsWriteFailed)
             }
         }
+    }
+
+    /// Dòng nhắc chất lượng lúc chụp (§7 Pha 4 — UI tối thiểu: chỉ
+    /// state + dòng nhắc, cổng chặn đang TẮT nên không bao giờ
+    /// chặn lượt quét; anh vẫn kiểm lại số ở màn Review).
+    private func qualityNote(_ outcome: QualityOutcome?) -> String? {
+        guard let outcome, outcome.decision == .warn else { return nil }
+        var issues: [String] = []
+        for detected in outcome.detected {
+            switch detected {
+            case "blur": issues.append("hơi mờ")
+            case "glare": issues.append("bị chói sáng")
+            case "lowContrast": issues.append("tương phản thấp (chữ nhạt)")
+            default: issues.append(detected)
+            }
+        }
+        if issues.isEmpty { return nil }
+        return "Ảnh \(issues.joined(separator: ", ")) — anh kiểm tra kỹ các số ở màn sau giúp."
     }
 
     // MARK: - WP3: nạp file từ Files (CODE-AUDIT F1)
@@ -323,19 +461,26 @@ struct ScanView: View {
         }
         if let lines = textLayerLines(pdfData: data) {
             // Lớp chữ là chữ thật do hệ thống của tiệm tạo ra — không phải
-            // chữ đoán — nên độ tin cậy 1.0 (CODE-AUDIT F1 mục 4). Kiểm
-            // chứng số học vẫn chạy đủ trong ReceiptParser.validate();
-            // độ tin cậy tự nó KHÔNG duyệt được tờ nào (Master Plan §5.5).
-            // File PDF chính là bằng chứng: imageFileName trỏ thẳng tới
-            // nó, các màn hiển thị render trang 1 qua ImageStore.load.
-            let result = ReceiptParser.parse(lines: lines)
-            draft = ScanDraft(result: result, imageFileName: storedPDFName,
-                              sourceType: .pdfImport, sourceFileName: sourceFileName,
-                              originalFileNames: [storedPDFName],
-                              rawTextIsPDFTextLayer: true)
+            // chữ đoán — nên độ tin cậy 1.0 (CODE-AUDIT F1 mục 4). Đường
+            // chữ đi vào CÙNG ReceiptReader như mọi đường khác (không
+            // parser thứ hai): F4+F5 chạy trên đúng các dòng này, hồ sơ
+            // chẩn đoán ghi nguồn pdfTextLayer. File PDF chính là bằng
+            // chứng: imageFileName trỏ thẳng tới nó, các màn hiển thị
+            // render trang 1 qua ImageStore.load.
+            runRead(request: ReadRequest(
+                        source: .pdfTextLayer,
+                        imageFileName: storedPDFName,
+                        byteSize: data.count,
+                        textLines: lines,
+                        diagnosticsDirectory: ImageStore.directory,
+                        qualityGate: qualityGate),
+                    sourceType: .pdfImport,
+                    sourceFileName: sourceFileName,
+                    originalFileNames: [storedPDFName],
+                    rawTextIsPDFTextLayer: true)
             return
         }
-        // Không có lớp chữ (PDF là ảnh scan): render trang 1 -> đường OCR.
+        // Không có lớp chữ (PDF là ảnh scan): render trang 1 -> đường ảnh.
         // PDF gốc vẫn là bằng chứng chính (originalFileNames); JPEG render
         // là nguồn đọc. Hoá đơn PDF nhiều trang -> xử lý nhiều trang ở WP8;
         // bước này giữ đúng giới hạn 1 trang như Build 1 và ghi rõ ở cổng.
@@ -346,7 +491,8 @@ struct ScanView: View {
             return
         }
         process(image: image, source: .pdfImport, sourceFileName: sourceFileName,
-                originalFileNames: [storedPDFName])
+                originalFileNames: [storedPDFName],
+                pdfRenderScale: 200.0 / 72.0)
     }
 
     /// Trích lớp chữ nhúng trong PDF (PDFKit — có từ iOS 11, không phải
@@ -354,8 +500,7 @@ struct ScanView: View {
     /// luật TEAM.md #1). Trả nil khi PDF không chứa dòng chữ nào — đó là
     /// tín hiệu rẽ sang đường render->OCR, KHÔNG phải lỗi.
     /// Thứ tự dòng = thứ tự nội dung từng trang (page.string); với hoá đơn
-    /// do máy tạo thì đó là thứ tự đọc (CODE-AUDIT F1 mục 3). Cùng bộ
-    /// ReceiptParser như mọi đường khác — không có parser thứ hai.
+    /// do máy tạo thì đó là thứ tự đọc (CODE-AUDIT F1 mục 3).
     private func textLayerLines(pdfData: Data) -> [OCRLine]? {
         guard let doc = PDFDocument(data: pdfData) else { return nil }
         var lines: [OCRLine] = []
@@ -394,295 +539,8 @@ struct ScanView: View {
             page.draw(with: .cropBox, to: cg)
         }
     }
-
-    // MARK: - WP4 ứng viên (a): Vision cổ điển + ráp hàng F2a + cắt lát F2c
-    // + tiền xử lý ảnh phái sinh (bước 2: phát hiện tứ giác -> nắn
-    // perspective -> tăng tương phản — TOP-APPS-RESEARCH ý #3, WP4-SPEC §1).
-    // (Đặc tả đo + luật chọn thắng/thua: WP4-SPEC.md. Ảnh GỐC không bao
-    //  giờ bị sửa: process() đã lưu JPEG gốc TRƯỚC khi đọc; phái sinh chỉ
-    //  tồn tại trong bộ nhớ ở đường đọc này, không lưu, không thay gốc.)
-    // OCRFIX (2026-11-10): làm lại LUẬT CHỌN ẢNH ĐẦU VÀO của đường đọc —
-    // ảnh gốc là ứng viên số 1 LUÔN được đọc; ảnh phái sinh chỉ là ứng
-    // viên phụ, thắng khi ĐIỂM SẢN LƯỢNG cao hơn hẳn (xem yieldScore).
-    // Cờ thay-thế-mù useDerivedImage của WP4 đã gỡ bỏ (sự cố Mẫu 001:
-    // phái sinh thắng thế vô điều kiện, lượt đọc sụp còn 3 mảnh rác mà
-    // không có kiểm sản lượng, không có đường lùi — xem gói OCRFIX).
-
-    /// Một mảnh chữ Vision kèm hộp toạ độ chuẩn hoá (gốc dưới-trái) trong
-    /// KHÔNG GIAN ẢNH ĐẦY ĐỦ — mảnh của lát cắt đã quy đổi về trước khi ráp.
-    struct OCRFrag {
-        var text: String
-        var confidence: Double
-        var box: CGRect
-    }
-
-    /// Vision VNRecognizeTextRequest — API cổ điển, ổn định từ iOS 13.
-    /// (Ứng viên (b) RecognizeDocumentsRequest của iOS 26 thi đấu ở bản test
-    /// pipeline RIÊNG — WP4-SPEC.md; không đưa vào bản chính ở bước này.)
-    private func recognizeLines(in image: UIImage, completion: @escaping ([OCRLine]) -> Void) {
-        // Chuẩn hoá hướng ảnh trước khi OCR: ảnh từ thư viện có thể mang hướng EXIF
-        // mà cgImage bỏ qua — không chuẩn hoá thì Vision đọc chữ bị xoay, ra rác.
-        let upright: UIImage
-        if image.imageOrientation == .up {
-            upright = image
-        } else {
-            let renderer = UIGraphicsImageRenderer(size: image.size)
-            upright = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: image.size)) }
-        }
-        guard let cgImage = upright.cgImage else {
-            completion([])
-            return
-        }
-        DispatchQueue.global(qos: .userInitiated).async {
-            // OCRFIX: hai ứng viên thi đấu theo SẢN LƯỢNG (yieldScore).
-            // Ứng viên 1 — ảnh GỐC — luôn được đọc trước và là kết quả
-            // mặc định; ứng viên 2 — ảnh PHÁI SINH — chỉ thắng khi điểm
-            // cao hơn HẲN (hoà thì giữ gốc). Mọi lỗi ở tầng phái sinh
-            // (không thấy tứ giác, lọc lỗi) đều thu về "không có ứng
-            // viên 2" — tiền xử lý hỏng không còn làm mất lượt đọc, và
-            // phái sinh không còn âm thầm thay thế gốc như sự cố
-            // Mẫu 001 (phái sinh đọc ra 3 mảnh rác và thắng thế vì là
-            // đầu vào duy nhất được đọc).
-            let originalLines = Self.ocrLines(from: cgImage)
-            var bestLines = originalLines
-            if let derived = Self.derivedOCRImage(cgImage) {
-                let derivedLines = Self.ocrLines(from: derived)
-                if Self.yieldScore(derivedLines) > Self.yieldScore(originalLines) {
-                    bestLines = derivedLines
-                }
-            }
-            completion(bestLines)
-        }
-    }
-
-    /// OCRFIX: một lượt đọc trọn vẹn trên MỘT ảnh — cắt lát (nếu đạt
-    /// ngưỡng) -> mảnh -> khử trùng vùng chồng -> ráp hàng. Đây là
-    /// đúng đường ống cũ của WP4, chỉ tách thành hàm riêng để chạy
-    /// cho cả hai ứng viên (gốc + phái sinh) bằng cùng một cơ chế.
-    private static func ocrLines(from cgImage: CGImage) -> [OCRLine] {
-        mergeRows(dedupeOverlap(collectFragments(cgImage: cgImage)))
-    }
-
-    /// OCRFIX: điểm SẢN LƯỢNG của một bộ dòng — ước lượng "bộ này có
-    /// giống một lượt đọc hoá đơn thành công không", CHỈ dùng để chọn
-    /// ứng viên, không chạm vào nội dung dòng và không thay bất kỳ
-    /// kiểm chứng nào của Parser. Ba thành phần, hệ số tròn trị:
-    ///  1. +10 cho mỗi dòng chứa ít nhất 1 ký tự chữ-số (dòng rác
-    ///     thuần ký hiệu không tính).
-    ///  2. +(tổng số ký tự chữ-số của mọi dòng) / 10, chia nguyên —
-    ///     thưởng cho lượng thông tin thật, để một ứng viên không
-    ///     thắng chỉ nhờ nhiều dòng vụn ngắn.
-    ///  3. Neo cấu trúc, mỗi loại tối đa 1 lần: SUBTOTAL +30; TOTAL
-    ///     trên dòng KHÔNG phải SUBTOTAL +40; ký tự % +20; mẫu ngày
-    ///     dd/dd/dd(dd) hoặc dd-dd-dd(dd) +20. Hoá đơn đọc trúng gần
-    ///     như luôn có các neo này.
-    /// Hiệu chuẩn trên chính sự cố Mẫu 001 (bản gương Python của
-    /// đúng công thức này, xem AFTER.md gói OCRFIX): bộ rác 3 dòng
-    /// ("28200860 / IV Z / 9969080000") được 3×10 + 21/10 + 0 = 32
-    /// điểm; một bộ dòng Sam's trúng RÚT GỌN còn 14 dòng đã đạt 271
-    /// điểm (đủ 4 neo = +110) — cách biệt ~8,5 lần ngay trên bản rút
-    /// gọn, lượt đọc đầy đủ còn cao hơn; không nằm ở vùng nhiễu của
-    /// phép chọn.
-    private static func yieldScore(_ lines: [OCRLine]) -> Int {
-        var contentLines = 0
-        var alnumChars = 0
-        var hasSubtotal = false
-        var hasTotal = false
-        var hasPercent = false
-        var hasDate = false
-        for line in lines {
-            let text = line.text
-            let alnum = text.unicodeScalars.filter {
-                CharacterSet.alphanumerics.contains($0)
-            }.count
-            if alnum > 0 {
-                contentLines += 1
-                alnumChars += alnum
-            }
-            let upper = text.uppercased()
-            if upper.contains("SUBTOTAL") {
-                hasSubtotal = true
-            } else if upper.contains("TOTAL") {
-                hasTotal = true
-            }
-            if text.contains("%") { hasPercent = true }
-            if !hasDate,
-               text.range(of: #"\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"#,
-                          options: .regularExpression) != nil {
-                hasDate = true
-            }
-        }
-        var score = contentLines * 10 + alnumChars / 10
-        if hasSubtotal { score += 30 }
-        if hasTotal { score += 40 }
-        if hasPercent { score += 20 }
-        if hasDate { score += 20 }
-        return score
-    }
-
-    /// Tạo ảnh PHÁI SINH trong bộ nhớ để đọc (không bao giờ lưu):
-    /// VNDetectRectanglesRequest tìm tứ giác hoá đơn -> CIPerspective-
-    /// Correction nắn thẳng -> CIColorControls bỏ màu + tăng tương phản.
-    /// OCRFIX: phái sinh chỉ còn là ỨNG VIÊN PHỤ — tạo được thì đọc
-    /// riêng rồi thi đấu điểm sản lượng với ảnh gốc (xem recognizeLines).
-    /// Trả nil (= không có ứng viên phái sinh) khi: không thấy tứ giác nào đạt ngưỡng
-    /// tin cậy, hoặc bất kỳ bước lọc nào lỗi. Ngưỡng 0.5 và hệ số tương
-    /// phản 1.1 là GIÁ TRỊ KHỞI ĐIỂM cho bước 3 đo trên bộ mẫu — chưa
-    /// có bằng chứng chúng tối ưu, không được đọc là "đã tinh chỉnh".
-    /// [CHƯA KIỂM CHỨNG trên máy: VNDetectRectanglesRequest + phép đổi
-    /// toạ độ Vision (gốc dưới-trái, chuẩn hoá) sang toạ độ CI (gốc
-    /// dưới-trái, điểm ảnh) — cùng gốc nên chỉ nhân với kích thước ảnh;
-    /// bài kiểm thật ở bước 3 / mốc M1.]
-    private static func derivedOCRImage(_ cgImage: CGImage) -> CGImage? {
-        let detect = VNDetectRectanglesRequest()
-        detect.minimumConfidence = 0.5
-        detect.maximumObservations = 1
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        do {
-            try handler.perform([detect])
-        } catch {
-            return nil
-        }
-        guard let quad = (detect.results ?? []).first else { return nil }
-        let w = CGFloat(cgImage.width)
-        let h = CGFloat(cgImage.height)
-        func ciPoint(_ p: CGPoint) -> CIVector {
-            CIVector(x: p.x * w, y: p.y * h)
-        }
-        let source = CIImage(cgImage: cgImage)
-        guard let perspective = CIFilter(name: "CIPerspectiveCorrection") else { return nil }
-        perspective.setValue(source, forKey: kCIInputImageKey)
-        perspective.setValue(ciPoint(quad.topLeft), forKey: "inputTopLeft")
-        perspective.setValue(ciPoint(quad.topRight), forKey: "inputTopRight")
-        perspective.setValue(ciPoint(quad.bottomLeft), forKey: "inputBottomLeft")
-        perspective.setValue(ciPoint(quad.bottomRight), forKey: "inputBottomRight")
-        guard let corrected = perspective.outputImage else { return nil }
-        guard let enhance = CIFilter(name: "CIColorControls") else { return nil }
-        enhance.setValue(corrected, forKey: kCIInputImageKey)
-        enhance.setValue(NSNumber(value: 0.0), forKey: kCIInputSaturationKey)
-        enhance.setValue(NSNumber(value: 1.1), forKey: kCIInputContrastKey)
-        enhance.setValue(NSNumber(value: 0.0), forKey: kCIInputBrightnessKey)
-        guard let output = enhance.outputImage else { return nil }
-        let context = CIContext(options: nil)
-        return context.createCGImage(output, from: output.extent)
-    }
-
-    /// Trích mảnh chữ từ ảnh đầy đủ. F2c: ảnh cao được cắt thành lát
-    /// dọc ~1600px chồng nhau 200px, OCR từng lát, rồi quy đổi hộp của
-    /// mỗi mảnh về toạ độ ảnh đầy đủ TRƯỚC khi ráp hàng. Ngoài ngưỡng
-    /// đó: 1 lượt OCR như cũ. handler.perform là ĐỒNG BỘ nên vòng lát
-    /// chạy tuần tự trong hàng đợi nền — không có request nào chạy
-    /// song song.
-    /// OCRFIX — NGƯỠNG CẮT MỚI: cao > 2000px là cắt, BẤT KỂ tỉ lệ
-    /// (WP4 đòi thêm tỉ lệ cao/rộng > 3.0). Lý do: hoá đơn giấy dài
-    /// là ca THƯỜNG chứ không phải ca cá biệt theo tỉ lệ — Mẫu 001
-    /// (1320×2868, tỉ lệ 2.17) bị ngưỡng cũ bỏ qua, phải đọc một lượt
-    /// trên toàn chiều cao 2868px. Rủi ro vùng chồng 200px sinh mảnh
-    /// trùng được dedupeOverlap xử theo đúng luật F2c như trước
-    /// (cùng chữ + hộp giao ≥ 50% -> giữ bản tin cậy hơn); xem thêm
-    /// phân tích rủi ro trong AFTER.md của gói OCRFIX.
-    private static func collectFragments(cgImage: CGImage) -> [OCRFrag] {
-        let w = cgImage.width
-        let h = cgImage.height
-        guard h > 2000 else {
-            return ocrFragments(tile: cgImage, tileTopPx: 0, tileHeightPx: h, fullHeightPx: h)
-        }
-        var all: [OCRFrag] = []
-        let tileHeight = 1600
-        let overlap = 200
-        let step = tileHeight - overlap
-        var top = 0
-        while top < h {
-            let th = min(tileHeight, h - top)
-            if let tile = cgImage.cropping(to: CGRect(x: 0, y: top, width: w, height: th)) {
-                all += ocrFragments(tile: tile, tileTopPx: top, tileHeightPx: th, fullHeightPx: h)
-            }
-            if top + th >= h { break }
-            top += step
-        }
-        return all
-    }
-
-    /// OCR 1 lát (hoặc cả ảnh khi không cắt) và quy đổi hộp về ảnh đầy đủ.
-    /// Trục Y: Vision dùng gốc dưới-trái TRONG lát; lát bắt đầu ở tileTopPx
-    /// tính từ ĐỈNH ảnh đầy đủ (toạ độ cắt của CGImage) — công thức dưới
-    /// đổi cạnh-trên của hộp thành khoảng cách từ đỉnh ảnh đầy đủ rồi mới
-    /// lật về gốc dưới-trái chuẩn hoá. [Hướng cắt CGImage + phép quy đổi
-    /// này CHƯA KIỂM CHỨNG trên máy — bài kiểm mốc M1/WP4 bước 3.]
-    private static func ocrFragments(tile: CGImage, tileTopPx: Int, tileHeightPx: Int, fullHeightPx: Int) -> [OCRFrag] {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.recognitionLanguages = ["vi-VN", "en-US"]
-        // Hoá đơn đầy mã số — tắt tự sửa chính tả để khỏi "sửa" nhầm mã/tiền.
-        request.usesLanguageCorrection = false
-        let handler = VNImageRequestHandler(cgImage: tile, options: [:])
-        do {
-            try handler.perform([request])
-        } catch {
-            return []
-        }
-        let observations = (request.results ?? [])
-        return observations.compactMap { obs in
-            guard let candidate = obs.topCandidates(1).first else { return nil }
-            let b = obs.boundingBox
-            let topFromFullTop = Double(tileTopPx) + (1.0 - Double(b.maxY)) * Double(tileHeightPx)
-            let heightFull = Double(b.height) * Double(tileHeightPx) / Double(fullHeightPx)
-            let maxYFull = 1.0 - topFromFullTop / Double(fullHeightPx)
-            let box = CGRect(x: b.minX, y: CGFloat(maxYFull - heightFull),
-                             width: b.width, height: CGFloat(heightFull))
-            return OCRFrag(text: candidate.string, confidence: Double(candidate.confidence), box: box)
-        }
-    }
-
-    /// Khử mảnh trùng sinh ra trong vùng chồng 200px giữa hai lát: cùng
-    /// chữ + hộp giao nhau >= 50% diện tích hộp nhỏ hơn -> giữ bản có độ
-    /// tin cậy cao hơn (đúng luật CODE-AUDIT F2c). Hai dòng THẬT khác nhau
-    /// không bao giờ giao hộp tới mức này nên không bị xoá nhầm.
-    static func dedupeOverlap(_ frags: [OCRFrag]) -> [OCRFrag] {
-        var kept: [OCRFrag] = []
-        for f in frags.sorted(by: { $0.confidence > $1.confidence }) {
-            let isDuplicate = kept.contains { k in
-                guard k.text == f.text else { return false }
-                let inter = k.box.intersection(f.box)
-                guard !inter.isNull else { return false }
-                let smaller = min(k.box.width * k.box.height, f.box.width * f.box.height)
-                return smaller > 0 && (inter.width * inter.height) / smaller >= 0.5
-            }
-            if !isDuplicate { kept.append(f) }
-        }
-        return kept
-    }
-
-    /// F2a — ráp mảnh thành HÀNG THỊ GIÁC (nguyên văn thuật toán CODE-AUDIT
-    /// F2a): sắp trên->xuống theo maxY; gom mảnh có khoảng Y chồng >= 50%
-    /// chiều cao mảnh NGẮN HƠN vào cùng hàng; trong hàng sắp trái->phải
-    /// theo minX và nối bằng 1 khoảng trắng; độ tin cậy của dòng ráp = MIN
-    /// của các mảnh (mảnh yếu nhất quyết định — không để tiền mờ trốn sau
-    /// nhãn nét). Hàng giữ thứ tự trên->xuống vì mảnh đã sắp và chỉ nối
-    /// vào hàng đang mở cuối cùng.
-    static func mergeRows(_ fragsIn: [OCRFrag]) -> [OCRLine] {
-        var frags = fragsIn
-        frags.sort { $0.box.maxY > $1.box.maxY }
-        var rows: [[OCRFrag]] = []
-        for f in frags {
-            if var row = rows.last, let anchor = row.first {
-                let overlap = min(f.box.maxY, anchor.box.maxY) - max(f.box.minY, anchor.box.minY)
-                let shorter = min(f.box.height, anchor.box.height)
-                if shorter > 0 && overlap / shorter >= 0.5 {
-                    row.append(f)
-                    rows[rows.count - 1] = row
-                    continue
-                }
-            }
-            rows.append([f])
-        }
-        return rows.map { row in
-            let sorted = row.sorted { $0.box.minX < $1.box.minX }
-            return OCRLine(text: sorted.map(\.text).joined(separator: " "),
-                           confidence: sorted.map(\.confidence).min() ?? 0)
-        }
-    }
 }
+
 
 // MARK: - Bọc VNDocumentCameraViewController cho SwiftUI
 
