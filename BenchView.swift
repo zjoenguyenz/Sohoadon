@@ -14,6 +14,8 @@ struct BenchView: View {
     @State private var running: String? = nil
     @State private var languageOutput: String = ""
     @State private var documentsOutput: String = ""
+    @State private var enhancerOn: Bool = false
+    @State private var stageLogText: String = ""
 
     private var imageNames: [String] {
         // CI-FIX-4 (2026-11-12): XcodeGen LAM PHANG tai nguyen vao
@@ -45,6 +47,35 @@ struct BenchView: View {
         return dir
     }
 
+    // MARK: - Nhật ký giai đoạn (CI-FIX-6 / L-2026-11-12-12)
+
+    /// File breadcrumb trong Documents của bench — ghi TRƯỚC
+    /// mỗi bước của chuỗi đọc và flush ngay (synchronize), nên
+    /// app chết giữa chừng vẫn còn dòng cuối chỉ tầng chết.
+    private static var stageLogURL: URL {
+        FileManager.default.urls(for: .documentDirectory,
+                                 in: .userDomainMask)[0]
+            .appendingPathComponent("bench-stage-log.txt")
+    }
+
+    static func stageLog(_ line: String) {
+        let stamped = "\(Date()) \(line)\n"
+        guard let data = stamped.data(using: .utf8) else { return }
+        if let handle = try? FileHandle(forWritingTo: stageLogURL) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+            try? handle.synchronize()
+        } else {
+            try? data.write(to: stageLogURL)
+        }
+    }
+
+    private func loadStageLog() {
+        stageLogText = (try? String(contentsOf: Self.stageLogURL,
+                                    encoding: .utf8)) ?? ""
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -71,6 +102,27 @@ struct BenchView: View {
                         Text(documentsOutput)
                             .font(.caption2)
                             .textSelection(.enabled)
+                    }
+                }
+
+                Section("Chẩn đoán crash (CI-FIX-6)") {
+                    Toggle("CIDocumentEnhancer (nghi phạm H1)",
+                           isOn: $enhancerOn)
+                        .onChange(of: enhancerOn) { _, newValue in
+                            ReceiptReader.documentEnhancerEnabled =
+                                newValue
+                        }
+                    Button("Đọc lại nhật ký giai đoạn") {
+                        loadStageLog()
+                    }
+                    if !stageLogText.isEmpty {
+                        Text(stageLogText)
+                            .font(.caption2)
+                            .textSelection(.enabled)
+                        ShareLink(item: stageLogText) {
+                            Label("Chia sẻ nhật ký giai đoạn",
+                                  systemImage: "square.and.arrow.up")
+                        }
                     }
                 }
 
@@ -109,6 +161,10 @@ struct BenchView: View {
                 }
             }
             .navigationTitle("BenchShell — Đo OCR")
+            .onAppear {
+                ReceiptReader.documentEnhancerEnabled = enhancerOn
+                loadStageLog()
+            }
         }
     }
 
@@ -128,6 +184,10 @@ struct BenchView: View {
     private func runOne(_ name: String) {
         guard running == nil, let cg = loadCGImage(name) else { return }
         running = name
+        ReceiptReader.stageBreadcrumb = { step in
+            BenchView.stageLog("stage \(step)")
+        }
+        BenchView.stageLog("file-begin \(name)")
         let directory = diagnosticsDirectory
         DispatchQueue.global(qos: .userInitiated).async {
             let outcome = ReceiptReader.read(ReadRequest(
@@ -135,6 +195,7 @@ struct BenchView: View {
                 imageFileName: name,
                 image: cg,
                 diagnosticsDirectory: directory))
+            BenchView.stageLog("file-end \(name)")
             let r = outcome.result
             let text = [
                 "tiệm: \(r.vendor ?? "—")",

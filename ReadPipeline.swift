@@ -355,6 +355,20 @@ struct ReadOutcome {
 }
 
 enum ReceiptReader {
+    // CI-FIX-6 (L-2026-11-12-12): móc truy vết giai đoạn — vỏ
+    // đo (BenchShell) gán closure ghi xuống đĩa TRƯỚC mỗi bước
+    // của chuỗi ứng viên; app chính để nil (không đổi hành vi).
+    // App chết giữa chuỗi thì dòng cuối cùng chỉ đích danh tầng
+    // chết — thay cho việc phải xin .ips vòng ngoài.
+    static var stageBreadcrumb: ((String) -> Void)? = nil
+
+    // CI-FIX-6: CIDocumentEnhancer (lọc ML của CoreImage) là
+    // nghi phạm H1 của crash run #44 và lợi ích của nó chưa
+    // từng được đo trên thiết bị — cách ly sau cờ mặc định TẮT
+    // ở cả hai app (D3: ứng viên phải đo-mới-được-sống);
+    // BenchShell có công tắc bật lại cho phép đo A/B có kiểm
+    // soát trên thiết bị.
+    static var documentEnhancerEnabled = false
 
     /// Chính sách lát hiệu lực: toàn khung một lượt (§3.3(a)).
     static let tilePolicyID = "full-frame-v3-p4"
@@ -548,6 +562,7 @@ enum ReceiptReader {
         var enhancedSeen = 0
         var anyE1Closed = false
         for step in CandidateChain.steps {
+            stageBreadcrumb?("candidate-\(step.kind)")
             switch step.kind {
             case "original":
                 if let run = runCandidate(step: step, images: pages,
@@ -584,6 +599,11 @@ enum ReceiptReader {
                 guard !multiPage, let first = pages.first else { continue }
                 let variant = enhancedSeen == 1 ? "enhancedContrast"
                     : "enhancedDocument"
+                if variant == "enhancedDocument",
+                   !documentEnhancerEnabled {
+                    flags.append("document-enhancer-off")
+                    continue
+                }
                 guard let img = ciVariant(first, kind: variant)
                 else { continue }
                 if let run = runCandidate(step: step, images: [img],
@@ -613,6 +633,7 @@ enum ReceiptReader {
                                input: input, started: started)
         }
 
+        stageBreadcrumb?("scoring")
         let winnerIndex = CandidateScorer.pickWinner(
             runs.map { $0.evaluation })
         let winner = runs[winnerIndex]
@@ -690,6 +711,7 @@ enum ReceiptReader {
                                      images: [CGImage],
                                      engine: ClassicTextEngine)
         -> CandidateRun? {
+        stageBreadcrumb?("ocr-\(step.kind)")
         var fragments: [Fragment] = []
         do {
             for (page, image) in images.enumerated() {
@@ -798,6 +820,7 @@ enum ReceiptReader {
     /// (nil, lý do) khi cổng chặn hoặc không thấy tứ giác.
     private static func perspectiveCandidate(from image: CGImage)
         -> (CGImage?, String?) {
+        stageBreadcrumb?("perspective-detect")
         let request = VNDetectRectanglesRequest()
         request.maximumObservations = 1
         request.minimumConfidence = 0.6
@@ -811,10 +834,20 @@ enum ReceiptReader {
         guard let obs = request.results?.first else {
             return (nil, "no-quad")
         }
-        // Vision: điểm chuẩn hoá, gốc DƯỚI-trái — đúng hệ QuadGate.
+        // Vision trả điểm CHUẨN HOÁ 0..1 (gốc dưới-trái);
+        // QuadGate tính theo ĐIỂM ẢNH (hợp đồng của cổng ghi rõ
+        // trong CaptureIntake) — phải đổi hệ TRƯỚC khi gọi.
+        // L-2026-11-12-12: bản cũ truyền thẳng điểm chuẩn hoá
+        // khiến diện tích luôn < 55% khung pixel → ứng viên bị
+        // loại 100% trên thiết bị (fail-closed, không crash —
+        // lỗi riêng, không trình bày là bản sửa crash).
         let quad = [obs.topLeft, obs.topRight,
                     obs.bottomRight, obs.bottomLeft]
-        let verdict = QuadGate.evaluate(quad: quad,
+        let pixelQuad = quad.map {
+            CGPoint(x: Double($0.x) * Double(image.width),
+                    y: Double($0.y) * Double(image.height))
+        }
+        let verdict = QuadGate.evaluate(quad: pixelQuad,
                                         imageWidth: image.width,
                                         imageHeight: image.height)
         switch verdict {
@@ -856,6 +889,7 @@ enum ReceiptReader {
     /// thiếu khoá thì bỏ ứng viên (fail-closed), không ép.
     private static func ciVariant(_ image: CGImage, kind: String)
         -> CGImage? {
+        stageBreadcrumb?("civariant-\(kind)")
         let ci = CIImage(cgImage: image)
         let filter: CIFilter?
         switch kind {
@@ -943,6 +977,7 @@ enum ReceiptReader {
                                  extraFlags: [String],
                                  error: String? = nil,
                                  started: Date) -> ReadOutcome {
+        stageBreadcrumb?("finalize")
         let result = outcome.result
 
         // Provenance mức snapshot (trạng thái cuối F4): chỉ các
