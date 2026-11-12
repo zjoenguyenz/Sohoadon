@@ -44,6 +44,12 @@ import Vision
 // Mọi chế độ chạm parse đều in dòng cuối "SURVIVED ..." — CI
 // grep dòng này; thiếu nó + mã thoát/signal != 0 = tái hiện.
 
+// stdout KHÔNG đệm: print() qua pipe mặc định bị đệm theo khối —
+// process chết vì trap thì mọi dòng đã in mà chưa xả đều MẤT
+// (bài học run #5: cổng control chết lặng không một dòng log).
+// Mọi mốc giai đoạn phải chạm được log kể cả khi process chết.
+setvbuf(stdout, nil, _IONBF, 0)
+
 let args = Array(CommandLine.arguments.dropFirst())
 
 func fail(_ msg: String, code: Int32 = 2) -> Never {
@@ -459,11 +465,15 @@ case "probe":
 
 case "fixture":
     guard args.count >= 2 else { fail("fixture cần đường dẫn file") }
+    print("[fixture] start path=\(args[1])")
     requireDataLoaded()
+    print("[fixture] data-loaded")
     let fx = loadFixture(args[1])
     let boxes: [CGRect?]? = hasFlag("--nobox") ? nil : fx.boxes
     print("fixture lines=\(fx.lines.count) boxes=\(boxes != nil ? "yes" : "nil")")
+    print("[fixture] parsing")
     let parsed = ReceiptParser.parse(lines: fx.lines, boxes: boxes)
+    print("[fixture] parsed")
     print(parseSummary(parsed))
     print("SURVIVED fixture")
 
