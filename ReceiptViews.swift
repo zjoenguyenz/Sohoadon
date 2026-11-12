@@ -87,11 +87,13 @@ struct RawTextDisclosure: View {
 // liệu (VNDocumentCamera) ngay trong màn Chi Tiết — mã mới
 // "m1fix-reparse-4".
 //
-// P2-2 (2026-11-10): gói kích hoạt đợt làm lại cốt lõi OCR (đa pass +
-// hợp nhất mờ + chọn bộ thắng bằng đối chiếu số học) — mã mới
-// "p2-core-1". Gói này KHÔNG đổi gì ở file này ngoài dấu bản.
+// INTEGRATE-V2 (2026-11-11): đưa kết quả chấm lại buổi đo vào app
+// chính — mặt trước quay về đọc đơn kiểu A0/OCRFIX, Parser cộng
+// nhánh trích món cùng-dòng + vá tầng totals/ngày (xem Parser.swift).
+// Mã mới "core-v2-1". Gói này KHÔNG đổi gì ở file này ngoài dấu bản:
+// nút Đọc lại, mục Ảnh gốc và nút Chụp lại bản gốc giữ nguyên.
 
-let currentParserVersion = "p2-core-1"
+let currentParserVersion = "core-v2-1"
 
 // MARK: - WP5 bước 3: nhãn nguồn tên tiệm (WP5-SPEC mục 3/4)
 //
