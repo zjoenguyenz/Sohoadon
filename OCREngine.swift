@@ -50,13 +50,28 @@ enum LanguagePolicy {
     static let priority = ["vi-VN", "en-US"]
 
     /// (hiệu lực, ghi chú) — gương: effective_languages.
+    /// CI-FIX-5 (2026-11-12, từ bản in LanguageProbe trên máy
+    /// đích): runtime báo tiếng Việt là "vi-VT", KHÔNG phải
+    /// "vi-VN" — khớp chuỗi nguyên văn sẽ đánh rớt tiếng Việt
+    /// khỏi hiệu lực và ghi manifest SAI rằng máy không có
+    /// tiếng Việt. Luật đúng: khớp theo MÃ NGÔN NGỮ (phần trước
+    /// dấu "-"), giá trị hiệu lực dùng NGUYÊN VĂN cách viết của
+    /// runtime (đúng định danh máy tự bảo chứng).
     static func effective(supported: [String])
         -> (languages: [String], note: String?) {
-        var eff = priority.filter { supported.contains($0) }
+        func adopt(_ code: String) -> String? {
+            supported.first {
+                $0.split(separator: "-").first?.lowercased() == code
+            }
+        }
+        var eff: [String] = []
+        if let vi = adopt("vi") { eff.append(vi) }
+        if let en = adopt("en") { eff.append(en) }
         var note: String? = nil
-        if !eff.contains("vi-VN") {
-            note = "vi-VN không có trong supportedRecognitionLanguages "
-                + "của máy này — chạy [en-US], ghi manifest đúng vậy"
+        if adopt("vi") == nil {
+            note = "không có ngôn ngữ vi-* nào trong "
+                + "supportedRecognitionLanguages của máy này "
+                + "— chạy [en-US], ghi manifest đúng vậy"
         }
         if eff.isEmpty {
             eff = ["en-US"]
