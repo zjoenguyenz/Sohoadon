@@ -125,6 +125,6 @@ jobs:
             variants.log
             crashreports/
             images.log
-                   matrix-*.log
+             matrix-*.log
             fuzz-results.txt
             fuzz-*.log
