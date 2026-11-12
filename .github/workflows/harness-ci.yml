@@ -1,0 +1,94 @@
+# HARNESS CI — cổng tự chạy của LUẬT 2026-11-12.
+#
+# FILE NHÁP: muốn hiệu lực phải nằm ở .github/workflows/
+# harness-ci.yml trong repo. Connector GitHub KHÔNG đẩy được
+# .github/workflows/* (403 — đã chứng minh) nên Leader cài
+# file này qua đường trình duyệt như mọi lần sửa workflow.
+#
+# Ba cổng, đỏ ở đâu dừng ở đó:
+#   1. control  — parse luồng ĐÃ GHI L-R01 bằng Swift thật
+#                 (đối chứng audit: phải SURVIVED).
+#   2. law      — 33 ảnh x 100 set liên tiếp qua Vision macOS
+#                 + assemble + parse + scoring, cấu hình mặc
+#                 định BenchShell run #46 (old + top-1).
+#                 Một crash ở bất kỳ lượt nào = job đỏ.
+#   3. fuzz     — bẫy đột biến trên luồng ghi, mỗi đột biến
+#                 một process riêng; process chết vì signal
+#                 = TÁI HIỆN ĐƯỢC = job đỏ + ghi rõ id.
+name: Harness — cổng tự chạy 100 lượt
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v3]
+    paths:
+      - "*.swift"
+      - "harness/**"
+
+jobs:
+  law-and-control:
+    runs-on: macos-14
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cài XcodeGen
+        run: brew install xcodegen
+      - name: Sinh project harness
+        run: cd harness && xcodegen generate --spec project-harness.yml
+      - name: Build harness (Release)
+        run: |
+          xcodebuild -project harness/SoHoaDonHarness.xcodeproj \
+            -scheme SoHoaDonHarness -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath harness/dd build | tail -5
+          BIN=$(find harness/dd -name SoHoaDonHarness -type f | head -1)
+          echo "BIN=$BIN" >> "$GITHUB_ENV"
+          cp vendors.json lexicon.json "$(dirname "$BIN")/"
+      - name: Probe (ngôn ngữ + dữ liệu nạp thật)
+        run: |
+          "$BIN" probe | tee probe.log
+          ! grep -q "unloaded" probe.log
+      - name: Cổng 1 — control trên luồng đã ghi L-R01
+        run: |
+          "$BIN" fixture harness/fixtures/L-R01-raw-a-original.json | tee control.log
+          grep -q "SURVIVED fixture" control.log
+      - name: Cổng 2 — LUẬT 100 lượt (33 ảnh x 100 set)
+        run: |
+          "$BIN" images --dir BenchImages --sets 100 --dump streams | tee images.log
+          grep -q "SURVIVED images x100" images.log
+      - name: Ma trận cấu hình phụ (3 set mỗi tổ hợp còn lại)
+        run: |
+          for cfg in "current 1" "current 3" "old 3" "enus 1"; do
+            set -- $cfg
+            "$BIN" images --dir BenchImages --sets 3 --lang "$1" --topk "$2" \
+              | tee "matrix-$1-$2.log"
+            grep -q "SURVIVED images x3" "matrix-$1-$2.log"
+          done
+      - name: Cổng 3 — bẫy đột biến (mỗi ca một process)
+        run: |
+          : > fuzz-results.txt
+          "$BIN" fuzz harness/fixtures/L-R01-raw-a-original.json --list > fuzz-ids.txt
+          while read -r id; do
+            [ -z "$id" ] && continue
+            if "$BIN" fuzz harness/fixtures/L-R01-raw-a-original.json "$id" > "fuzz-$id.log" 2>&1 \
+               && grep -q "SURVIVED $id" "fuzz-$id.log"; then
+              echo "PASS $id" >> fuzz-results.txt
+            else
+              echo "DIED $id (exit=$?)" >> fuzz-results.txt
+            fi
+          done < fuzz-ids.txt
+          cat fuzz-results.txt
+          ! grep -q "^DIED" fuzz-results.txt
+      - name: Lưu bằng chứng (luồng thật + log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-evidence-${{ github.run_number }}
+          path: |
+            streams/
+            probe.log
+            control.log
+            images.log
+            matrix-*.log
+            fuzz-results.txt
+            fuzz-*.log
