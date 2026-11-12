@@ -1,0 +1,119 @@
+name: Build CarProbe IPA
+
+# Builds the CarProbe probe app as an ad-hoc signed .ipa.
+#
+# Signing approach (deliberate): manual signing style, ad-hoc identity "-",
+# NO provisioning profile. That makes xcodebuild/codesign embed the
+# entitlements blob from CarPlay.entitlements directly into the .app -- which
+# is exactly what this probe needs to measure. The next step then extracts the
+# entitlements ACTUALLY embedded in the built app and fails the whole run if
+# the two CarPlay entitlements are not there: a probe build without them
+# proves nothing and must never be handed over as if it did.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [cardash-probe]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: probe
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Compute unique artifact name
+        id: names
+        run: |
+          DATE="$(date +%Y%m%d)"
+          NAME="CarProbe-probe-run${{ github.run_number }}-${DATE}"
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "Artifact / IPA name: ${NAME}"
+
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Build (ad-hoc signed, manual, no provisioning profile)
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project CarProbe.xcodeproj \
+            -target CarProbe \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$PWD/build/DerivedData" \
+            CONFIGURATION_BUILD_DIR="$PWD/build/app" \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="" \
+            CODE_SIGN_ENTITLEMENTS="CarPlay.entitlements" \
+            PRODUCT_BUNDLE_IDENTIFIER="com.luun.nguyen.cardashprobe" \
+            MARKETING_VERSION="1.0" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            build
+          test -d "$PWD/build/app/CarProbe.app"
+          ls -la "$PWD/build/app/CarProbe.app"
+
+      - name: Extract embedded entitlements + verify CarPlay keys (fail loudly)
+        run: |
+          set -euo pipefail
+          APP="$PWD/build/app/CarProbe.app"
+          # The entitlements actually embedded in the built app's signature.
+          codesign -d --entitlements :- "$APP" > entitlements-built.txt
+          echo "----- entitlements embedded in built app -----"
+          cat entitlements-built.txt
+          echo "----------------------------------------------"
+          MISSING=0
+          for KEY in com.apple.developer.carplay-video com.apple.developer.carplay-audio; do
+            if grep -q "$KEY" entitlements-built.txt; then
+              echo "OK: $KEY present in built app signature"
+            else
+              echo "::error::MISSING ENTITLEMENT: $KEY is NOT in the built app's signature entitlements. This probe build is worthless -- failing the run."
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Extract built Info.plist
+        run: |
+          set -euo pipefail
+          APP="$PWD/build/app/CarProbe.app"
+          plutil -convert xml1 -o Info-built.plist "$APP/Info.plist"
+          grep -A1 -E "CFBundleShortVersionString|CFBundleVersion|CFBundleIdentifier|UIWindowSceneSessionRoleCarPlay" Info-built.plist || true
+
+      - name: Assemble IPA
+        run: |
+          set -euo pipefail
+          NAME="${{ steps.names.outputs.name }}"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$PWD/build/app/CarProbe.app" Payload/
+          zip -qry "${NAME}.ipa" Payload
+          ls -lh "${NAME}.ipa"
+          shasum -a 256 "${NAME}.ipa"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.names.outputs.name }}
+          path: |
+            probe/${{ steps.names.outputs.name }}.ipa
+            probe/entitlements-built.txt
+            probe/Info-built.plist
+          if-no-files-found: error
