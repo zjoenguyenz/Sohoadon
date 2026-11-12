@@ -63,7 +63,7 @@ jobs:
       - name: Thu báo cáo crash macOS (khi đỏ)
         if: failure()
         run: |
-          mikdir -p crashreports
+          mkdir -p crashreports
           cp ~/Library/Logs/DiagnosticReports/SoHoaDonHarness* crashreports/ 2>/dev/null || true
           ls -la crashreports/ || true
       - name: Truy vết bisect (chỉ khi cổng control đỏ)
