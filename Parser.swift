@@ -2125,7 +2125,7 @@ enum ReceiptParser {
     /// Trả (lb, đơn giá?) — khung hình học chỉ cần biết có/không.
     private static func matchWeightLine(_ text: String) -> (lb: Double, unitCents: Int?)? {
         guard text.contains("/lb") || text.contains("/1b") else { return nil }
-        guard let m = matchGroups(text, pattern: #"(\d+(?:\.\d+)?)\s*(?:lb|1b|Tb)"#),
+        guard let m = matchGroups(text, pattern: #"(\d+(?:\.\d+)?)\s*(?:lb|1b|Tb)\b"#),
               m.count == 1, let lb = Double(m[0] ?? "") else { return nil }
         var unit: Int? = nil
         if let mu = matchGroups(text, pattern: #"\$\s*\*?\s*(\d[\d,]*\.\d{2})"#) {
