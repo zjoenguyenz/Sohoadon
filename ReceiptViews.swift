@@ -351,6 +351,18 @@ struct ReceiptListView: View {
     }
 }
 
+// MARK: - Lưu SwiftData trung thực (N2-FIX, FULL-REVIEW 2026-11-12)
+
+/// Lưu context và trả kết quả THẬT: true = đã lưu xuống máy.
+/// false = lỗi — caller PHẢI báo cho anh và KHÔNG đi tiếp đường
+/// thành công (không đóng màn, không hiện "Đã lưu ✓", không xoá
+/// file, không gắn cờ đã duyệt). Luật cứng sau FULL-REVIEW:
+/// mọi điểm lưu trong tầng app đi qua hàm này hoặc do/catch
+/// tường minh — cấm quay lại `try?` nuốt lỗi lưu.
+func saveContextOrFalse(_ context: ModelContext) -> Bool {
+    do { try context.save(); return true } catch { return false }
+}
+
 // MARK: - Chi tiết hoá đơn
 
 struct ReceiptDetailView: View {
@@ -366,6 +378,9 @@ struct ReceiptDetailView: View {
     @State private var purposeText: String
     @State private var showDeleteConfirm = false
     @State private var savedNote = false
+    /// N2-FIX: lỗi lưu gần nhất ở màn này (nil = không lỗi) —
+    /// hiện chữ đỏ trong form, thay cho việc nuốt lỗi lặng lẽ.
+    @State private var saveError: String? = nil
     @State private var reparsedNote = false
     /// V3 (Pha 4): hồ sơ chẩn đoán v2 tải theo yêu cầu (nút trong
     /// mục "Chẩn đoán lần đọc") — không đọc file ở mọi lần vẽ.
@@ -658,6 +673,9 @@ struct ReceiptDetailView: View {
                 if savedNote {
                     Text("Đã lưu ✓").font(.caption).foregroundStyle(.green)
                 }
+                if let saveError {
+                    Text(saveError).font(.caption).foregroundStyle(.red)
+                }
             }
 
             if !receipt.items.isEmpty {
@@ -682,8 +700,18 @@ struct ReceiptDetailView: View {
             Section {
                 if receipt.status == .needsReview {
                     Button {
+                        // N2-FIX: duyệt chỉ thành công khi LƯU
+                        // được; hỏng thì trả trạng thái cũ và báo
+                        // thật — bản cũ nuốt lỗi mà vẫn hiện
+                        // "Đã duyệt ✓" theo trạng thái trong RAM.
+                        let oldStatus = receipt.status
                         receipt.status = .reviewed
-                        try? modelContext.save()
+                        if saveContextOrFalse(modelContext) {
+                            saveError = nil
+                        } else {
+                            receipt.status = oldStatus
+                            saveError = "Duyệt chưa lưu được — trên máy tờ này vẫn đang chờ duyệt. Anh thử lại giúp."
+                        }
                     } label: {
                         Label("Duyệt — đã kiểm, cho vào sổ chính thức", systemImage: "checkmark.circle.fill")
                     }
@@ -700,14 +728,32 @@ struct ReceiptDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Xoá hẳn hoá đơn này và ảnh gốc?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Xoá", role: .destructive) {
-                ImageStore.delete(fileName: receipt.imageFileName)
-                // V3 (Pha 4): dọn cả file phụ chẩn đoán của tờ —
-                // không để hồ sơ mồ côi trong thư mục bằng chứng.
-                ImageStore.delete(fileName: DiagnosticsStore.fileName(
-                    forImageFileName: receipt.imageFileName))
+                // C9-FIX (FULL-REVIEW): bản cũ xoá FILE TRƯỚC,
+                // lưu SAU — lưu hỏng là bản ghi còn mà ảnh gốc
+                // (bằng chứng) đã mất vĩnh viễn; và chỉ xoá file
+                // theo tên hiện tại, để mồ côi các ảnh gốc phụ.
+                // Nay: chụp tên file TRƯỚC, xoá bản ghi + LƯU
+                // trước; lưu được mới xoá file (gồm mọi ảnh gốc
+                // phụ trong originalImageFileNames); lưu hỏng
+                // thì rollback — mọi thứ còn nguyên — và báo thật.
+                let mainName = receipt.imageFileName
+                let extraNames = receipt.originalImageFileNames
+                    .filter { $0 != mainName }
                 modelContext.delete(receipt)
-                try? modelContext.save()
-                dismiss()
+                if saveContextOrFalse(modelContext) {
+                    ImageStore.delete(fileName: mainName)
+                    // V3 (Pha 4): dọn cả file phụ chẩn đoán của tờ —
+                    // không để hồ sơ mồ côi trong thư mục bằng chứng.
+                    ImageStore.delete(fileName: DiagnosticsStore.fileName(
+                        forImageFileName: mainName))
+                    for name in extraNames {
+                        ImageStore.delete(fileName: name)
+                    }
+                    dismiss()
+                } else {
+                    modelContext.rollback()
+                    saveError = "Xoá chưa thành công — hoá đơn và ảnh gốc vẫn còn nguyên. Anh thử lại giúp."
+                }
             }
             Button("Huỷ", role: .cancel) {}
         }
@@ -777,8 +823,14 @@ struct ReceiptDetailView: View {
         if receipt.originalImageFileNames.isEmpty {
             receipt.originalImageFileNames = [name]
         }
-        try? modelContext.save()
-        reattachError = nil
+        // N2-FIX: gắn ảnh chỉ xong khi ghi nhận vào hoá đơn đã
+        // LƯU được; bản cũ nuốt lỗi rồi xoá thông báo lỗi cũ,
+        // trông như đã gắn thành công.
+        if saveContextOrFalse(modelContext) {
+            reattachError = nil
+        } else {
+            reattachError = "Ảnh đã lưu vào máy nhưng ghi nhận vào hoá đơn không thành công — anh thử gắn lại giúp."
+        }
     }
 
     /// Đường ảnh (thư viện ảnh, hoặc file ảnh từ Files): lưu JPEG qua
@@ -855,8 +907,13 @@ struct ReceiptDetailView: View {
         }
         receipt.originalImageFileNames = evidence
         receipt.imageFileName = newNames[0]
-        try? modelContext.save()
-        rescanError = nil
+        // N2-FIX: như các điểm lưu khác — chỉ xoá lỗi cũ khi
+        // việc ghi nhận bản quét mới đã LƯU được thật.
+        if saveContextOrFalse(modelContext) {
+            rescanError = nil
+        } else {
+            rescanError = "Bản quét đã lưu vào máy nhưng ghi nhận vào hoá đơn không thành công — anh thử lại giúp."
+        }
     }
 
     // REPARSE: hạ cánh kết quả đọc lại vào CHÍNH bản ghi này, theo đúng
@@ -1033,13 +1090,20 @@ struct ReceiptDetailView: View {
         receipt.status = stillNeedsReview ? .needsReview : .reviewed
         receipt.parserVersion = currentParserVersion
 
-        try? modelContext.save()
-        // Vẽ lại theo số mới: đồng bộ 3 state của khối Phân loại về đúng
-        // giá trị vừa hạ cánh (kể cả khi gợi ý vừa đổi loại/mục).
-        selectedKind = receipt.classification
-        selectedCategory = receipt.category
-        purposeText = receipt.businessPurpose
-        reparsedNote = true
+        // N2-FIX: chỉ đồng bộ state + hiện ghi chú "đã đọc lại"
+        // khi hạ cánh đã LƯU được; bản cũ nuốt lỗi mà vẫn báo
+        // thành công trong khi số trên máy vẫn là số cũ.
+        if saveContextOrFalse(modelContext) {
+            // Vẽ lại theo số mới: đồng bộ 3 state của khối Phân loại về đúng
+            // giá trị vừa hạ cánh (kể cả khi gợi ý vừa đổi loại/mục).
+            selectedKind = receipt.classification
+            selectedCategory = receipt.category
+            purposeText = receipt.businessPurpose
+            reparsedNote = true
+            saveError = nil
+        } else {
+            saveError = "Đọc lại xong nhưng LƯU không thành công — số trên máy vẫn là số cũ. Anh bấm Đọc lại lần nữa giúp."
+        }
     }
 
     private func saveChanges() {
@@ -1050,8 +1114,16 @@ struct ReceiptDetailView: View {
         }
         receipt.category = selectedCategory
         receipt.businessPurpose = purposeText
-        try? modelContext.save()
-        savedNote = true
+        // N2-FIX: "Đã lưu ✓" chỉ khi lưu được thật; hỏng thì
+        // báo đỏ và giữ nguyên thay đổi trong bộ nhớ để anh
+        // bấm Lưu lại là ghi tiếp, không phải nhập lại.
+        if saveContextOrFalse(modelContext) {
+            savedNote = true
+            saveError = nil
+        } else {
+            savedNote = false
+            saveError = "Lưu thay đổi không thành công — số trên máy chưa đổi. Anh bấm Lưu lại giúp."
+        }
     }
 }
 
@@ -1076,13 +1148,30 @@ struct ReviewView: View {
     @State private var suggestionApplied = false
     @State private var showDuplicateAlert = false
     @State private var duplicateCount = 0
+    /// N2-FIX: kiểm tra trùng THẤT BẠI (fetch lỗi) — khác hẳn
+    /// "không trùng": tờ vẫn lưu được nhưng bị ép chờ duyệt.
+    @State private var duplicateCheckFailed = false
+    /// N2-FIX: lưu thất bại — hiện alert, KHÔNG đóng màn Kiểm Lại.
+    @State private var saveFailed = false
+    /// C8-FIX: bộ đọc không tìm thấy ngày trên tờ này — ngày
+    /// đang hiện chỉ là ngày tạm (hôm nay), không phải ngày đọc.
+    @State private var dateWasMissing = false
+    /// Giá trị ngày ban đầu (để nhận biết anh có sửa ngày hay
+    /// không khi ngày là ngày tạm).
+    private let dateDefault: Date
 
     init(draft: ScanDraft, onDone: @escaping () -> Void) {
         self.draft = draft
         self.onDone = onDone
         let r = draft.result
         _vendorText = State(initialValue: r.vendor ?? "")
-        _dateValue = State(initialValue: r.date ?? Date())
+        // C8-FIX: một mốc ngày DUY NHẤT cho cả ô ngày lẫn mốc
+        // đối chiếu "anh có sửa ngày tạm không" — hai lần gọi
+        // Date() riêng lẻ sẽ lệch nhau vài phần nghìn giây.
+        let initialDate = r.date ?? Date()
+        _dateValue = State(initialValue: initialDate)
+        self.dateDefault = initialDate
+        _dateWasMissing = State(initialValue: r.date == nil)
         _subtotalText = State(initialValue: centsToDollarsText(r.subtotalCents))
         _taxText = State(initialValue: r.taxes.isEmpty ? "" : centsToDollarsText(r.taxTotalCents))
         _totalText = State(initialValue: centsToDollarsText(r.totalCents))
@@ -1166,6 +1255,14 @@ struct ReviewView: View {
                 Section("Thông tin đọc được") {
                     TextField("Tiệm / Vendor", text: $vendorText)
                     DatePicker("Ngày", selection: $dateValue, displayedComponents: [.date, .hourAndMinute])
+                    if dateWasMissing {
+                        // C8-FIX: nói thẳng ngày đang hiện là
+                        // ngày TẠM — bản cũ im lặng lưu ngày hôm
+                        // nay như ngày hoá đơn thật.
+                        Text("⚠ Bộ đọc không tìm thấy ngày trên tờ này — ngày đang để tạm là hôm nay. Anh sửa lại đúng ngày trên tờ; nếu cứ để vậy thì khi lưu, hoá đơn sẽ nằm ở trạng thái chờ duyệt.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                     HStack {
                         Text("Subtotal")
                         Spacer()
@@ -1305,6 +1402,11 @@ struct ReviewView: View {
             } message: {
                 Text("Mã chống trùng của tờ này khớp \(duplicateCount) hoá đơn đã lưu (cùng mã TC#). Anh kiểm tra kẻo tính trùng 2 lần.")
             }
+            .alert("Lưu không thành công", isPresented: $saveFailed) {
+                Button("Đã hiểu", role: .cancel) {}
+            } message: {
+                Text("Hoá đơn CHƯA được lưu vào máy. Anh kiểm tra dung lượng trống rồi bấm Lưu lại — đừng rời màn này kẻo mất bản nháp.")
+            }
         }
     }
 
@@ -1348,8 +1450,18 @@ struct ReviewView: View {
         guard let key = draft.result.dedupeKey else { duplicateCount = 0; return }
         // Lọc trong bộ nhớ thay cho #Predicate so sánh String? — loại bỏ điểm
         // rủi ro biên dịch với macro predicate trên cột optional (đã xử lý khi duyệt).
-        let all = (try? modelContext.fetch(FetchDescriptor<Receipt>())) ?? []
-        duplicateCount = all.filter { $0.dedupeKey == key }.count
+        // N2-FIX: bản cũ `(try? fetch) ?? []` biến lỗi đọc sổ
+        // thành "không trùng" — cảnh báo trùng TC# biến mất
+        // lặng lẽ. Nay lỗi được ghi cờ riêng: save() ép tờ vào
+        // chờ duyệt thay vì giả vờ đã kiểm.
+        do {
+            let all = try modelContext.fetch(FetchDescriptor<Receipt>())
+            duplicateCount = all.filter { $0.dedupeKey == key }.count
+            duplicateCheckFailed = false
+        } catch {
+            duplicateCount = 0
+            duplicateCheckFailed = true
+        }
     }
 
     private func attemptSave() {
@@ -1431,11 +1543,17 @@ struct ReviewView: View {
         // V3 (Pha 4): cộng hai điều kiện của đường đọc mới — trọng
         // tài F5 đòi kiểm lại, hoặc ghi chẩn đoán thất bại (hợp
         // đồng fail-closed: không hồ sơ = không "sạch").
+        // C8-FIX: ngày đang lưu là ngày TẠM (bộ đọc trượt ngày
+        // và anh không sửa) — ngày đó không phải bằng chứng;
+        // tờ phải chờ duyệt để anh chốt lại ngày đúng sau.
+        let dateIsUntouchedDefault = dateWasMissing && dateValue == dateDefault
         let stillNeedsReview = selectedKind == .unknown
             || receipt.totalCents == nil
             || !draft.result.warnings.isEmpty
             || (draft.reconcileReport?.requiresReview ?? false)
             || draft.diagnosticsWriteFailed
+            || dateIsUntouchedDefault
+            || duplicateCheckFailed
             || (selectedKind == .business && purposeText.trimmingCharacters(in: .whitespaces).isEmpty)
         receipt.status = stillNeedsReview ? .needsReview : .reviewed
 
@@ -1465,7 +1583,18 @@ struct ReviewView: View {
                 modelContext.insert(line)
             }
         }
-        try? modelContext.save()
+        // N2-FIX (điểm tệ nhất của FULL-REVIEW): bản cũ
+        // `try? save` rồi đóng màn vô điều kiện — lưu hỏng là
+        // mất bản nháp mà anh tưởng đã lưu xong. Nay: lưu hỏng
+        // -> rollback (dọn bản ghi chưa lưu để bấm Lưu lại
+        // không sinh tờ trùng ma) + alert + Ở LẠI màn Kiểm Lại.
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            saveFailed = true
+            return
+        }
         onDone()
     }
 }

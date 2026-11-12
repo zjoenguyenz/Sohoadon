@@ -417,17 +417,39 @@ func dollarsTextToCents(_ text: String) -> Int? {
         .replacingOccurrences(of: ",", with: "")
         .trimmingCharacters(in: .whitespaces)
     guard !cleaned.isEmpty else { return nil }
-    let parts = cleaned.split(separator: ".", omittingEmptySubsequences: false)
-    if parts.count == 1, let dollars = Int(parts[0]) {
-        return dollars * 100
+    // TRAP/SIGN-FIX T2+N1 (FULL-REVIEW 2026-11-12):
+    // - Dấu trừ áp cho TOÀN BỘ giá trị. Bản cũ tính
+    //   dollars*100 + cents với dấu chỉ nằm ở phần đô-la:
+    //   "-216.80" đọc lại thành -21520 (sai 160 xu) và
+    //   "-0.50" thành +50 (lật dấu) — vòng khép kín với
+    //   centsToDollarsText phá chính số âm của app trên
+    //   đường Kiểm Lại -> Lưu.
+    // - Phần đô-la chặn 12 chữ số như SafeMoney: bản cũ dán
+    //   chuỗi 18-19 chữ số vào ô tiền là *100 tràn Int ->
+    //   crash. Ngoài miền -> nil (ô nhập coi như không hợp lệ).
+    var body = cleaned
+    var negative = false
+    if body.hasPrefix("-") { negative = true; body = String(body.dropFirst()) }
+    else if body.hasPrefix("+") { body = String(body.dropFirst()) }
+    guard !body.isEmpty else { return nil }
+    let parts = body.split(separator: ".", omittingEmptySubsequences: false)
+    guard parts.count == 1 || parts.count == 2 else { return nil }
+    let dollarsText = parts[0]
+    guard !dollarsText.isEmpty, dollarsText.count <= 12,
+          dollarsText.allSatisfy({ $0.isNumber }),
+          let dollars = Int(dollarsText) else { return nil }
+    var cents = 0
+    if parts.count == 2 {
+        var frac = String(parts[1])
+        if frac.isEmpty { frac = "00" }
+        if frac.count == 1 { frac += "0" }
+        if frac.count > 2 { frac = String(frac.prefix(2)) }
+        guard let c = Int(frac) else { return nil }
+        cents = c
     }
-    guard parts.count == 2, let dollars = Int(parts[0]) else { return nil }
-    var frac = String(parts[1])
-    if frac.isEmpty { frac = "00" }
-    if frac.count == 1 { frac += "0" }
-    if frac.count > 2 { frac = String(frac.prefix(2)) }
-    guard let cents = Int(frac) else { return nil }
-    return dollars * 100 + cents
+    // dollars <= 999_999_999_999 nên * 100 + cents không tràn.
+    let magnitude = dollars * 100 + cents
+    return negative ? -magnitude : magnitude
 }
 
 /// 21680 -> "216.80" (để nạp vào ô sửa tiền)

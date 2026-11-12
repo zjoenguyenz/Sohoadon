@@ -16,11 +16,16 @@ struct BenchView: View {
     @State private var documentsOutput: String = ""
     @State private var enhancerOn: Bool = false
     @State private var stageLogText: String = ""
-    // CI-FIX-7: trạng thái chia đôi cấu hình engine — MẶC ĐỊNH
-    // là cấu hình ĐÃ CHỨNG MINH của bench cũ (ngôn ngữ truyền
-    // trực tiếp ["vi-VN","en-US"] + chỉ ứng viên top-1).
-    @State private var top3On: Bool = false
-    @State private var langMode: Int = 1
+    // CI-FIX-7: trạng thái chia đôi cấu hình engine — công tắc
+    // vẫn giữ làm dụng cụ bisect khi cần.
+    // N5-FIX (FULL-REVIEW 2026-11-12): MẶC ĐỊNH phải là cấu
+    // hình APP GIAO (top-3 + chính sách ngôn ngữ runtime,
+    // trên máy anh là vi-VT). Mặc định cũ của CI-FIX-7 (top-1
+    // + ép thẳng ["vi-VN","en-US"]) đo một cấu hình app giao
+    // không bao giờ chạy — mọi hồ sơ bench mặc định, kể cả
+    // readerConfigHash, đều lệch khỏi đường giao.
+    @State private var top3On: Bool = true
+    @State private var langMode: Int = 0
 
     private var imageNames: [String] {
         // CI-FIX-4 (2026-11-12): XcodeGen LAM PHANG tai nguyen vao

@@ -641,6 +641,24 @@ enum ReceiptReader {
             flags.append("stitch-\(status)")
         }
 
+        // N3-FIX (FULL-REVIEW): thả ảnh toàn phân giải của các
+        // ứng viên THUA ngay sau khi có winner. Bản cũ giữ
+        // CGImage 12-24MP của MỌI ứng viên tới tận cuối lần
+        // đọc — đỉnh bộ nhớ vài trăm MB/lần đọc, bề mặt jetsam
+        // cấu trúc. Sau điểm này ứng viên thua chỉ còn được
+        // dùng ở tầng metadata (hồ sơ chẩn đoán: kind/điểm/cờ)
+        // và fragments/assembly — KHÔNG còn ai đọc ảnh của
+        // chúng; ảnh winner đi tiếp qua bản sao `winner`.
+        if let tiny = CGContext(
+            data: nil, width: 1, height: 1, bitsPerComponent: 8,
+            bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )?.makeImage() {
+            for i in runs.indices where i != winnerIndex {
+                runs[i].image = tiny
+            }
+        }
+
         // QualityMap theo vị trí trên ảnh THẮNG + cổng chất
         // lượng lúc chụp (quyết định 3 tầng của Pha 2; chặn mặc
         // định TẮT trong QualityThresholds).
@@ -1094,6 +1112,15 @@ enum ReceiptReader {
             out = fin.outcome
             out.diagnosticsID = fin.diagnosticsID
             out.diagnosticsWriteFailed = fin.diagnosticsWriteFailed
+        } else {
+            // N4-FIX (FULL-REVIEW; DESIGN-FINAL §1.5): không có
+            // thư mục chẩn đoán = không có bản ghi = lần đọc
+            // KHÔNG được mang cờ sạch. Bản cũ bỏ qua hẳn
+            // ReadFinalizer mà diagnosticsWriteFailed vẫn false
+            // — một đường né cổng fail-closed (chạm được từ
+            // ReceiptViews khi imageFileName rỗng). Nay ép cờ
+            // hỏng chẩn đoán: ReviewView sẽ giữ tờ ở chờ duyệt.
+            out.diagnosticsWriteFailed = true
         }
         return out
     }

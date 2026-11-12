@@ -1130,6 +1130,11 @@ enum ReceiptParser {
         guard text.contains("/lb") || text.contains("/1b") else { return nil }
         guard let m = matchGroups(text, pattern: #"(\d+(?:\.\d+)?)\s*(?:lb|1b|Tb)\b"#),
               let w = Double(m[0] ?? "") else { return nil }
+        // TRAP-FIX T1 (FULL-REVIEW): token cân không chặn độ dài
+        // -> Double có thể là inf (token >= 309 chữ số) hoặc vô
+        // lý; cân hoá đơn thật không quá 1e6 lb. Ngoài miền ->
+        // không phải dòng cân.
+        guard w.isFinite, w >= 0, w <= 1_000_000 else { return nil }
         var unit: Int? = nil
         if let mu = matchGroups(text, pattern: #"\$\s*\*?\s*(\d[\d,]*\.\d{2})"#) {
             unit = SafeMoney.parseCents(mu[0] ?? "", negative: false)
@@ -1220,7 +1225,16 @@ enum ReceiptParser {
                 break
             }
             if let w = weightLine(text) {
-                let expected = w.unit.map { Int((w.lb * Double($0)).rounded()) }
+                // TRAP-FIX T1 (FULL-REVIEW): chuyển Double->Int
+                // PHẢI kiểm miền trước — tích cân x đơn giá ngoài
+                // [0, 2^63) là trap cứng của Swift. Ngoài miền ->
+                // không kiểm chứng được, coi như không có kỳ vọng.
+                let expected = w.unit.flatMap { u -> Int? in
+                    let p = (w.lb * Double(u)).rounded()
+                    guard p.isFinite, p >= 0, p < 9_223_372_036_854_775_808.0
+                    else { return nil }
+                    return Int(p)
+                }
                 if let exp = expected, let lp = lastItemPos,
                    let amt = out[lp].item.amountCents, abs(exp - amt) <= 2,
                    out[lp].item.weightLb == nil {
@@ -1998,7 +2012,11 @@ enum ReceiptParser {
         for (i, line) in lines.enumerated() {
             guard i < boxes.count, let b = boxes[i] else { continue }
             guard lastMoneyInLine(line.text) != nil else { continue }
-            edges.append(Double(b.maxX))
+            // TRAP-FIX (khoá bin): cạnh không hữu hạn (NaN/inf)
+            // mà vào Int((e/0.01)...) ở vòng bin dưới là trap.
+            let e = Double(b.maxX)
+            guard e.isFinite else { continue }
+            edges.append(e)
         }
         guard edges.count >= 3 else { return nil }
         var order: [Int] = []

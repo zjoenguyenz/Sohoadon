@@ -512,7 +512,11 @@ enum CandidateScorer {
         -> (lo: Double, hi: Double)? {
         var edges: [Double] = []
         for l in lines where !SafeMoney.tokens(in: l.text).isEmpty {
-            edges.append(Double(l.box.maxX))
+            // TRAP-FIX (khoá bin): chỉ giữ cạnh hữu hạn — cạnh
+            // NaN/inf vào Int((e/0.01)...) ở vòng bin dưới là
+            // trap; rỗng hết thì edges.isEmpty ở dưới trả nil.
+            let e = Double(l.box.maxX)
+            if e.isFinite { edges.append(e) }
         }
         if edges.isEmpty { return nil }
         var bins: [Int: [Double]] = [:]

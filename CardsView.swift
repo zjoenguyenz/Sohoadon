@@ -12,6 +12,8 @@ struct CardsView: View {
 
     @State private var formTarget: CardFormTarget? = nil
     @State private var pendingKindChange: PendingKindChange? = nil
+    /// N2-FIX: lưu thẻ thất bại — hiện alert, không nuốt lặng.
+    @State private var saveFailed = false
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
     private var archivedCards: [CardTail] { cardTails.filter { $0.archived } }
@@ -61,6 +63,11 @@ struct CardsView: View {
                 CardFormView(target: target, existingTails: cardTails) { data in
                     handleFormData(data)
                 }
+            }
+            .alert("Lưu không thành công", isPresented: $saveFailed) {
+                Button("Đã hiểu", role: .cancel) {}
+            } message: {
+                Text("Thay đổi thẻ CHƯA được lưu vào máy. Anh thử lại giúp — nếu vẫn không được, anh kiểm tra dung lượng trống của máy.")
             }
             .confirmationDialog(
                 "Đổi loại thẻ •• \(pendingKindChange?.last4 ?? "")?",
@@ -128,8 +135,14 @@ struct CardsView: View {
     }
 
     private func setArchived(_ card: CardTail, _ archived: Bool) {
+        // N2-FIX: lưu hỏng thì trả trạng thái cũ + báo thật;
+        // bản cũ nuốt lỗi, thẻ trông như đã ngưng mà máy chưa ghi.
+        let old = card.archived
         card.archived = archived
-        try? modelContext.save()
+        if !saveContextOrFalse(modelContext) {
+            card.archived = old
+            saveFailed = true
+        }
     }
 
     // MARK: Xử lý form thêm/sửa
@@ -140,8 +153,14 @@ struct CardsView: View {
                 // Đổi loại: không tự áp — hỏi anh trước qua confirmationDialog.
                 pendingKindChange = PendingKindChange(card: card, brand: data.brand, kind: data.kind, last4: card.last4)
             } else {
+                // N2-FIX: như setArchived — hỏng thì hoàn tác
+                // trong bộ nhớ và báo thật.
+                let oldBrand = card.brand
                 card.brand = data.brand
-                try? modelContext.save()
+                if !saveContextOrFalse(modelContext) {
+                    card.brand = oldBrand
+                    saveFailed = true
+                }
             }
         } else {
             let card = CardTail()
@@ -149,23 +168,44 @@ struct CardsView: View {
             card.brand = data.brand
             card.kind = data.kind
             modelContext.insert(card)
-            try? modelContext.save()
+            if !saveContextOrFalse(modelContext) {
+                // Gỡ thẻ chưa lưu khỏi context — không để nó
+                // tự hạ cánh ở một lần lưu khác sau này.
+                modelContext.delete(card)
+                saveFailed = true
+            }
         }
     }
 
     private func applyCardChange(_ pending: PendingKindChange, reclassifyOld: Bool) {
+        // N2-FIX: bản cũ `(try? fetch) ?? []` — đọc sổ lỗi thì
+        // việc xếp lại hoá đơn cũ lặng lẽ thành không làm gì,
+        // trong khi đổi loại thẻ vẫn lưu: trạng thái nửa vời mà
+        // không ai biết. Nay: cần xếp lại mà đọc sổ lỗi thì
+        // DỪNG TOÀN BỘ thay đổi và báo thật.
+        var receipts: [Receipt] = []
+        if reclassifyOld {
+            do {
+                receipts = try modelContext.fetch(FetchDescriptor<Receipt>())
+            } catch {
+                saveFailed = true
+                return
+            }
+        }
         pending.card.brand = pending.brand
         pending.card.kind = pending.kind
         if reclassifyOld {
             let last4 = pending.last4
             // Lọc trong bộ nhớ thay cho #Predicate (tránh phụ thuộc macro với optional).
-            let all = (try? modelContext.fetch(FetchDescriptor<Receipt>())) ?? []
-            for receipt in all where receipt.cardLast4 == last4 {
+            for receipt in receipts where receipt.cardLast4 == last4 {
                 receipt.classification = pending.kind
                 receipt.classificationReason = "Xếp lại theo thẻ •• \(last4) — anh chọn đổi cả hoá đơn cũ"
             }
         }
-        try? modelContext.save()
+        if !saveContextOrFalse(modelContext) {
+            modelContext.rollback()
+            saveFailed = true
+        }
     }
 }
 

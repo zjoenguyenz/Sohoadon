@@ -405,7 +405,12 @@ enum LineAssembly {
                 for f in cand
                 where TextSimilarity.ratio(g.text, f.text)
                         >= AssemblyPolicy.stitchVoteSimilarity {
-                    votes.append((centerY(g) - centerY(f), f.id))
+                    // TRAP-FIX (khoá bin): phiếu dy không hữu
+                    // hạn (hộp NaN) vào Int((dy/0.01)...) ở vòng
+                    // bin dưới là trap — loại ngay tại nguồn;
+                    // rỗng hết thì nhánh votes.isEmpty xử lý.
+                    let dy = centerY(g) - centerY(f)
+                    if dy.isFinite { votes.append((dy, f.id)) }
                 }
             }
             if votes.isEmpty {

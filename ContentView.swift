@@ -135,14 +135,30 @@ struct TabShellView: View {
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: "didSeedStarterCard2586") else { return }
         let descriptor = FetchDescriptor<CardTail>()
-        let existing = (try? modelContext.fetch(descriptor)) ?? []
+        // N2-FIX: bản cũ `(try? fetch) ?? []` — đọc sổ lỗi bị
+        // hiểu là "chưa có thẻ" -> nạp TRÙNG thẻ 2586; và cờ
+        // UserDefaults được đặt vô điều kiện nên lưu hỏng một
+        // lần là thẻ mồi không bao giờ được nạp lại. Nay: đọc
+        // lỗi thì bỏ lượt này (lần mở app sau thử lại, không
+        // đặt cờ); chỉ đặt cờ sau khi đã chắc chắn trạng thái.
+        let existing: [CardTail]
+        do {
+            existing = try modelContext.fetch(descriptor)
+        } catch {
+            seeded = false
+            return
+        }
         if existing.isEmpty {
             let card = CardTail()
             card.last4 = "2586"
             card.brand = "Mastercard Debit"
             card.kind = .business
             modelContext.insert(card)
-            try? modelContext.save()
+            if !saveContextOrFalse(modelContext) {
+                modelContext.delete(card)
+                seeded = false
+                return
+            }
         }
         defaults.set(true, forKey: "didSeedStarterCard2586")
     }
