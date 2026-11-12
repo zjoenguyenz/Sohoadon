@@ -2186,3 +2186,149 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   hết 33 → xuất chẩn đoán; tuỳ chọn cô lập trên L-R01) →
   Leader đọc kết quả theo bảng v3-phase4/CI-FIX-7.md.
   Không kêu anh cài/test gì thêm ngoài phiên đó.
+
+## LUẬT MỚI CỦA ANH 12:44 CST 2026-11-12 — DỪNG GIAO BẢN CRASH
+- Anh ra lệnh: ngừng đưa bản crash bắt anh test; rà toàn bộ
+  project, sửa lỗi tại bàn; tự chạy ≥100 lần thành công liên
+  tục mới giao; chỉ giao patch lớn. Đã ghi TEAM.md.
+- Hai tuyến mở ngay: (A) rà soát toàn project + vi sai
+  cũ-vs-mới; (B) dựng harness tự chạy trên CI macOS (đường
+  đọc Swift thật × 33 ảnh × 100 lượt). Yêu cầu nhật ký
+  run #46: RÚT.
+- ĐẨY CUỐI CA 12:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `b5bd50d8b24d9ca4de505a661c9954272fa74255`. (Dòng này chỉ
+  có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## ĐIỂM CHẾT ĐÃ KHOÁ: TRONG PARSER, TRÊN LUỒNG THẬT CỦA L-R01
+- Nhật ký mịn run #46 (mục trên trong TEAM.md): chết trong
+  ReceiptParser.parse. Hai tuyến theo luật mới của anh:
+  (A) harness tự chạy + tái hiện tại bàn (Swift parser trên
+  luồng ghi + đột biến token, và/hoặc CI macOS với Vision
+  thật); (B) rà soát toàn project. Không bản nào tới tay anh
+  cho tới khi: tái hiện được tại bàn → sửa → tự chạy 100
+  lượt liên tiếp sạch trên đủ 33 ảnh → mới giao patch lớn.
+
+## HAI TUYẾN RÀ SOÁT XONG (2026-11-12 ~12:55 CST) + HARNESS ĐÃ ĐẨY
+- HARNESS-REPRO: VM không có Swift → gói CI-macOS dựng xong;
+  Leader đã đẩy harness/ lên v3 (commit de2c617) và đang cài
+  workflow qua trình duyệt để kích lượt chạy đầu. Hai ứng
+  viên cơ chế crash (đọc tĩnh toàn văn parse, Leader tự đọc
+  lại cả hai dòng): A = Parser.swift:1999 Int((maxX/0.01)…)
+  — hộp tiền NaN/inf/khổng lồ là trap, KHÔNG cổng hữu hạn
+  nào trên đường đi; B = Parser.swift:1223 dòng cân (đã được
+  FULL-REVIEW xác nhận là điểm trap CHẮC CHẮN duy nhất trong
+  lõi đọc). Lượt CI đầu phân định bằng census hộp + fuzz id.
+- FULL-PROJECT-REVIEW (69 phát hiện, 11 lệch thiết kế, 14
+  khẳng định vượt bằng chứng — v3-phase4/FULL-PROJECT-REVIEW.md):
+  nặng nhất: (1) Models.swift:414-439 hàm tiền tầng app phá
+  số âm (−216.80 đọc lại thành −21520; −0.50 thành +50) +
+  crash khi dán số 18–19 chữ số — lọt mọi cổng vì kiểm tĩnh
+  chỉ quét file module, không quét tầng app; (2) 18 điểm lưu
+  SwiftData nuốt lỗi bằng try? mà vẫn báo "Đã lưu ✓" (màn
+  Kiểm Lại đóng dù lưu hỏng); (3) ReadPipeline giữ CGImage
+  toàn phân giải của MỌI ứng viên tới finalize (đỉnh vài
+  trăm MB — bề mặt jetsam không trần) + đường
+  diagnosticsDirectory=nil né cổng ghi mà cờ vẫn false (phá
+  luật §1.5); (4) QualityMap không hề nuôi hàm chọn ứng
+  viên như thiết kế (code chết) và cổng chất lượng lệch vị
+  trí thiết kế; (5) vi sai cũ↔mới chưa từng vào ma trận đo:
+  họ documents biến mất, bỏ cắt lát + ~3× lượt perform,
+  CIContext tĩnh ép GPU dùng chung.
+- Hàng sửa (Leader xếp, thi hành SAU khi harness khoá cơ
+  chế crash): trap A/B + họ cùng nhà → toàn vẹn dữ liệu
+  (tiền số âm, lưu nuốt lỗi, né cổng ghi) → trần bộ nhớ ứng
+  viên → lệch thiết kế ảnh hưởng đúng-sai. Sau sửa: chạy
+  luật 100 lượt trên CẤU HÌNH SẼ GIAO (current + top-3),
+  không chỉ cấu hình bench cũ.
+
+## HARNESS RUN #1 HUỶ SAU 3 GIÂY — RUNNER (2026-11-12 12:59 CST)
+- Workflow đã cài: v3 ad1c675 + main e6bb6f2 (bản sao y hệt
+  để Actions thấy workflow — dispatch chỉ chạy với workflow
+  có trên nhánh mặc định). Run #1 kích thành công trên v3
+  nhưng bị huỷ ngay: cấu hình runner "macos-14-arm64-us-xl"
+  không được hỗ trợ cho repo này. Sửa: runs-on macos-14 →
+  macos-15 (nhãn build-ipa vẫn chạy xanh) trên cả hai bản +
+  bản nháp staging, rồi kích lại.
+
+## HARNESS RUNS #2/#3 — HAI LẦN CHẾT Ở BƯỚC BUILD CỦA HARNESS (2026-11-12)
+- Run #2 (e4f5921): build hỏng dưới Xcode 16.4 mặc định —
+  bản nháp thiếu bước Select Xcode 26 + giấu lỗi sau tail -5.
+  Đã sửa bản nháp (chọn Xcode 26 như build-ipa, tee build.log
+  vào artifact); workflow trên v3 394a10d + main (đồng bộ).
+- Run #3 (394a10d): build tiến tới Xcode 26.3, chết vì lỗi
+  biên dịch trong CHÍNH mã harness: main.swift:385,388
+  "ambiguous use of 'nan'" (mã fuzz dựng hộp NaN). Đã sửa
+  CGFloat.nan tường minh (376/385/388), đẩy v3 3be5737.
+  Run #4 tự kích theo push — đang chờ kết quả cổng thật.
+- Bài học ghi sổ: harness cũng là mã — phải qua cùng kỷ luật
+  kiểm tĩnh biên dịch trước khi kích lượt dài.
+
+## HARNESS RUN #4 (2026-11-12 13:36 CST) — BUILD XANH, CỔNG 1 CHƯA CHẠY ĐƯỢC
+- Build SUCCEEDED (sửa NaN đúng), nhưng biến BIN của
+  workflow trỏ nhầm vào file DWARF trong .dSYM (find lấy
+  kết quả đầu) → "Permission denied" ở Cổng 1; cổng luật
+  chưa chạy. Probe "PASS" là PASS GIẢ: bước probe không có
+  pipefail, tee nuốt mã lỗi — control.log/probe.log rỗng.
+  Đã sửa bản nháp: find giới hạn Build/Products + loại
+  .dSYM; probe thêm pipefail. Chờ cài lên repo + chạy lại.
+
+## CA TRỰC 14:40 CST 2026-11-12 — PHÁN QUYẾT HARNESS RUN #5: BIN + PROBE ĐÃ KHÉP, CỔNG 1 RỚT CÂM; BẢN 2>&1 CHƯA CÓ LƯỢT CHẠY
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước: lấy phán quyết
+  lượt harness sau mục RUN #4 (13:36), là bước tiếp theo đang
+  chờ ở mục đó ("cài lên repo + chạy lại"). Ca không sửa code,
+  không đẩy code v3, không kích lượt chạy nào.
+- Cài lên repo ĐÃ XẢY RA ở nhịp chat chính sau mục 13:36:
+  commit `43dd986` trên v3 (2026-11-12 13:40 CST, "Update
+  harness-ci.yml") đưa đúng 2 sửa của bản nháp — BIN find giới
+  hạn `harness/dd/Build/Products` + loại `.dSYM`, và Probe
+  cộng `set -o pipefail` (đối chiếu trang commit: 2 cộng /
+  1 xoá so với `3be5737`; bản nháp tại bàn
+  harness/workflow/harness-ci.yml dòng 51 + 56 khớp).
+- RUN #5 (đọc trực tiếp GitHub Actions trong ca này, run id
+  43292958946, job law-and-control macos-15, kích tay, bắt đầu
+  13:42 CST, 44s, completed/failure): build ĐÚNG commit
+  `43dd986` — KHÔNG phải đầu v3 hiện tại. Từng bước: Build
+  harness (Release) **PASS** — log kết "** BUILD SUCCEEDED **",
+  `BIN: harness/dd/Build/Products/Release/SoHoaDonHarness`
+  (đúng binary Release thật, hết bệnh .dSYM của run #4) ·
+  Probe **PASS THẬT** — log có danh sách ngôn ngữ rev3/accurate
+  (gồm `vi-VT`), `vendors dataVersion = vendors-2026-11-11-p1`,
+  `lexicon version = lexicon-2026-11-11-p1`, `SURVIVED probe`
+  (hết PASS giả của run #4) · **Cổng 1 — control RỚT** (1s,
+  exit 1): log bước chỉ 7 dòng — lệnh chạy + `grep -q
+  "SURVIVED fixture" control.log` + dòng lỗi exit 1; binary
+  KHÔNG để lại stdout nào bị bắt, không dòng "Permission
+  denied", không chữ lỗi nào khác. Cổng 2 (luật 100 lượt) ·
+  ma trận phụ · Cổng 3 fuzz đều SKIPPED. Artifact
+  `harness-evidence-5` ĐÃ tải lên (6.03 KB, 3 file, sha256
+  3593ffe2… theo trang run).
+- ĐẦU v3 HIỆN TẠI ĐÃ ĐI TIẾP: `6716f22` (14:29 CST) cộng
+  `2>&1` vào lệnh Cổng 1 + Cổng 2 + ma trận (3 cộng / 3 xoá,
+  1 file) — bản nháp tại bàn đã khớp dạng này (grep `2>&1` ở
+  các lệnh fixture/images trong ca này); main có commit đồng
+  bộ `0884d10` (14:31 CST, cùng thông điệp — ca chỉ xác nhận
+  tồn tại qua connector, chưa đối chiếu nội dung trên main).
+  **Chưa có run #6**: lượt chạy trên `6716f22` CHƯA TỒN TẠI ở
+  thời điểm kiểm (14:45 CST) — sửa 2>&1 chưa được phán quyết.
+- Tuyên bố trung thực — đã chứng minh: trạng thái run #5
+  từng bước + nội dung workflow trên v3 + thứ tự 2 commit,
+  bằng đọc trực tiếp Actions/trang commit/file trên nhánh
+  trong ca; chưa chứng minh: VÌ SAO binary fixture ở Cổng 1
+  không ra chữ nào — log run #5 không chứa bằng chứng (lệnh
+  ở `43dd986` chưa có `2>&1` nên stderr nếu có đã không vào
+  control.log; đây là tính chất của lệnh, không phải kết
+  luận cơ chế: chết-trong-parse / thoát-sớm / crash đều chưa
+  phân định được); chưa làm: chưa chạy lượt trên `6716f22`,
+  chưa đụng hàng sửa crash A/B (vẫn chờ harness khoá cơ chế
+  theo mục ~12:55), chưa chuẩn bị bản giao nào — đóng băng
+  giao bản + luật 100 lượt vẫn nguyên.
+- **Bước tiếp theo: một lượt harness trên đầu v3 `6716f22`**
+  (nhịp chat chính/Leader kích — workflow đã có sẵn nút
+  dispatch; push lên v3 cũng tự kích theo paths) → đọc Cổng 1
+  với stderr đã bắt: nếu binary chết có chữ lỗi thì đối chiếu
+  census/fuzz để khoá A/B; nếu Cổng 1 qua thì Cổng 2 (100
+  lượt) mới là phán quyết luật của anh. Không kêu anh
+  cài/test gì.
