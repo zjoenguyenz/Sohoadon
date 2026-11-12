@@ -1622,3 +1622,150 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   22:42 ở trên vì vậy đã qua kiểm chéo độc lập của ca trực.
 - Bước tiếp theo giữ nguyên: PHA 3 (nhịp chat chính). Treo cũ
   không đổi: C1 in ngôn ngữ + C2 biên dịch Swift thật.
+
+## PHA 3 XONG Ở MỨC GƯƠNG (2026-11-11 23:03 CST)
+- Reconcile tách module + gia cố SafeMoney toàn bộ: 13/13 ca tổng
+  hợp PASS lại, vi sai 3 chiều trùng cả số nút DFS; bẫy Int64 cũ
+  bẫy thật, đường mới từ chối sạch. ReadPipeline nối F3→F4→
+  Reconcile→ROI. Cờ thẻ đóng (L-R09 "2580" → cờ mạnh; 2 ca cờ oan
+  đã đăng ký là chi phí đã biết).
+- KÊNH CANDIDATE: oracle@3 = 0/7 token — file buổi đo chỉ ghi ĐÚNG
+  1 candidate cho mọi dòng tranh chấp, biến thể đúng không tồn
+  tại trong dữ liệu đã ghi. Kênh giữ tầng gợi ý; chỉ xét lại bằng
+  đo thiết bị với topCandidates(3) bảo đảm. (Bài học dữ liệu: bản
+  ghi bench mỏng hơn thiết kế giả định.)
+- F5 TRÊN 15 CA THẬT: can thiệp áp = 0, can thiệp SAI = 0 → cổng
+  cứng §7 QUA (không lùi chỉ-gợi-ý). Đọc đúng nghĩa: trọng tài TỪ
+  CHỐI áp trên các ca thật gãy (ANCHOR_CONFLICT/NO_SOLUTION/
+  TOTAL_ONLY) vì không có nghiệm duy nhất kèm bằng chứng tại chỗ —
+  năng lực sửa đúng mới chứng minh trên ca tổng hợp. Hệ quả cho
+  GATE100: các ca chữ-số-chết KHÔNG được F5 cứu trên luồng kiểu
+  này; đường cứu nằm ở ROI trên ảnh thật (thiết bị) + capture.
+- Leader đã tự chạy lại test_f5_corpus + test_reconcile13: khớp.
+- AMD-001 (Leader chốt): nới vùng ROI thống nhất ±50% mỗi phía
+  theo RECONCILE §6 (thay ×1.5 của DESIGN-FINAL) — ghi tại
+  core-v3-design/AMENDMENTS.md; Pha 4 thi hành + fixture.
+- PHA 4 bắt đầu: lắp ráp toàn bộ module vào hình hài app chính +
+  BenchShell dùng chung nguồn + chuẩn bị đẩy nhánh v3 lên CI
+  (đóng C2 biên dịch Swift thật).
+- ĐẨY CUỐI CA 22:40: THÀNH CÔNG — đúng 1 lần, 1 file (WORK-STATE.md), commit docs/planning: `304c1c90443ba4f55283c7169284454be80c293d`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## PHA 4 LẮP RÁP XONG (2026-11-11 23:22 CST) — CHỜ TRÌNH ĐẨY NHÁNH v3
+- v3-phase4/: bộ nguồn app v3 hoàn chỉnh (19 Swift + vendors/
+  lexicon JSON + project.yml 2 target + 33 ảnh bench). Models
+  .swift trùng byte với main. Toàn bộ bộ kiểm Pha 0–3 chạy lại
+  trên nguồn đã lắp: KẾT QUẢ ≡ từng pha (trọn sổ 7/15, vendor
+  15/15, C4 7/7, reconcile 13/13, F5 0 can thiệp, oracle 0/7).
+  Kiểm tĩnh Pha 4 PASS toàn bộ (ReadPipeline là đường đọc duy
+  nhất từ UI; không phép tính tiền trần ngoài SafeMoney).
+- AMD-001 đã thi hành (RegionReReader hệ số 2.0, fixture PASS).
+- Lắp ráp tự bắt 2 lỗi loại biên-dịch-thật mà gương/lexer mọi pha
+  đều mù: P4-D1 (gán Int vào Double — CI chắc chắn rớt) và P4-D4
+  (Parser lén phụ thuộc formatMoney của tầng app — BenchShell chỉ
+  -module sẽ gãy). Bằng chứng sống cho giá trị của bước CI.
+- PUSH-MANIFEST sẵn sàng: 16 file chữ qua connector + 34 file qua
+  trình duyệt (workflow + 33 JPG) lên nhánh `v3` MỚI (không đụng
+  main, không đụng app đang chạy của anh). Run CI đầu tiên đóng
+  C2 (biên dịch Swift thật); lỗi sót (nếu còn) sửa theo log trên
+  nhánh v3. Đang trình anh duyệt đẩy.
+
+## NHÁNH v3 ĐÃ ĐẨY + CI RUN ĐẦU (2026-11-11 23:25–23:32 CST)
+- Đẩy đủ theo PUSH-MANIFEST (anh duyệt 23:23): nguồn be4e9073
+  (17 file, connector) + workflow 165f035 + ảnh 87c8871/001d47b/
+  0d2639a (33/33) qua trình duyệt. Main không bị đụng.
+- Run #35–#38 đều rớt; run #38 (HEAD 0d2639a) đọc log tận nơi:
+  bước "Build main app" rớt bởi ĐÚNG MỘT lỗi — Parser.swift:2128
+  chứa byte điều khiển 0x08 (backspace thật) ngay trong regex cân
+  nặng, ở chỗ gương Python có `\b` in được. Quét toàn bộ nguồn
+  lắp ráp: đó là byte điều khiển DUY NHẤT. Đã sửa ở cả bản lắp
+  ráp Pha 4 lẫn nguồn Pha 1 (thay bằng `\b` hai ký tự) và đẩy lên
+  v3: commit 0ac6406 (thẻ duyệt của anh). Đang chờ run kế tiếp
+  phán quyết — C2 chưa đóng cho tới khi có run XANH.
+
+## CI RUN #39 (2026-11-11 23:50 CST) — LỚP LỖI ĐƯỜNG NỐI
+- Run #39 (0ac6406): lỗi 0x08 ĐÃ HẾT; compiler đi tiếp và phơi
+  13 lỗi thuộc họ đường-nối-giữa-các-pha ở bước Build main app:
+  2 khai báo trùng TRONG cùng file Parser (hasAlphaToken,
+  samelineExcludeContains — kiểm tĩnh cũ chỉ soi trùng XUYÊN
+  file), 3 điểm gọi thừa đối số 'confidence' (lệch chữ ký findCard
+  của việc cờ thẻ), các lời gọi Vision lệch nhãn cgImage:/thiếu
+  try (vùng CONFIRM-AT-COMPILE), 1 thứ tự đối số, 1 gán Double→Int
+  thứ hai cùng họ P4-D1, 1 nhãn 'lines:' thừa ở ReadPipeline.
+- Gói CI-FIX-1 đang sửa trong staging v3-phase4/app: luật cứng —
+  helper trùng phải đối chiếu thân hàm + gương trước khi xoá
+  (khác nhau thì chọn theo hành vi đã kiểm chứng, cấm hợp nhất
+  bừa); chạy lại toàn bộ bộ kiểm sau sửa phải ≡; bổ sung 2 kiểm
+  tĩnh mới (trùng trong-file + quét byte điều khiển) và phải chứng
+  minh bắt được lỗi cũ. Leader đẩy bản sửa khi gói xong.
+
+## CI RUN #40 + CI-FIX-2 (2026-11-12 00:30 CST)
+- Run #40 (e853f12): còn ĐÚNG MỘT lỗi biên dịch — OCREngine.swift
+  :198: adapter họ documents bắc cầu RecognizeDocumentsRequest
+  (Swift-native, async perform(on:) theo T2 §2) qua
+  VNImageRequestHandler.perform([VNRequest]) — không hợp lệ theo
+  kiểu. Đây là khung đo Pha 2 để trống ĐIỂM CHUYỂN ĐỔI có chủ
+  đích; lỗi nằm ở câu bắc cầu, không phải ý đồ.
+- CI-FIX-2 (Leader tự sửa, điểm duy nhất): adapter fail-closed
+  bằng lỗi tường minh OCREngineError.documentsAdapterNotWired
+  (BenchView đã bọc do/catch và in trung thực trạng thái khung);
+  sửa đồng bộ vào nguồn gốc Pha 2; kiểm tĩnh P4+P5 PASS, byte
+  điều khiển = 0. Đẩy v3 commit 399f67a. Đang chờ run phán quyết.
+
+## CA TRỰC 00:40 CST 2026-11-12 — PHÁN QUYẾT RUN #41: APP CHÍNH ĐÃ BIÊN DỊCH XANH, BENCH CÒN ĐÚNG 2 LỖI
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (như ca 22:40 đã
+  ghi) — file này ghi rõ anh duyệt hướng 21:02 + duyệt thiết
+  kế chốt D1–D7 21:44. Ca làm đúng MỘT bước trong hàng việc:
+  lấy phán quyết run cho commit 399f67a đang chờ ở mục trên.
+  Ca không sửa code, không đẩy code v3, không làm trùng gói
+  CI-FIX tiếp theo đang ở nhịp chat chính/Leader.
+- Kiểm từ xa trước khi đọc Actions (connector GitHub, trong
+  ca này): đầu nhánh v3 = đúng commit
+  `399f67a0cd373118585c05ea80b80089e931a7c9` (2026-11-12T06:30:56Z
+  = 00:30:56 CST, thông điệp CI-FIX-2) — không có commit nào
+  sau nó.
+- Run #41 (đọc trực tiếp GitHub Actions qua trình duyệt có
+  phiên của anh, 00:41–00:45 CST; run: https://github.com/
+  zjoenguyenz/Sohoadon/actions/runs/43168679392): completed /
+  failure, chạy 1m 5s trên macos-26, Xcode 26.3, SDK
+  iphoneos26.2, build đúng commit 399f67a. Các bước setup /
+  XcodeGen / chọn Xcode ĐỀU QUA. **Build main app (scheme
+  SoHoaDon) QUA — lần đầu tiên app chính biên dịch xanh trên
+  CI; 0 lỗi biên dịch ở bước này.** C2 vì vậy ĐÃ ĐÓNG ở phía
+  app chính.
+- Build bench app (scheme SoHoaDonBench) RỚT, exit 65, đúng
+  **2 lỗi biên dịch**, cả hai ở BenchView.swift — chính là 2
+  lời gọi giữ nhãn CONFIRM-AT-COMPILE mà CI-FIX-1/HONESTY đã
+  khai chờ compiler phán: (1) dòng 208:38 — `instance member
+  'supportedRecognitionLanguages' cannot be used on type
+  'RecognizeDocumentsRequest'`; (2) dòng 210:39 — lỗi y hệt
+  trên `RecognizeTextRequest`. Compiler đã phán: thuộc tính
+  này là instance member, KHÔNG phải type member — cách gọi
+  `.supportedRecognitionLanguages` trên chính kiểu là sai.
+  Tìm `error:` toàn log chỉ có 2 lỗi này (+1 dòng liệt kê
+  destination không phải lỗi). Các warning deprecated
+  (VNRecognizeTextRequestRevision1/2, supportedRecognition
+  Languages(for:revision:) ở BenchView 191/198 + OCREngine
+  111/188) KHÔNG phải nguyên nhân rớt.
+- Đối chiếu tại bàn (ca tự đọc trực tiếp): v3-phase4/app/
+  BenchView.swift dòng 208–211 khớp từng ký tự 2 điểm lỗi
+  (docLangs ở 208–209, textLangs ở 210–211, trong
+  printLanguages(), khối #available(iOS 26.0, *)).
+- Hệ quả run: Package + Upload 2 artifact đều SKIPPED —
+  **run #41 KHÔNG có artifact/IPA nào**; không có gì để kêu
+  anh tải/cài (đúng luật: chưa xanh trọn = chưa giao).
+- Tuyên bố trung thực — đã chứng minh: trạng thái đầu nhánh
+  v3 + phán quyết run #41 từng bước/lỗi bằng đọc trực tiếp
+  (connector + Actions) và khớp code tại bàn 208–211; chưa
+  chứng minh: bản sửa cho 2 điểm này CHƯA tồn tại — compiler
+  mới chỉ phán cách gọi hiện tại sai, hướng sửa (tạo instance
+  trước khi đọc thuộc tính, hoặc in fail-closed trung thực
+  như tiền lệ CI-FIX-2 cho phần probe) phải qua kiểm tĩnh +
+  chạy lại bộ kiểm Pha 0–4 ≡ trước khi đẩy, ca này chưa làm;
+  C2 phía BenchShell CHƯA đóng (chỉ đóng khi một run xanh
+  trọn cả 2 scheme); chưa làm: chưa đụng Swift nào, chưa
+  chuẩn bị bản giao nào — đóng băng giao bản vẫn nguyên.
+- **Bước tiếp theo: CI-FIX-3 ở nhịp chat chính/Leader** — sửa
+  đúng 2 lời gọi probe ở BenchView.swift:208/210 (điểm duy
+  nhất), chạy lại toàn bộ bộ kiểm + kiểm tĩnh P4/P5 phải ≡,
+  đẩy v3, chờ run kế tiếp phán quyết. Rớt 1 scheme là C2
+  chưa đóng; không kêu anh cài/test gì.
