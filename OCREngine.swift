@@ -81,6 +81,15 @@ protocol OCREngine {
 enum OCREngineError: Error {
     case noObservations
     case unsupportedRevision
+    /// Họ documents (Swift-native): adapter là KHUNG đo — điểm
+    /// chuyển đổi observation -> Fragment chưa nối (chờ phép đo
+    /// cô lập §4.5 trên thiết bị). Mọi lời gọi đọc đều ném lỗi
+    /// này (fail-closed) thay vì trả rỗng lặng lẽ. CI-FIX-2,
+    /// 2026-11-12: bản khung cũ bắc cầu qua VNImageRequestHandler
+    /// .perform([VNRequest]) — không hợp lệ với request
+    /// Swift-native (kiểu async perform(on:), T2 §2) và là lỗi
+    /// biên dịch duy nhất của run #40.
+    case documentsAdapterNotWired
 }
 
 // MARK: - Họ cổ điển (GHIM Rev3)
@@ -193,13 +202,13 @@ final class DocumentsEngine: OCREngine {
         // observation -> Fragment là điểm nối của Pha 3 (cần đo
         // cấu trúc thật trên thiết bị trước khi chốt cách bóc
         // dòng/đoạn — không đoán mò cấu trúc ở đây).
-        let request = RecognizeDocumentsRequest()
-        let handler = VNImageRequestHandler(cgImage: image, options: [:])
-        _ = try handler.perform([request])
-        // TODO(PHA-3): bóc DocumentObservation thành Fragment
-        // theo kết quả đo cô lập E-C/E-D; hiện trả rỗng để không
-        // một kết luận nào dựa trên khung chưa đo này.
+        // KHUNG: request Swift-native thực thi bằng async
+        // perform(on:) (T2 §2) — KHÔNG đi qua VNImageRequestHandler
+        // (cầu bắc đó không hợp lệ theo kiểu, CI run #40). Việc
+        // bóc DocumentObservation thành Fragment chờ phép đo cô
+        // lập E-C/E-D (§4.5) trên thiết bị; cho tới lúc đó adapter
+        // fail-closed bằng lỗi tường minh, không trả rỗng.
         lastDetectedData = []
-        return []
+        throw OCREngineError.documentsAdapterNotWired
     }
 }
