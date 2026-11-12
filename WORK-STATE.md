@@ -33,6 +33,12 @@ chính/Wally lấy log sự cố trên máy anh → phân loại
 trap/jetsam/watchdog → mới định gói sửa**; điều kiện mở băng
 (c) giữ nguyên (quét trong app tờ T-Johnnys từ ảnh gốc + 2 tờ
 liên tiếp không tắt). Ca này không kêu anh cài/test gì.)
+ĐẨY CUỐI CA 20:40: **THÀNH CÔNG** — đúng 1 lần, 4 file
+(WORK-STATE.md · integrate-v2/crash-audit/
+CRASH-AUDIT-LEDGER.md · run_crash_stress.py ·
+crash-stress-results.txt), commit mới trên docs/planning:
+`84cd24ab0622638a3579107cbed0243a23554664`. (Dòng này chỉ có
+tại bàn, sẽ đi theo lần đẩy của ca sau.)
 Cập nhật trước đó: 2026-11-11 18:40 CST (ca trực: **KIỂM CHỨNG
 TỪ XA LẦN ĐẨY MƠ HỒ 16:40 — KHÔNG LÊN ĐƯỢC CHÚT NÀO, KHÔNG
 TRÙNG; ĐẨY BÙ AN TOÀN** — đúng việc ca 16:40 dặn ca sau, làm
@@ -1414,3 +1420,205 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   T-Johnnys/Pan-Asia vắng — mọi đường đọc đều trống); thuế mất ký
   tự "3" ở tầng ảnh→chữ sống; Σ sống 47.87 ≠ bench 23.97.
 - Toàn bộ đã chuyển làm đầu vào cho chương trình nghiên cứu sâu.
+
+## NGHIÊN CỨU SÂU HOÀN TẤT 4/4 TUYẾN (2026-11-11 20:49 CST) — CHỜ CỔNG ANH
+- Báo cáo hợp nhất: deep-study/DEEP-STUDY-REPORT.md (+ T1–T4).
+  Leader kiểm số đầu: 159 giá trị tiền sống sót khớp artifact T1.
+- Kết luận chính: mong manh theo PHÉP NHÂN (159/172 giá trị tiền
+  về nguyên vẹn trong dòng OCR nhưng trọn sổ chỉ 5/15) — vá từng
+  chỗ là thua toán học này. Xếp hạng kẻ giết: F2 engine mất 1 chữ
+  số trên in nhiệt mờ → F3 ráp dòng trên ảnh cắt lát (3/3 ca lát
+  đều rớt; cặp C-003/L-R10 cùng tờ: cắt→rớt, không cắt→qua) → F4
+  từ điển vendor 9 chuỗi (mất tên tiệm 5/15 dù header đọc hoàn hảo)
+  → F5 tầng trọng tài/đọc-lại VẮNG MẶT trong bản đã giao (Reconcile
+  không nối vào parse()) biến vết thương thành mất mát vĩnh viễn.
+  F6 cờ/hiển thị khoẻ nhất: 0 số sai không cờ.
+- §5.5 kiểm lại: điều kiện cloud CHƯA từng kích hoạt hợp lệ — họ cổ
+  điển bị bác bỏ là nút thắt bằng số (92,4% chữ đã về); họ tài liệu
+  CHƯA TỪNG ĐƯỢC ĐO CÔ LẬP (chỉ xuất hiện trong bản gộp phá hoại).
+  Nghiên cứu KHÔNG trình ngoại lệ cloud; T3 có thiết kế phép đo cô
+  lập engine. Đính chính T2: enhancedImageOfPage KHÔNG tồn tại
+  trong API công khai — chỉ imageOfPage; tăng cường phải tự sinh.
+- T3: 7 nguyên tắc bất biến + kiến trúc 6 tầng + máy kiểm chứng
+  khép kín (chẩn đoán bắt buộc trong app chính; corpus sinh từ
+  chính đường app chính; một module đọc duy nhất dùng chung).
+- Bước tiếp theo theo L-9: anh duyệt hướng ở cổng nghiên cứu →
+  thiết kế chi tiết → xây. Chưa duyệt = chưa thiết kế.
+
+## ANH DUYỆT HƯỚNG NGHIÊN CỨU (2026-11-11 21:02 CST)
+- Sau khi em trình bày thêm theo yêu cầu của anh (21:01 "Chưa duyệt
+  — em cần trình bày thêm"), anh bấm duyệt: "Duyệt hướng — đi tiếp
+  thiết kế chi tiết cốt lõi mới".
+- Bước hiện tại: THIẾT KẾ CHI TIẾT cốt lõi mới (theo T3) — trình
+  anh qua cổng thiết kế trước khi xây bất cứ thứ gì. Đóng băng
+  giao bản vẫn nguyên hiệu lực.
+
+## LỆNH 21:05 CST 2026-11-11 — MỔ XẺ APP KHÁC + CỔNG CỐT LÕI 100/100
+- Mở nghiên cứu mổ xẻ phương pháp của các app/sản phẩm quét hoá
+  đơn & tài liệu khác (kỹ thuật, không phải bảng tính năng) làm
+  đầu vào bắt buộc trước khi phác lại sơ đồ; gói thiết kế chi tiết
+  đang chạy được lệnh chờ tích hợp, không chốt thiết kế trước
+  nghiên cứu này.
+- Chuẩn cốt lõi mới: 100% trên 100 lần thử thành công mới tính
+  giai đoạn 2 (L-2026-11-11-10). Định nghĩa lần thử/thành công sẽ
+  đặc tả trong thiết kế, qua cổng của anh.
+
+## BẢN THẢO THIẾT KẾ CHI TIẾT XONG — PARK CHỜ DISSECTION (2026-11-11 21:09 CST)
+- core-v3-design/DESIGN-DETAIL.md (994 dòng, 10 chương). Đúng kỷ
+  luật L-10: miền không phụ thuộc đã đặc tả đầy đủ (module đọc duy
+  nhất liên kết cùng nguồn cho app chính + BenchShell +
+  ReplayHarness; KHÔNG đổi model SwiftData; chẩn đoán schema v2
+  lưu toàn bộ mảnh; SafeMoney), miền tầng đọc để MỞ theo mã OPEN-*
+  chờ DISSECTION.
+- Đặc tả ĐỀ XUẤT cổng 100/100 (GATE100-v1, chưa chốt): một lần thử
+  = một lần đọc trọn vẹn hoá đơn thật qua đường production trên
+  thiết bị; thành công = trọn sổ + vendor + ngày + thuế từng dòng
+  + thẻ + M9=0 + không crash + chẩn đoán đủ, chấm trên kết quả máy
+  trước sửa tay; cấu thành S1 15 + S2 10 + S3 50 + S4 20 + S5 5
+  (cổng danh dự S-0 + L-R08 — rớt 1 rớt cả phiên); luật qua cổng:
+  100/100 cho nguyên phiên, một lần thua = chạy lại trọn phiên mới.
+- Chờ DISSECTION về → tích hợp OPEN-* → bản chốt trình anh ở cổng
+  thiết kế lần hai. Không mở pha xây nào trước điểm tích hợp
+  (ngoại lệ tối đa Pha 0–1 phần không phụ thuộc — Leader giữ chưa
+  mở, chờ cổng thiết kế).
+
+## MỔ XẺ APP KHÁC HOÀN TẤT (2026-11-11 21:17 CST) — ĐANG TÍCH HỢP VÀO THIẾT KẾ
+- deep-study/DISSECTION-REPORT.md + 4 phụ lục (~1.300 dòng nguồn
+  đọc trực tiếp). 4 phát hiện bao trùm: (1) ngành ĐI VÒNG QUA F2 —
+  không ai cứu chữ số phai ở mức engine; thắng lợi nằm ở chụp tốt
+  (F1) + hậu kiểm số học (F5); (2) ranh giới on-device của cả
+  ngành nằm GIỮA pipeline — trích xuất trường ngữ nghĩa tổng quát
+  không hãng nào công bố chạy on-device; F4 của ta chỉ có nguyên
+  lý để học, không có sản phẩm để bắt chước; (3) mọi số 95–99%
+  bên ngoài đều kèm điều kiện đầu vào đã chuẩn hoá (cùng model:
+  98,5% với chữ vàng → 38,5% với OCR thật) — phép nhân tầng là cơ
+  chế phổ quát; (4) đội thắng SROIE Task 3 KHÔNG dùng deep-KIE —
+  thắng bằng lexicon tự sửa + regex theo trường + ràng buộc.
+- Ghi chú bắt buộc giữ nhãn: Veryfi công khai SUY subtotal =
+  Total − Tax − Tip — luật không-nặn-số của dự án là ngược ngành
+  CÓ CHỦ ĐÍCH (chứng cứ kế toán), phải ghi lý do vào thiết kế.
+  OCR voting không phải mẫu hình của sản phẩm hoá đơn nào; đọc-
+  lại-ROI là sáng tác tổng hợp của dự án — không mượn uy tín hãng.
+  15 ca hiện tại = IN-SAMPLE; ca mới phải holdout trước khi dùng
+  chỉnh parser.
+- Đang chạy gói tích hợp DISSECTION → DESIGN-FINAL (giải quyết
+  từng OPEN-*, sửa đặc tả GATE100 theo kỷ luật holdout). Xong sẽ
+  trình anh ở cổng thiết kế.
+
+## THIẾT KẾ CHỐT XONG (2026-11-11 21:21 CST) — TRÌNH CỔNG THIẾT KẾ
+- core-v3-design/DESIGN-FINAL.md (773 dòng). Mọi OPEN-* đã giải
+  quyết có truy vết (chốt / đo-ở-pha + căn cứ mổ xẻ).
+- Tích hợp lớn: trọng tâm cứu chữ số dời F2 → F1+F5 (cổng chất
+  lượng 3 quyết định + QualityMap có vị trí làm đích ROI); hoá đơn
+  dài = chế độ nạp nhiều trang + ghép tầng chữ (hết bệnh cắt lát);
+  nắn cong là bước riêng, xoá bóng giữ màu trước nhị phân; cấm
+  phục hồi sinh-tạo trong đường đọc; DomainCorrection (chỉ sửa
+  CHỮ, không chạm token số) thành tầng hạng nhất; hiến chương
+  không-nặn-số ghi kèm phản ví dụ Veryfi.
+- GATE100-v2 (luật 100/100 không đổi, cấu thành sửa theo kỷ luật
+  in-sample): 15 ca hạt giống rời khỏi con số 100 → tiền-cổng hồi
+  quy bắt buộc 15/15; 100 lần đếm = S1 quét hạt giống 10 + S2 ca
+  MỚI NIÊM PHONG 50 + S3 lặp chụp 20 + S4 cổng danh dự 5 + S5
+  HOLDOUT THUẦN 15 (chọn sau khi build đóng băng). Một phiên = 115
+  lần đọc; rớt 1 lần đếm = rớt cả phiên, chạy lại trọn phiên.
+- 7 quyết định trình cổng (D1–D7) — D6 cần anh cam kết nguồn cung
+  hoá đơn niêm phong (≥25 tờ trước đóng băng + ≥15 tờ sau).
+
+## ANH DUYỆT THIẾT KẾ CHỐT + CẢ 7 QUYẾT ĐỊNH (2026-11-11 21:44 CST)
+- Cổng thiết kế ĐÃ QUA: DESIGN-FINAL thành đặc tả thi hành;
+  D1–D7 chốt theo khuyến nghị (gồm GATE100-v2; D6 = anh cam kết
+  nguồn hoá đơn niêm phong ≥25 tờ trước đóng băng + ≥15 tờ sau;
+  D5 hiến chương không-nặn-số + DomainCorrection chỉ sửa chữ;
+  D7 luật §5.5 giữ nguyên).
+- Bắt đầu XÂY PHA 0: máy kiểm chứng + sàn an toàn trước mọi tầng
+  đọc (SafeMoney, chẩn đoán schema v2, ReplayHarness, cổng ngữ
+  nghĩa nền tảng). Các pha sau theo §7 của thiết kế; phiên cổng
+  100/100 là điểm cuối của lộ trình cốt lõi.
+
+## PHA 0 XONG Ở STAGING (2026-11-11 21:55 CST) — LEADER TỰ CHẠY LẠI XANH TOÀN BỘ
+- v3-phase0/: Money.swift (gương 15/15; ≡ crashfix trên 28 token
+  thật), ReadDiagnostics.swift v2 (gương 5/5 gồm mô phỏng lỗi ghi
+  — fail-closed chạy đúng), ReplayHarness (48/48 trên 3 bản ghi;
+  bản ghi chuyển đổi từ luồng 001 tái lập đúng mọi số đóng băng),
+  platform_gate 17/17. Leader tự chạy lại cả 4 bộ: PASS toàn bộ.
+- Cổng tự bắt được 1 lỗi thật: luật extent thuần của sàn crashfix
+  CHO QUA tứ giác nơ-bướm tự cắt (ảnh nắn bị gấp mà extent vẫn hữu
+  hạn) — luật đầy đủ (tứ giác đơn + extent) đã đặc tả, Pha 2 kế
+  thừa bắt buộc.
+- Điều kiện treo (đã có cách khép, không chặn Pha 1 ngoại tuyến):
+  C1 in ngôn ngữ trên thiết bị (probe đã sẵn); C2 biên dịch Swift
+  thật trên CI (khép ở lần đẩy v3 đầu tiên); C3 nối chẩn đoán vào
+  app chính (Pha 4); C4 replay toàn baseline (cần F4 thật — Pha 1).
+- PHA 1 bắt đầu: tầng phân tích F4 trên luồng chữ theo DESIGN-FINAL.
+
+## PHA 1 XONG Ở MỨC GƯƠNG + KIỂM TĨNH (2026-11-11 22:25 CST)
+- F4 v3 (v3-phase1/): trọn sổ IN-SAMPLE 5/15 → 7/15 (L-R 5/11 →
+  6/11; +L-R04 nhờ luật in Walmart E3 thành dữ liệu, +N-002);
+  0 ca thụt lùi; phủ vendor 15/15 (nền 10/15); M9=0; Domain
+  Correction 4/4 đúng 0 oan; 8 lỗi F4 tự bắt + sửa trong pha, mỗi
+  lỗi có fixture. Leader tự chạy lại test_f4.py: exit 0, cổng A–G
+  PASS; kiểm tĩnh Swift ALL PASS.
+- Ca còn rớt đều phân tầng có bằng chứng: F2 chữ chết (L-R05/08/09
+  + subtotal-in-sai L-R03 + token đếm mất L-R06) chờ F5 ở Pha 3;
+  F3 ráp dòng (S-0/N-001/C-003) chờ Pha 2. Hình học nhãn–tiền đã
+  xây, kiểm không-hại 15/15, chưa có ca nào để trọng tài kích hoạt
+  — không tuyên bố quá mức.
+- SỰ KIỆN ĐIỀU KIỆN DỪNG §7: replay L-R10 rớt → cổng replay đạt
+  6/7. Truy tới số: khung ráp F3 của Pha 0 gộp hàng với dung sai
+  0.0179 trong khi hộp thật của L-R10 cách 0.0135–0.0176 → 25 dòng
+  bị gộp thành 18, giết cả hai neo tổng. Lệch 100% ở tham số F3
+  skeleton, không ở F4 (cô lập: hộp không chồng → 25/25, parse
+  trọn). Xử lý đúng luật: KHÔNG sửa Pha 0, KHÔNG chạy lại bằng hộp
+  thay thế để nhận "qua" — bàn giao Pha 2 kèm file chẩn đoán +
+  yêu cầu đo luật hàng §3.3 trên chính các hộp chồng này (C4 đóng
+  6/7, L-R10 mang sang Pha 2).
+- Treo cũ: Swift chưa biên dịch thật (C2 — lần đẩy v3 đầu tiên);
+  1 phép nhân thô còn trong khối Reconcile giữ-nguyên-văn (gia cố
+  khi tách module ở Pha 3); validate chưa có cơ chế cờ cho giá trị
+  thẻ bất thường (L-R09 "2580" đi qua không cờ — xét Pha 3/4).
+- PHA 2 bắt đầu: F1 capture/hình học + F2 adapter engine + F3 ráp
+  dòng với luật hàng đo trên hộp chồng L-R10.
+
+## PHA 2 XONG Ở MỨC GƯƠNG (2026-11-11 22:42 CST) — C4 ĐÃ ĐÓNG 7/7
+- F3 ráp dòng mới: replay toàn baseline 7/7 qua khung mới (L-R10
+  trọn 9691/[825]/10516). Hiệu chuẩn trên hộp chồng thật của
+  L-R10: khung xương Pha 0 ra 18/25 dòng → luật bắt đầu của thiết
+  kế 21/25 → luật đầy đủ Pha 2 (cộng tương thích ngang: hai mảnh
+  chồng theo cột là hai dòng in xếp chồng) 25/25. Leader tự chạy
+  lại test_f3 + replay_f3 + test_capture_engine: QUA toàn bộ.
+- Gộp xuyên-lượt bị kết tội bằng số ngay trong F3: cho ăn mảnh của
+  nhiều lượt đọc, số dòng phình 104→66 so với thật 38 (N-001) —
+  F3 chỉ ráp mảnh của MỘT lượt, bất biến chống nhân đôi = 0 ngay
+  cả khi cho ăn sai phạm vi.
+- Thi đấu chính sách lát: KHÔNG đo được ngoại tuyến (JSON buổi đo
+  không ghi hình học lát — lỗ hổng chẩn đoán v2 lấp bằng tileMap)
+  → dời nguyên vẹn vào giao thức đo thiết bị M-4. Ghép trang mô
+  phỏng trên mảnh thật L-R07: khôi phục tỉ lệ 0.621 (thật 0.620),
+  48/48 dòng, 0 token nhân đôi; không vùng chồng → cờ fail-closed.
+- F1/F2 ở mức hàm: cổng tứ giác đầy đủ; cổng chất lượng 3 quyết
+  định (chặn mặc định TẮT, fail-safe sau 3 lần từ chối); hàm chọn
+  ứng viên mới qua ca rác 16:19 (ứng viên "nhiều chữ vỡ tiền" thua
+  bản đọc khép sổ); F2 ghim Rev3 + giữ top-3 biến thể. Phần đo
+  thiết bị (M-1 in ngôn ngữ → M-7 đóng gói phiên) đã có giao thức
+  sẵn sàng: v3-phase2/MEASUREMENT-PROTOCOL.md.
+- Treo: C2 biên dịch Swift thật (lần đẩy v3 đầu tiên); ngưỡng cổng
+  chất lượng đang là mặc định giữ chỗ, hiệu chuẩn ở M-5.
+- PHA 3 bắt đầu: nối trọng tài F5 vào parse + ROI + kênh CANDIDATE
+  (oracle@3 đo ngoại tuyến từ JSON buổi đo) + gia cố phép nhân thô
+  cuối cùng trong khối Reconcile.
+
+## CA TRỰC 22:40 CST 2026-11-11 — KIỂM CHÉO ĐỘC LẬP PHA 2
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC — WORK-STATE ghi
+  rõ anh duyệt hướng 21:02 + duyệt thiết kế chốt D1–D7 21:44.
+  Ca không thiết kế/code mới, không làm trùng Pha 3 đang ở nhịp
+  chat chính/đội xây.
+- Leader ca trực tự chạy lại CẢ 4 bộ kiểm Pha 2 tại bàn
+  (test_f3.py · test_capture_engine.py · replay_f3.py ·
+  swift_static_check_p2.py): exit 0 cả 4; kết quả BYTE-TRÙNG
+  từng file output đã lưu trong v3-phase2/ (test-f3-output.txt ·
+  test-capture-engine-output.txt · replay-output.txt ·
+  swift-static-output.txt); kiểm tĩnh đúng 83 mục PASS như
+  AFTER.md tuyên bố; C4 7/7 tái lập. Số liệu Pha 2 trong mục
+  22:42 ở trên vì vậy đã qua kiểm chéo độc lập của ca trực.
+- Bước tiếp theo giữ nguyên: PHA 3 (nhịp chat chính). Treo cũ
+  không đổi: C1 in ngôn ngữ + C2 biên dịch Swift thật.
