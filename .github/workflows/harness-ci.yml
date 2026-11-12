@@ -75,6 +75,15 @@ jobs:
           else
             echo "BIN không chạy được — bỏ qua bisect" | tee bisect.log
           fi
+      - name: Chẻ biến thể dòng chết (chỉ khi cổng control đỏ)
+        if: failure()
+        run: |
+          if [ -x "$BIN" ]; then
+            "$BIN" variants harness/fixtures/L-R01-raw-a-original.json 2>&1 | tee variants.log
+          else
+            echo "BIN không chạy được — bỏ qua variants" | tee variants.log
+          fi
+
       - name: Cổng 2 — LUẬT 100 lượt (33 ảnh x 100 set)
         run: |
           "$BIN" images --dir BenchImages --sets 100 --dump streams 2>&1 | tee images.log
@@ -94,7 +103,7 @@ jobs:
           while read -r id; do
             [ -z "$id" ] && continue
             if "$BIN" fuzz harness/fixtures/L-R01-raw-a-original.json "$id" > "fuzz-$id.log" 2>&1 \
-               && grep -q "SURVIVED $id" "fuzz-$id.log"; then
+              && grep -q "SURVIVED $id" "fuzz-$id.log"; then
               echo "PASS $id" >> fuzz-results.txt
             else
               echo "DIED $id (exit=$?)" >> fuzz-results.txt
@@ -113,8 +122,9 @@ jobs:
             probe.log
             control.log
             bisect.log
+            variants.log
             crashreports/
             images.log
-                   matrix-*.log
+            matrix-*.log
             fuzz-results.txt
             fuzz-*.log
