@@ -1,9 +1,26 @@
 name: Build unsigned IPA
 
+# ============================================================
+# BẢN SOẠN SẴN CHO NHÁNH v3 (Pha 4 — staging, CHƯA đẩy).
+# Lệch so với workflow hiện hành trên main:
+#  1. Kích hoạt trên nhánh `v3` (+ workflow_dispatch) để CI biên
+#     dịch CẢ HAI target ngay từ lần đẩy đầu — đây là cổng đóng
+#     điều kiện C2 (biên dịch Swift thật) của cốt lõi v3.
+#  2. Build TƯỜNG MINH hai scheme (SoHoaDon + SoHoaDonBench) và
+#     đóng gói IPA RIÊNG cho từng .app. Workflow cũ lấy .app đầu
+#     tiên tìm thấy trong Release-iphoneos (head -1) — với hai
+#     target, cách đó chọn app tuỳ tiện, cấm dùng lại.
+#  3. Tên artifact: run number + NGÀY CHẠY THẬT (date +%F) thay
+#     ngày cứng "2026-11-10" của bản cũ (B2 Điều 3: tên duy nhất
+#     kèm run + ngày).
+# Khi v3 được duyệt nhập về main, Leader nối lại danh sách
+# branches [main, testb] vào file này qua cùng đường trình duyệt.
+# ============================================================
+
 on:
   workflow_dispatch:
   push:
-    branches: [ main, testb ]
+    branches: [ v3 ]
 
 jobs:
   build:
@@ -25,13 +42,14 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Discover project and scheme
+      - name: Discover project
         run: |
           PROJ=$(ls -d *.xcodeproj | head -1)
           NAME=$(basename "$PROJ" .xcodeproj)
-          echo "Discovered project: $PROJ (scheme: $NAME)"
+          echo "Discovered project: $PROJ"
           echo "PROJ=$PROJ" >> "$GITHUB_ENV"
           echo "NAME=$NAME" >> "$GITHUB_ENV"
+          echo "RUN_DATE=$(date +%F)" >> "$GITHUB_ENV"
 
       - name: Select Xcode 26
         run: |
@@ -40,31 +58,58 @@ jobs:
           sudo xcode-select -s "$XC"
           xcodebuild -version
 
-      - name: Build app (signing disabled)
+      - name: Build main app (scheme SoHoaDon, signing disabled)
         run: |
           xcodebuild build \
             -project "$PROJ" \
-            -scheme "$NAME" \
+            -scheme "SoHoaDon" \
             -sdk iphoneos \
             -configuration Release \
-            -derivedDataPath build/DD \
+            -derivedDataPath build/DD-main \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Package unsigned IPA
+      - name: Build bench app (scheme SoHoaDonBench, signing disabled)
         run: |
-          APP_PATH=$(find build/DD/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
-          echo "App: $APP_PATH"
-          rm -rf Payload "$NAME-unsigned.ipa"
-          mkdir Payload
-          cp -R "$APP_PATH" Payload/
-          zip -qry "$NAME-unsigned.ipa" Payload
-          ls -lh "$NAME-unsigned.ipa"
+          xcodebuild build \
+            -project "$PROJ" \
+            -scheme "SoHoaDonBench" \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build/DD-bench \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
 
-      - name: Upload IPA artifact
+      - name: Package unsigned IPAs
+        run: |
+          set -e
+          package() {
+            DD="$1"; APPNAME="$2"; OUT="$3"
+            APP_PATH=$(find "$DD/Build/Products/Release-iphoneos" -maxdepth 1 -name "$APPNAME.app" | head -1)
+            echo "App: $APP_PATH"
+            test -n "$APP_PATH"
+            rm -rf Payload "$OUT"
+            mkdir Payload
+            cp -R "$APP_PATH" Payload/
+            zip -qry "$OUT" Payload
+            rm -rf Payload
+            ls -lh "$OUT"
+          }
+          package build/DD-main SoHoaDon "SoHoaDon-unsigned.ipa"
+          package build/DD-bench SoHoaDonBench "SoHoaDonBench-unsigned.ipa"
+
+      - name: Upload main IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SoHoaDon-P2-CORE-run${{ github.run_number }}-2026-11-10
-          path: ${{ env.NAME }}-unsigned.ipa
+          name: SoHoaDon-V3-run${{ github.run_number }}-${{ env.RUN_DATE }}
+          path: SoHoaDon-unsigned.ipa
+          retention-days: 30
+
+      - name: Upload bench IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoHoaDon-BENCH-V3-run${{ github.run_number }}-${{ env.RUN_DATE }}
+          path: SoHoaDonBench-unsigned.ipa
           retention-days: 30
