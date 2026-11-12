@@ -477,6 +477,84 @@ case "fixture":
     print(parseSummary(parsed))
     print("SURVIVED fixture")
 
+case "parseonly":
+    // Process CON cho bisect: parse đúng một lựa chọn dòng của
+    // fixture rồi thoát. Chết vì signal = lựa chọn đó gây chết.
+    //   --keep i,j,k   chỉ giữ các dòng theo chỉ số 0-based
+    //   --count k      giữ k dòng đầu
+    guard args.count >= 2 else { fail("parseonly cần đường dẫn file") }
+    requireDataLoaded()
+    let fx = loadFixture(args[1])
+    var idx = Array(fx.lines.indices)
+    if let keep = argValue("--keep") {
+        idx = keep.split(separator: ",").compactMap { Int($0) }
+            .filter { fx.lines.indices.contains($0) }
+    } else if let c = argValue("--count"), let k = Int(c) {
+        idx = Array(fx.lines.indices.prefix(max(0, k)))
+    }
+    let lines = idx.map { fx.lines[$0] }
+    let boxes = idx.map { fx.boxes[$0] }
+    print("[parseonly] lines=\(lines.count) idx=\(idx.map(String.init).joined(separator: ","))")
+    _ = ReceiptParser.parse(lines: lines, boxes: boxes)
+    print("SURVIVED parseonly")
+
+case "bisect":
+    // Truy vết cái chết trong parse TRÊN CHÍNH luồng fixture:
+    // mỗi lựa chọn dòng chạy trong process con riêng (chết vì
+    // signal không kéo theo cha). Pha A: tiền tố tăng dần —
+    // tiền tố chết đầu tiên khoanh đoạn cuối. Pha B: tham lam
+    // bỏ từng dòng mà vẫn chết -> tập tối thiểu gây chết.
+    guard args.count >= 2 else { fail("bisect cần đường dẫn file") }
+    requireDataLoaded()
+    let fxPath = args[1]
+    let fx = loadFixture(fxPath)
+    let n = fx.lines.count
+    let selfPath = CommandLine.arguments[0]
+    func runChild(_ keep: [Int]) -> Bool {
+        // true = con sống (in SURVIVED), false = con chết/trap
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: selfPath)
+        p.arguments = ["parseonly", fxPath, "--keep",
+                       keep.map(String.init).joined(separator: ",")]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return false }
+        p.waitUntilExit()
+        return p.terminationReason == .exit && p.terminationStatus == 0
+    }
+    print("[bisect] total lines=\(n)")
+    var fatalPrefix = -1
+    for k in 1...n {
+        let ok = runChild(Array(0..<k))
+        print("[bisect] prefix k=\(k) -> \(ok ? "ok" : "DIED")")
+        if !ok { fatalPrefix = k; break }
+    }
+    guard fatalPrefix > 0 else {
+        print("BISECT-DONE no-death-on-any-prefix")
+        exit(0)
+    }
+    var current = Array(0..<fatalPrefix)
+    var improved = true
+    var guardRounds = 0
+    while improved && guardRounds < 12 {
+        improved = false
+        guardRounds += 1
+        for i in current.reversed() {
+            let trial = current.filter { $0 != i }
+            if trial.isEmpty { continue }
+            if !runChild(trial) {
+                print("[bisect] drop line \(i) -> still DIED (kept dropped)")
+                current = trial
+                improved = true
+            }
+        }
+    }
+    print("[bisect] minimal idx=\(current.map(String.init).joined(separator: ","))")
+    for i in current {
+        print("[bisect] line \(i): \(fx.lines[i].text)")
+    }
+    print("BISECT-DONE fatalPrefix=\(fatalPrefix) minimalCount=\(current.count)")
+
 case "fuzz":
     guard args.count >= 2 else { fail("fuzz cần đường dẫn fixture") }
     let table = mutationTable()
