@@ -46,7 +46,7 @@ jobs:
           xcodebuild -version
           swift --version
 
-      - name: Build (ad-hoc signed, manual, no provisioning profile)
+      - name: Build (unsigned — SDK 26.5 forbids ad-hoc signing inside xcodebuild)
         run: |
           set -euo pipefail
           xcodebuild \
@@ -55,18 +55,28 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             CONFIGURATION_BUILD_DIR="$PWD/build/app" \
-            CODE_SIGNING_ALLOWED=YES \
-            CODE_SIGN_IDENTITY="-" \
-            ADHOC_CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="" \
-            CODE_SIGN_ENTITLEMENTS="CarPlay.entitlements" \
             PRODUCT_BUNDLE_IDENTIFIER="com.luun.nguyen.cardashprobe" \
             MARKETING_VERSION="1.0" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             build
           test -d "$PWD/build/app/CarProbe.app"
           ls -la "$PWD/build/app/CarProbe.app"
+
+      - name: Ad-hoc sign the built app with the CarPlay entitlements (codesign)
+        run: |
+          set -euo pipefail
+          APP="$PWD/build/app/CarProbe.app"
+          # xcodebuild on SDK iOS 26.5 refuses ad-hoc signing ("Ad Hoc code
+          # signing is not allowed"), but the codesign tool itself still
+          # ad-hoc signs a built bundle and embeds the entitlements blob —
+          # which is exactly what this probe needs to measure.
+          codesign --force --deep --sign - --entitlements "$PWD/CarPlay.entitlements" --timestamp=none "$APP"
+          codesign --verify --verbose=2 "$APP" || true
 
       - name: Extract embedded entitlements + verify CarPlay keys (fail loudly)
         run: |
