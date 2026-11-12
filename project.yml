@@ -43,6 +43,35 @@ targets:
       - BenchImages/N-002.jpg
       - BenchImages/C-003.jpg
       - BenchImages/S-0.jpg
+      - BenchImages/SYN-001-BLUR.jpg
+      - BenchImages/SYN-001-DOWNSCALE.jpg
+      - BenchImages/SYN-001-LIGHT.jpg
+      - BenchImages/SYN-001-TILT.jpg
+      - BenchImages/SYN-001-WRINKLE.jpg
+      - BenchImages/SYN-001-NOISE.jpg
+      - BenchImages/SYN-002-BLUR.jpg
+      - BenchImages/SYN-002-DOWNSCALE.jpg
+      - BenchImages/SYN-002-LIGHT.jpg
+      - BenchImages/SYN-002-TILT.jpg
+      - BenchImages/SYN-002-WRINKLE.jpg
+      - BenchImages/SYN-002-NOISE.jpg
+      - BenchImages/SYN-003-BLUR.jpg
+      - BenchImages/SYN-003-DOWNSCALE.jpg
+      - BenchImages/SYN-003-LIGHT.jpg
+      - BenchImages/SYN-003-TILT.jpg
+      - BenchImages/SYN-003-WRINKLE.jpg
+      - BenchImages/SYN-003-NOISE.jpg
+      - BenchImages/L-R01.jpg
+      - BenchImages/L-R02.jpg
+      - BenchImages/L-R03.jpg
+      - BenchImages/L-R04.jpg
+      - BenchImages/L-R05.jpg
+      - BenchImages/L-R06.jpg
+      - BenchImages/L-R07.jpg
+      - BenchImages/L-R08.jpg
+      - BenchImages/L-R09.jpg
+      - BenchImages/L-R10.jpg
+      - BenchImages/L-R11.jpg
     info:
       path: Info.plist
       properties:
