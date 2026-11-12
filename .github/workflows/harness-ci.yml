@@ -58,6 +58,7 @@ jobs:
           ! grep -q "unloaded" probe.log
       - name: Cổng 1 — control trên luồng đã ghi L-R01
         run: |
+          set -o pipefail
           "$BIN" fixture harness/fixtures/L-R01-raw-a-original.json 2>&1 | tee control.log
           grep -q "SURVIVED fixture" control.log
       - name: Thu báo cáo crash macOS (khi đỏ)
