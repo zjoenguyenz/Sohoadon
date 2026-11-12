@@ -1,0 +1,537 @@
+import Foundation
+import CoreGraphics
+import ImageIO
+import Vision
+
+// MARK: - SoHoaDonHarness — driver tự chạy cốt lõi đọc (CI macOS)
+//
+// Thi hành LUẬT 2026-11-12 của anh: Muse TỰ CHẠY đường đọc
+// Swift THẬT (engine Vision -> ráp dòng -> parse -> chấm) trên
+// hạ tầng của mình, tối thiểu 100 lượt liên tiếp thành công,
+// trước khi bất kỳ bản nào tới tay anh test.
+//
+// Driver biên dịch NGUYÊN VĂN các file nguồn app sau vào cùng
+// module (xem project-harness.yml): Money, ReadDiagnostics,
+// CaptureIntake, OCREngine, LineAssembly, VendorData, Parser,
+// Reconcile, RegionReReader. KHÔNG file nào bị sửa để vào đây;
+// điểm nối duy nhất là HarnessShims.swift (biểu tượng
+// ReceiptReader.stageBreadcrumb của ReadPipeline — file đó
+// thuộc tầng UIKit, ngoài phạm vi harness).
+//
+// Chế độ:
+//   probe
+//       In ngôn ngữ engine hỗ trợ trên máy chạy (Rev3) + phiên
+//       bản dữ liệu vendors/lexicon đã nạp. Harness CHỈ có giá
+//       trị khi dataVersion != "unloaded".
+//   images --dir DIR [--lang current|old|enus] [--topk 1|3]
+//          [--sets N] [--dump DIR]
+//       Chạy toàn bộ ảnh .jpg trong DIR qua đường đọc thật.
+//       Mặc định --lang old --topk 1 = đúng mặc định BenchShell
+//       run #46 (cấu hình "đã chứng minh"); --lang current
+//       --topk 3 = cấu hình run #45. Mỗi ảnh in: điều tra hộp
+//       (bao nhiêu hộp không-hữu-hạn — đầu mối ứng viên A của
+//       HARNESS-REPRO) + tóm tắt parse + E1/E2. --dump ghi
+//       luồng mảnh + dòng ráp + kết quả từng ảnh ra JSON.
+//   fixture FILE [--nobox]
+//       Parse luồng ĐÃ GHI trong fixture JSON (ca kiểm chứng:
+//       luồng L-R01 của engine cũ — audit đã minh oan; harness
+//       phải tái xác nhận bằng Swift thật: SURVIVED).
+//   fuzz FIXTURE --list | fuzz FIXTURE <id>
+//       Bẫy đột biến trên luồng fixture: MỖI đột biến chạy như
+//       MỘT process riêng (CI lặp lời gọi) để trap không giết
+//       driver. In "SURVIVED <id>" ở cuối nếu parse trở về.
+//
+// Mọi chế độ chạm parse đều in dòng cuối "SURVIVED ..." — CI
+// grep dòng này; thiếu nó + mã thoát/signal != 0 = tái hiện.
+
+let args = Array(CommandLine.arguments.dropFirst())
+
+func fail(_ msg: String, code: Int32 = 2) -> Never {
+    FileHandle.standardError.write(Data("HARNESS-ERROR: \(msg)\n".utf8))
+    exit(code)
+}
+
+func argValue(_ name: String) -> String? {
+    guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }
+    return args[i + 1]
+}
+func hasFlag(_ name: String) -> Bool { args.contains(name) }
+
+// MARK: - Cấu hình engine (gương công tắc BenchShell CI-FIX-7)
+
+func applyEngineConfig() {
+    switch argValue("--lang") ?? "old" {
+    case "old":
+        LanguagePolicy.directLanguagesOverride = ["vi-VN", "en-US"]
+    case "enus":
+        LanguagePolicy.directLanguagesOverride = ["en-US"]
+    case "current":
+        LanguagePolicy.directLanguagesOverride = nil
+    default:
+        fail("--lang phải là current|old|enus")
+    }
+    switch argValue("--topk") ?? "1" {
+    case "1": ClassicTextEngine.topCandidates = 1
+    case "3": ClassicTextEngine.topCandidates = 3
+    default: fail("--topk phải là 1|3")
+    }
+    ReceiptReader.stageBreadcrumb = { step in
+        print("  [stage] \(step)")
+    }
+}
+
+func requireDataLoaded() {
+    // Harness im lặng mà mất dữ liệu = đo sai mà không biết:
+    // VendorData rỗng thì identifyVendor rơi generic toàn bộ,
+    // DomainCorrector trơ — kết quả vẫn "chạy được" nhưng vô
+    // nghĩa. Chặn fail-closed ngay từ cửa.
+    if VendorData.shared.dataVersion == "unloaded" {
+        fail("vendors.json KHÔNG nạp được (dataVersion=unloaded) — đặt vendors.json cạnh binary harness", code: 3)
+    }
+    if DomainCorrector.lexiconVersion == "unloaded" {
+        fail("lexicon.json KHÔNG nạp được (lexiconVersion=unloaded) — đặt lexicon.json cạnh binary harness", code: 3)
+    }
+}
+
+// MARK: - Điều tra hộp (ứng viên A: hộp không-hữu-hạn)
+
+func boxCensus(_ boxes: [CGRect]) -> String {
+    var nonFinite = 0
+    var maxAbsMaxX = 0.0
+    for b in boxes {
+        let comps = [b.origin.x, b.origin.y, b.width, b.height]
+        if comps.contains(where: { !$0.isFinite }) { nonFinite += 1 }
+        if b.maxX.isFinite { maxAbsMaxX = max(maxAbsMaxX, abs(Double(b.maxX))) }
+    }
+    return "boxes=\(boxes.count) nonFinite=\(nonFinite) maxAbsMaxX=\(String(format: "%.4f", maxAbsMaxX))"
+}
+
+// MARK: - Chấm E1/E2 + điểm ứng viên (bản driver của makeEvaluation)
+//
+// ReadPipeline.makeEvaluation là private trong file UIKit nên
+// harness không gọi được; bản này tính CÙNG các đại lượng từ
+// ParseResult bằng đúng CandidateScorer.score của app
+// (CaptureIntake — biên dịch nguyên văn vào harness). integrity
+// = tỉ lệ dòng tiền trước ranh giới vùng tổng có cạnh phải
+// trong dải cột tiền (moneyColumnBand của app); band nil -> 1.0.
+// Ghi nhãn trung thực: công thức integrity là bản driver, cổng
+// LUẬT của harness là SỐNG + khép E1/E2, không phải khớp điểm
+// tuyệt đối với BenchShell.
+
+func evaluate(parsed: ParseResult, assembly: AssemblyResult) -> (e1: Bool, e2: Bool, score: Double) {
+    var e1 = false
+    if let subtotal = parsed.subtotalCents,
+       let sum = SafeMoney.sumCents(parsed.items.map { $0.amountCents ?? 0 }) {
+        e1 = sum == subtotal
+    }
+    var e2 = false
+    if let subtotal = parsed.subtotalCents, let total = parsed.totalCents {
+        let implied = SafeMoney.checkedAdd(subtotal, parsed.taxTotalCents)
+        e2 = implied.map { abs($0 - total) <= 2 } ?? false
+    }
+    var e3 = false
+    if let sold = parsed.itemsSold {
+        let positive = parsed.items.filter { ($0.amountCents ?? 0) > 0 }
+        let counted = parsed.soldContribution == "onePerLine"
+            ? positive.count
+            : positive.reduce(0) { $0 + $1.qty }
+        e3 = counted == sold
+    }
+    let boundary = CandidateScorer.totalsBoundary(assembly.lines)
+    var integrity = 1.0
+    if let band = CandidateScorer.moneyColumnBand(assembly.lines) {
+        let pre = assembly.lines[..<boundary].filter {
+            !SafeMoney.tokens(in: $0.text).isEmpty
+        }
+        if !pre.isEmpty {
+            let inside = pre.filter {
+                Double($0.box.maxX) >= band.lo && Double($0.box.maxX) <= band.hi
+            }.count
+            integrity = Double(inside) / Double(pre.count)
+        }
+    }
+    let ev = CandidateEvaluation(
+        e1Closed: e1, e2Within2c: e2, e3Closed: e3,
+        integrity: integrity,
+        hasSubtotal: parsed.subtotalCents != nil,
+        hasTotal: parsed.totalCents != nil,
+        hasTaxLine: !parsed.taxes.isEmpty,
+        hasDate: parsed.date != nil,
+        vendorResolved: parsed.vendor != nil,
+        itemsMissingAmount: parsed.items.filter { $0.amountCents == nil }.count,
+        alnumChars: assembly.lines.reduce(0) {
+            $0 + $1.text.filter { $0.isLetter || $0.isNumber }.count
+        },
+        isOriginal: true)
+    return (e1, e2, CandidateScorer.score(ev).total)
+}
+
+func parseSummary(_ p: ParseResult) -> String {
+    let sum = SafeMoney.sumCents(p.items.map { $0.amountCents ?? 0 })
+    return "vendor=\(p.vendor ?? "nil") subtotal=\(p.subtotalCents.map(String.init) ?? "nil") "
+        + "tax=\(p.taxTotalCents) total=\(p.totalCents.map(String.init) ?? "nil") "
+        + "items=\(p.items.count) sumItems=\(sum.map(String.init) ?? "nil") "
+        + "sold=\(p.itemsSold.map(String.init) ?? "nil") card=\(p.cardLast4 ?? "nil") "
+        + "warnings=\(p.warnings.count)"
+}
+
+// MARK: - Nạp ảnh (ImageIO — không UIKit)
+
+func loadCGImage(_ url: URL) -> CGImage? {
+    guard let src = CGImageSourceCreateWithURL(url as CFURL, nil),
+          let img = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
+    return img
+}
+
+// MARK: - Một lượt đọc đầy đủ trên ảnh (đúng thân runCandidate)
+
+struct ImageRun {
+    var fragments: [Fragment]
+    var assembly: AssemblyResult
+    var parsed: ParseResult
+    var e1: Bool
+    var e2: Bool
+    var score: Double
+}
+
+func runImage(_ cg: CGImage, engine: ClassicTextEngine) throws -> ImageRun {
+    let fragments = try engine.recognize(in: cg, region: nil)
+    let assembly = LineAssembly.assemble(fragments)
+    let lines = assembly.lines.map {
+        OCRLine(text: $0.text, confidence: $0.confidence)
+    }
+    let boxes: [CGRect?] = assembly.lines.map { $0.box }
+    let parsed = ReceiptParser.parse(lines: lines, boxes: boxes)
+    let ev = evaluate(parsed: parsed, assembly: assembly)
+    return ImageRun(fragments: fragments, assembly: assembly,
+                    parsed: parsed, e1: ev.e1, e2: ev.e2, score: ev.score)
+}
+
+func boxDict(_ b: CGRect) -> [String: Double] {
+    // JSONSerialization NÉM LỖI trên Double không-hữu-hạn — mà
+    // hộp không-hữu-hạn lại chính là bằng chứng săn ở ứng viên
+    // A. Ánh xạ: NaN -> -999999, +/-inf -> +/-999999 (census ở
+    // stdout giữ con số đếm chính xác; dump chỉ là phụ chứng).
+    func fin(_ v: Double) -> Double {
+        if v.isNaN { return -999999 }
+        if v == .infinity { return 999999 }
+        if v == -.infinity { return -999999 }
+        return v
+    }
+    return ["x": fin(Double(b.origin.x)), "y": fin(Double(b.origin.y)),
+            "w": fin(Double(b.width)), "h": fin(Double(b.height))]
+}
+
+func dumpImageRun(name: String, run: ImageRun, dir: URL) {
+    let obj: [String: Any] = [
+        "image": name,
+        "fragmentCensus": boxCensus(run.fragments.map { $0.box }),
+        "fragments": run.fragments.map {
+            ["text": $0.text, "confidence": $0.confidence,
+             "box": boxDict($0.box), "alternates": $0.alternates.count]
+        },
+        "assembled": run.assembly.lines.map {
+            ["text": $0.text, "confidence": $0.confidence, "box": boxDict($0.box)]
+        },
+        "parse": parseSummary(run.parsed),
+        "e1": run.e1, "e2": run.e2, "score": run.score,
+    ]
+    if let data = try? JSONSerialization.data(withJSONObject: obj,
+                                              options: [.prettyPrinted, .sortedKeys]) {
+        let out = dir.appendingPathComponent(
+            name.replacingOccurrences(of: ".jpg", with: "") + ".stream.json")
+        try? data.write(to: out)
+    }
+}
+
+// MARK: - Fixture (luồng đã ghi)
+
+struct FixtureData {
+    var lines: [OCRLine]
+    var boxes: [CGRect?]
+}
+
+func loadFixture(_ path: String) -> FixtureData {
+    guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let rawLines = obj["lines"] as? [[String: Any]] else {
+        fail("không đọc được fixture \(path)")
+    }
+    var lines: [OCRLine] = []
+    var boxes: [CGRect?] = []
+    for raw in rawLines {
+        let text = raw["text"] as? String ?? ""
+        let conf = (raw["confidence"] as? NSNumber)?.doubleValue ?? 0.5
+        lines.append(OCRLine(text: text, confidence: conf))
+        if let b = raw["box"] as? [String: Any] {
+            boxes.append(CGRect(
+                x: (b["x"] as? NSNumber)?.doubleValue ?? 0,
+                y: (b["y"] as? NSNumber)?.doubleValue ?? 0,
+                width: (b["w"] as? NSNumber)?.doubleValue ?? 0,
+                height: (b["h"] as? NSNumber)?.doubleValue ?? 0))
+        } else {
+            boxes.append(nil)
+        }
+    }
+    return FixtureData(lines: lines, boxes: boxes)
+}
+
+// MARK: - Bẫy đột biến (mỗi id = một process riêng phía CI)
+//
+// Căn cứ thiết kế: hai điểm Double->Int DUY NHẤT trong
+// Parser.swift mà dữ liệu OCR chạm tới được (điều tra tĩnh
+// HARNESS-REPRO, grep Int( toàn file):
+//   (A) Parser.swift:1999 columnModel — Int((maxX/0.01).rounded())
+//       trên cạnh phải hộp của dòng CÓ TIỀN; maxX NaN/inf/>=9.2e16
+//       -> TRAP. Luồng ghi: mọi maxX hữu hạn [0.42, 0.60] nên
+//       không bao giờ kích hoạt ở đó.
+//   (B) Parser.swift:1223 extractSamelineItems — Int(lb * unit)
+//       trên dòng cân; lb từ regex số KHÔNG chặn chữ số ->
+//       Double khổng lồ/inf -> TRAP. Điều kiện tới được: dòng
+//       chứa "/lb" hoặc "/1b", lb KHÔNG đứng đầu dòng (đầu dòng
+//       là số dài thì nhánh khối UPC nuốt trước), có đơn giá.
+// Cộng các họ trong brief: kéo dài token số, trigger ở dòng
+// cuối, hộp suy biến, nhân đôi dòng, token tiền lạ, cấu trúc.
+
+func extendDigitRuns(_ text: String, toLength n: Int) -> String {
+    guard let re = try? NSRegularExpression(pattern: #"\d+"#) else { return text }
+    var out = text
+    let matches = re.matches(in: text, options: [],
+                             range: NSRange(text.startIndex..., in: text)).reversed()
+    for m in matches {
+        guard let r = Range(m.range, in: out) else { continue }
+        let run = String(out[r])
+        if run.count < n {
+            out.replaceSubrange(r, with: run + String(repeating: "9", count: n - run.count))
+        }
+    }
+    return out
+}
+
+typealias Mutation = (inout [OCRLine], inout [CGRect?]) -> Void
+
+func mutationTable() -> [(id: String, body: Mutation)] {
+    var table: [(id: String, body: Mutation)] = []
+    func add(_ id: String, _ body: @escaping Mutation) { table.append((id, body)) }
+    func insert(_ line: String, at pos: String) -> Mutation {
+        { lines, boxes in
+            let i = pos == "start" ? 0 : (pos == "end" ? lines.count : lines.count / 2)
+            lines.insert(OCRLine(text: line, confidence: 0.9), at: i)
+            boxes.insert(CGRect(x: 0.30, y: 0.50, width: 0.28, height: 0.015), at: i)
+        }
+    }
+    func appendLine(_ line: String) -> Mutation {
+        { lines, boxes in
+            lines.append(OCRLine(text: line, confidence: 0.9))
+            boxes.append(CGRect(x: 0.30, y: 0.03, width: 0.28, height: 0.015))
+        }
+    }
+
+    add("base") { _, _ in }
+    add("base-nobox") { _, boxes in boxes = boxes.map { _ in nil } }
+
+    // (a) kéo dài token số
+    for n in [13, 16, 19] {
+        add("digits\(n)-all") { lines, _ in
+            for i in lines.indices { lines[i].text = extendDigitRuns(lines[i].text, toLength: n) }
+        }
+    }
+    add("digits25-longest") { lines, _ in
+        // chỉ dãy số dài nhất (mã vạch 23 số của L-R01) -> 25 số
+        var best: (line: Int, len: Int) = (0, 0)
+        for (i, l) in lines.enumerated() {
+            for run in l.text.split(whereSeparator: { !$0.isNumber }) where run.count > best.len {
+                best = (i, run.count)
+            }
+        }
+        if best.line < lines.count {
+            lines[best.line].text = extendDigitRuns(lines[best.line].text, toLength: 25)
+        }
+    }
+
+    // (b) dòng cân — họ (B): lb khổng lồ đứng SAU nhãn chữ
+    add("weight-ok-mid", insert("CRAWFISH 1.69 lb @ $2.99/lb", at: "mid"))
+    add("weight-tjohnnys-mid", insert("LIVE CRAWFISH 43 lb @ $3.99/lb", at: "mid"))
+    add("weight-huge-mid", insert("CRAWFISH 99999999999999999999 lb @ $3.99/lb", at: "mid"))
+    add("weight-huge-start", insert("CRAWFISH 99999999999999999999 lb @ $3.99/lb", at: "start"))
+    add("weight-barcode-lb-mid", insert("CRAWFISH 21120720301342609141417 lb @ $3.99/lb", at: "mid"))
+    add("weight-inf-mid", insert("CRAWFISH " + String(repeating: "9", count: 400) + " lb @ $3.99/lb", at: "mid"))
+
+    // (c) trigger ở DÒNG CUỐI (săn index+1 thiếu chặn)
+    add("last-baremoney", appendLine("125.48"))
+    add("last-subtotal-label", appendLine("SUBTOTAL"))
+    add("last-itemcount-label", appendLine("ITEM COUNT:"))
+    add("last-money-then-total") { lines, boxes in
+        lines.append(OCRLine(text: "134.86", confidence: 0.9))
+        boxes.append(CGRect(x: 0.30, y: 0.03, width: 0.28, height: 0.015))
+        lines.append(OCRLine(text: "TOTAL", confidence: 0.9))
+        boxes.append(CGRect(x: 0.30, y: 0.02, width: 0.28, height: 0.015))
+    }
+    add("last-date", appendLine("09/14/2026"))
+    add("last-instsv", appendLine("INST SV 4.50-"))
+
+    // (d) hộp suy biến — họ (A): dòng 28 của fixture là "125.48"
+    // (dòng tiền trần) — columnModel chỉ quét dòng CÓ TIỀN.
+    add("box-nan-maxx-moneyline") { _, boxes in
+        if boxes.count > 28 { boxes[28] = CGRect(x: .nan, y: 0.47, width: 0.05, height: 0.013) }
+    }
+    add("box-inf-maxx-moneyline") { _, boxes in
+        if boxes.count > 28 { boxes[28] = CGRect(x: 0.52, y: 0.47, width: .infinity, height: 0.013) }
+    }
+    add("box-huge-maxx-moneyline") { _, boxes in
+        if boxes.count > 28 { boxes[28] = CGRect(x: 0, y: 0.47, width: 1e17, height: 0.013) }
+    }
+    add("box-nan-firstline") { _, boxes in
+        if !boxes.isEmpty { boxes[0] = CGRect(x: .nan, y: .nan, width: .nan, height: .nan) }
+    }
+    add("box-nan-everywhere") { _, boxes in
+        boxes = boxes.map { _ in CGRect(x: .nan, y: .nan, width: .nan, height: .nan) }
+    }
+    add("box-all-identical") { _, boxes in
+        boxes = boxes.map { _ in CGRect(x: 0.3, y: 0.5, width: 0.28, height: 0.015) }
+    }
+    add("box-all-zero") { _, boxes in
+        boxes = boxes.map { _ in CGRect.zero }
+    }
+    add("box-negative") { _, boxes in
+        boxes = boxes.map { _ in CGRect(x: -0.5, y: -0.5, width: 0.28, height: 0.015) }
+    }
+    add("box-short") { _, boxes in
+        if boxes.count > 10 { boxes = Array(boxes.prefix(10)) }
+    }
+
+    // (e) nhân đôi dòng
+    add("dup2") { lines, boxes in
+        var l2: [OCRLine] = []; var b2: [CGRect?] = []
+        for i in lines.indices { l2.append(lines[i]); l2.append(lines[i]); b2.append(boxes[i]); b2.append(boxes[i]) }
+        lines = l2; boxes = b2
+    }
+    add("dup3") { lines, boxes in
+        var l2: [OCRLine] = []; var b2: [CGRect?] = []
+        for i in lines.indices { for _ in 0..<3 { l2.append(lines[i]); b2.append(boxes[i]) } }
+        lines = l2; boxes = b2
+    }
+
+    // (f) token tiền lạ
+    add("money-thousands") { lines, _ in
+        if lines.count > 28 { lines[28].text = "1,234,567.89" }
+    }
+    add("money-thousands-total", appendLine("TOTAL 1,234,567.89"))
+    add("money-dot99", appendLine("TOTAL .99"))
+    add("money-99dot", appendLine("TOTAL 99."))
+    add("money-comma-decimal", appendLine("TOTAL $2,79"))
+    add("money-baht-tax", appendLine("TAX 1 8.517% ฿9.60"))
+
+    // (g) cấu trúc cực đoan
+    add("merge-all") { lines, boxes in
+        let joined = lines.map { $0.text }.joined(separator: " ")
+        lines = [OCRLine(text: joined, confidence: 0.9)]
+        boxes = [CGRect(x: 0.3, y: 0.5, width: 0.3, height: 0.9)]
+    }
+    add("charbomb-5000") { lines, boxes in
+        lines = [OCRLine(text: String(repeating: "9", count: 5000) + " TOTAL 134.86", confidence: 0.9)]
+        boxes = [CGRect(x: 0.3, y: 0.5, width: 0.3, height: 0.015)]
+    }
+    add("token-500-letters") { lines, boxes in
+        lines = [OCRLine(text: String(repeating: "A", count: 500) + " 12.34", confidence: 0.9)]
+        boxes = [CGRect(x: 0.3, y: 0.5, width: 0.3, height: 0.015)]
+    }
+    add("empty") { lines, boxes in lines = []; boxes = [] }
+    add("single-baremoney") { lines, boxes in
+        lines = [OCRLine(text: "125.48", confidence: 0.9)]
+        boxes = [CGRect(x: 0.5, y: 0.5, width: 0.05, height: 0.013)]
+    }
+    return table
+}
+
+// MARK: - Điều phối chế độ
+
+let mode = args.first ?? "probe"
+
+switch mode {
+case "probe":
+    let supported = (try? VNRecognizeTextRequest.supportedRecognitionLanguages(
+        for: .accurate, revision: VNRecognizeTextRequestRevision3)) ?? []
+    print("supported(rev3, accurate) = \(supported)")
+    print("vendors dataVersion = \(VendorData.shared.dataVersion)")
+    print("lexicon version = \(DomainCorrector.lexiconVersion)")
+    print("SURVIVED probe")
+
+case "fixture":
+    guard args.count >= 2 else { fail("fixture cần đường dẫn file") }
+    requireDataLoaded()
+    let fx = loadFixture(args[1])
+    let boxes: [CGRect?]? = hasFlag("--nobox") ? nil : fx.boxes
+    print("fixture lines=\(fx.lines.count) boxes=\(boxes != nil ? "yes" : "nil")")
+    let parsed = ReceiptParser.parse(lines: fx.lines, boxes: boxes)
+    print(parseSummary(parsed))
+    print("SURVIVED fixture")
+
+case "fuzz":
+    guard args.count >= 2 else { fail("fuzz cần đường dẫn fixture") }
+    let table = mutationTable()
+    if hasFlag("--list") {
+        for entry in table { print(entry.id) }
+        exit(0)
+    }
+    guard args.count >= 3 else { fail("fuzz cần id đột biến (xem --list)") }
+    requireDataLoaded()
+    let id = args[2]
+    guard let entry = table.first(where: { $0.id == id }) else {
+        fail("không có đột biến \(id)")
+    }
+    var fx = loadFixture(args[1])
+    entry.body(&fx.lines, &fx.boxes)
+    print("fuzz \(id): lines=\(fx.lines.count)")
+    let parsed = ReceiptParser.parse(lines: fx.lines, boxes: fx.boxes)
+    print(parseSummary(parsed))
+    print("SURVIVED \(id)")
+
+case "images":
+    guard let dirPath = argValue("--dir") else { fail("images cần --dir") }
+    requireDataLoaded()
+    applyEngineConfig()
+    let sets = Int(argValue("--sets") ?? "1") ?? 1
+    let dir = URL(fileURLWithPath: dirPath)
+    let files = (try? FileManager.default.contentsOfDirectory(
+        at: dir, includingPropertiesForKeys: nil)) ?? []
+    let jpgs = files.filter { $0.pathExtension.lowercased() == "jpg" }
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    if jpgs.isEmpty { fail("không có .jpg trong \(dirPath)") }
+    var dumpDir: URL? = nil
+    if let d = argValue("--dump") {
+        dumpDir = URL(fileURLWithPath: d)
+        try? FileManager.default.createDirectory(at: dumpDir!,
+                                                 withIntermediateDirectories: true)
+    }
+    let engine = ClassicTextEngine()
+    print("manifest: family=\(engine.manifest.family) rev=\(engine.manifest.revision) "
+        + "langs=\(engine.manifest.languagesEffective) topk=\(ClassicTextEngine.topCandidates)")
+    for set in 1...sets {
+        var okCount = 0
+        for url in jpgs {
+            guard let cg = loadCGImage(url) else {
+                print("SET \(set) \(url.lastPathComponent): LOAD-FAILED")
+                continue
+            }
+            do {
+                let run = try runImage(cg, engine: engine)
+                print("SET \(set) \(url.lastPathComponent): frag[\(boxCensus(run.fragments.map { $0.box }))] "
+                    + "asm[\(boxCensus(run.assembly.lines.map { $0.box }))] "
+                    + "\(parseSummary(run.parsed)) e1=\(run.e1) e2=\(run.e2) score=\(String(format: "%.1f", run.score))")
+                if let dumpDir, set == 1 {
+                    dumpImageRun(name: url.lastPathComponent, run: run, dir: dumpDir)
+                }
+                okCount += 1
+            } catch {
+                print("SET \(set) \(url.lastPathComponent): ENGINE-ERROR \(error)")
+            }
+        }
+        print("SET \(set) DONE \(okCount)/\(jpgs.count)")
+        if okCount != jpgs.count { fail("set \(set) thiếu ảnh", code: 4) }
+    }
+    print("SURVIVED images x\(sets)")
+
+default:
+    fail("chế độ không rõ: \(mode) — probe|images|fixture|fuzz")
+}

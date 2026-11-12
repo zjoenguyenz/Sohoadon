@@ -1,0 +1,64 @@
+# SoHoaDonHarness — target CLI macOS cho cổng tự chạy (LUẬT
+# 2026-11-12: >= 100 lượt liên tiếp thành công trước giao test).
+#
+# Đặt file này ở harness/project-harness.yml trong repo; các
+# đường ../ trỏ về GỐC repo nơi project.yml chính và các file
+# nguồn app đang sống (Money.swift ... BenchImages/). Nếu bố
+# cục repo lúc đẩy khác, Leader chỉ phải sửa tiền tố đường —
+# danh sách FILE giữ nguyên.
+#
+# Sinh project:  xcodegen generate --spec project-harness.yml
+# Build:         xcodebuild -project SoHoaDonHarness.xcodeproj \
+#                  -scheme SoHoaDonHarness -configuration Release \
+#                  -destination 'platform=macOS' build
+name: SoHoaDonHarness
+options:
+  bundleIdPrefix: com.nje
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+targets:
+  SoHoaDonHarness:
+    type: tool
+    platform: macOS
+    sources:
+      # --- File nguồn app NGUYÊN VĂN (cùng tập module đường
+      # đọc với hai target iOS — luật một-nguồn của Pha 4).
+      # VÀO ĐƯỢC vì chỉ dùng Foundation/CoreGraphics/Vision/
+      # ImageIO (đều có trên macOS):
+      - ../Money.swift
+      - ../ReadDiagnostics.swift
+      - ../CaptureIntake.swift
+      - ../OCREngine.swift
+      - ../LineAssembly.swift
+      - ../VendorData.swift
+      - ../Parser.swift
+      - ../Reconcile.swift
+      - ../RegionReReader.swift
+      # --- Driver + shim của harness (thư mục này):
+      - HarnessApp
+      # KHÔNG VÀO (và vì sao):
+      # - ReadPipeline.swift: UIKit + VisionKit (VNDocumentCamera)
+      #   + SwiftUI-free nhưng dính UIImage/UIGraphics — tầng
+      #   app iOS. Hệ quả: chuỗi ứng viên + makeEvaluation +
+      #   finalize KHÔNG chạy trong harness; driver tái lập
+      #   đúng thân runCandidate (recognize -> assemble ->
+      #   parse -> CandidateScorer) từ các module nguyên văn.
+      #   Biểu tượng duy nhất ReadPipeline để lại trong tập
+      #   module là ReceiptReader.stageBreadcrumb — đã có shim
+      #   ở HarnessApp/HarnessShims.swift.
+      # - Models.swift / ScanView / ReceiptViews / ContentView /
+      #   HomeView / CardsView / SoHoaDonApp / BenchApp /
+      #   BenchView: SwiftUI/SwiftData/UIKit — tầng app, ngoài
+      #   phạm vi đường đọc.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon.harness
+        # vendors.json + lexicon.json: KHÔNG nhúng vào tool —
+        # workflow chép hai file cạnh binary sau build
+        # (Bundle.main của CLI = thư mục chứa executable;
+        # driver fail-closed nếu dataVersion == "unloaded").
