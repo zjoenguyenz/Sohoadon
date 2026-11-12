@@ -49,6 +49,14 @@ enum CorrectionPolicy {
 enum LanguagePolicy {
     static let priority = ["vi-VN", "en-US"]
 
+    /// CI-FIX-7 (điều tra L-2026-11-12-12): BenchShell có thể
+    /// ép danh sách ngôn ngữ TRỰC TIẾP (bỏ qua lọc theo mã) để
+    /// chia đôi cấu hình engine trên thiết bị — ví dụ truyền
+    /// nguyên ["vi-VN","en-US"] như bản bench cũ đã chạy trọn
+    /// 132 lượt, hoặc ["en-US"] để tách hẳn mô hình tiếng Việt.
+    /// App chính luôn để nil.
+    static var directLanguagesOverride: [String]? = nil
+
     /// (hiệu lực, ghi chú) — gương: effective_languages.
     /// CI-FIX-5 (2026-11-12, từ bản in LanguageProbe trên máy
     /// đích): runtime báo tiếng Việt là "vi-VT", KHÔNG phải
@@ -110,7 +118,12 @@ enum OCREngineError: Error {
 // MARK: - Họ cổ điển (GHIM Rev3)
 
 final class ClassicTextEngine: OCREngine {
-    static let topCandidates = 3        // luật cứng — không đổi
+    // CI-FIX-7: đổi let -> var cho phép đo chia đôi trên thiết
+    // bị (BenchShell đặt 1 = cấu hình đã chứng minh của bench
+    // cũ). Mặc định vẫn 3 — app chính không đổi hành vi; kênh
+    // ứng viên vốn đã bị Pha 3 hạ xuống tầng gợi ý (oracle@3
+    // = 0/7) nên giá trị này không còn là luật cứng.
+    static var topCandidates = 3
     let manifest: EngineManifest
     let languageNote: String?
     let minimumTextHeight: Float
@@ -127,12 +140,14 @@ final class ClassicTextEngine: OCREngine {
                 for: .accurate,
                 revision: VNRecognizeTextRequestRevision3)) ?? []
         let eff = LanguagePolicy.effective(supported: supported)
-        self.languages = eff.languages
-        self.languageNote = eff.note
+        let directOverride = LanguagePolicy.directLanguagesOverride
+        self.languages = directOverride ?? eff.languages
+        self.languageNote = directOverride != nil
+            ? "direct-override (bench bisect CI-FIX-7)" : eff.note
         self.minimumTextHeight = minimumTextHeight
         self.manifest = EngineManifest(
             family: "classic", revision: "rev3", level: "accurate",
-            languagesEffective: eff.languages,
+            languagesEffective: directOverride ?? eff.languages,
             usesLanguageCorrection: false,
             minimumTextHeight: Double(minimumTextHeight))
     }
@@ -150,8 +165,10 @@ final class ClassicTextEngine: OCREngine {
             // không gian với hộp mảnh, không lật.
             request.regionOfInterest = region
         }
+        ReceiptReader.stageBreadcrumb?("engine-perform-begin")
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         try handler.perform([request])
+        ReceiptReader.stageBreadcrumb?("engine-perform-done")
         guard let observations = request.results else {
             throw OCREngineError.noObservations
         }
@@ -174,6 +191,7 @@ final class ClassicTextEngine: OCREngine {
                 regionID: nil))
             nextID += 1
         }
+        ReceiptReader.stageBreadcrumb?("engine-convert-done")
         return out
     }
 }

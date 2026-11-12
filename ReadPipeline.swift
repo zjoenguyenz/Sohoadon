@@ -734,6 +734,7 @@ enum ReceiptReader {
         } catch {
             return nil
         }
+        stageBreadcrumb?("candidate-recognize-done")
         let assembly: AssemblyResult
         var stitchStatus: String? = nil
         if images.count > 1 {
@@ -743,14 +744,17 @@ enum ReceiptReader {
         } else {
             assembly = LineAssembly.assemble(fragments)
         }
+        stageBreadcrumb?("candidate-assemble-done")
         let lines = assembly.lines.map {
             OCRLine(text: $0.text, confidence: $0.confidence)
         }
         let boxes: [CGRect?] = assembly.lines.map { $0.box }
         let parsed = ReceiptParser.parse(lines: lines, boxes: boxes)
+        stageBreadcrumb?("candidate-parse-done")
         let evaluation = makeEvaluation(parsed: parsed,
                                         assembly: assembly,
                                         isOriginal: step.kind == "original")
+        stageBreadcrumb?("candidate-evaluation-done")
         let scored = CandidateScorer.score(evaluation)
         return CandidateRun(step: step, image: images[0],
                             fragments: fragments, assembly: assembly,

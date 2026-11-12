@@ -16,6 +16,11 @@ struct BenchView: View {
     @State private var documentsOutput: String = ""
     @State private var enhancerOn: Bool = false
     @State private var stageLogText: String = ""
+    // CI-FIX-7: trạng thái chia đôi cấu hình engine — MẶC ĐỊNH
+    // là cấu hình ĐÃ CHỨNG MINH của bench cũ (ngôn ngữ truyền
+    // trực tiếp ["vi-VN","en-US"] + chỉ ứng viên top-1).
+    @State private var top3On: Bool = false
+    @State private var langMode: Int = 1
 
     private var imageNames: [String] {
         // CI-FIX-4 (2026-11-12): XcodeGen LAM PHANG tai nguyen vao
@@ -71,6 +76,21 @@ struct BenchView: View {
         }
     }
 
+    /// Áp trạng thái chia đôi vào engine (đọc lại ở mỗi lần
+    /// chạy — engine khởi tạo mới cho từng lượt đọc).
+    private func applyEngineBisect() {
+        ClassicTextEngine.topCandidates = top3On ? 3 : 1
+        switch langMode {
+        case 1:
+            LanguagePolicy.directLanguagesOverride =
+                ["vi-VN", "en-US"]
+        case 2:
+            LanguagePolicy.directLanguagesOverride = ["en-US"]
+        default:
+            LanguagePolicy.directLanguagesOverride = nil
+        }
+    }
+
     private func loadStageLog() {
         stageLogText = (try? String(contentsOf: Self.stageLogURL,
                                     encoding: .utf8)) ?? ""
@@ -112,6 +132,13 @@ struct BenchView: View {
                             ReceiptReader.documentEnhancerEnabled =
                                 newValue
                         }
+                    Toggle("topCandidates(3) (tắt = top-1 như bản cũ)",
+                           isOn: $top3On)
+                    Picker("Ngôn ngữ engine", selection: $langMode) {
+                        Text("Hiện tại: vi-VT + en-US").tag(0)
+                        Text("Bản cũ: vi-VN + en-US").tag(1)
+                        Text("Chỉ en-US").tag(2)
+                    }
                     Button("Đọc lại nhật ký giai đoạn") {
                         loadStageLog()
                     }
@@ -163,6 +190,7 @@ struct BenchView: View {
             .navigationTitle("BenchShell — Đo OCR")
             .onAppear {
                 ReceiptReader.documentEnhancerEnabled = enhancerOn
+                applyEngineBisect()
                 loadStageLog()
             }
         }
@@ -184,6 +212,7 @@ struct BenchView: View {
     private func runOne(_ name: String) {
         guard running == nil, let cg = loadCGImage(name) else { return }
         running = name
+        applyEngineBisect()
         ReceiptReader.stageBreadcrumb = { step in
             BenchView.stageLog("stage \(step)")
         }
