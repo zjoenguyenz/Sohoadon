@@ -1769,3 +1769,201 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   nhất), chạy lại toàn bộ bộ kiểm + kiểm tĩnh P4/P5 phải ≡,
   đẩy v3, chờ run kế tiếp phán quyết. Rớt 1 scheme là C2
   chưa đóng; không kêu anh cài/test gì.
+- ĐẨY CUỐI CA 00:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `ce6f6dccfc902a1f3df301a94dc639fcaf047a55`. (Dòng này chỉ
+  có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## CA TRỰC 02:40 CST 2026-11-12 — KIỂM CHÉO ĐỘC LẬP CI-FIX-3 TẠI BÀN: ĐÚNG PHẠM VI, KIỂM TĨNH XANH, CHƯA ĐẨY
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (như ca 22:40 +
+  00:40 đã ghi). Ca làm đúng MỘT bước: kiểm chéo độc lập bản
+  sửa CI-FIX-3 đã xuất hiện tại bàn lúc 00:49 CST (sau mục
+  00:40) trước khi Leader đẩy — ca không sửa code, không đẩy
+  code v3, không làm trùng nhịp chat chính.
+- Trạng thái từ xa (connector GitHub, trong ca này): đầu
+  nhánh v3 VẪN là `399f67a0cd373118585c05ea80b80089e931a7c9`
+  (CI-FIX-2) — CI-FIX-3 CHƯA đẩy, chưa có run mới. (Lưu ý kỹ
+  thuật: list_commits phải truyền nhánh qua tham số `sha`;
+  truyền `branch` bị bỏ qua và trả nhánh mặc định.)
+- Diff phạm vi (bằng chứng sơ cấp): tải BenchView.swift trên
+  v3 qua connector — blob SHA tự tính từ nội dung tải về
+  `882d8af87f2ea8349260bc335ee75fd38390902b` KHỚP SHA
+  connector báo. Diff với bản tại bàn: CHỈ đúng điểm
+  CI-FIX-3 — dòng 208 `RecognizeDocumentsRequest` →
+  `RecognizeDocumentsRequest()` và dòng 210
+  `RecognizeTextRequest` → `RecognizeTextRequest()` (đọc
+  thuộc tính trên INSTANCE thay vì trên kiểu, đúng phán
+  quyết compiler run #41) + 3 dòng chú thích; toàn file
+  không khác chỗ nào nữa.
+- Tiền lệ biên dịch được: benchapp/BenchRunner.swift:60-61
+  (đã build xanh ở các run bench #32/#33) dùng đúng mẫu
+  `RecognizeDocumentsRequest().supportedRecognitionLanguages`
+  cho họ documents. Họ TextRequest chưa có tiền lệ instance
+  riêng tại bàn — compiler run #41 tự chỉ hướng instance,
+  phán quyết cuối vẫn là run CI xanh trọn.
+- Bộ kiểm ca tự chạy lại trên bộ nguồn đã lắp (app/):
+  static_check_p4 PASS TOÀN BỘ (exit 0) · static_check_p5:
+  S8 PASS 19 file Swift (0 trùng trong-type), S9 byte điều
+  khiển = 0 trên 22 file nguồn, PASS · fixture AMD-001 PASS
+  8 nhóm. Hồi quy Pha 0–3: Pha 0 cả 5 bộ exit 0 BYTE-TRÙNG
+  file đã lưu · Pha 1 test_f4 exit 0 toàn PASS (chênh byte
+  duy nhất ở dòng 157 = thứ tự in của tập hợp Python, nội
+  dung 4 sửa y hệt) + kiểm tĩnh P1 ALL PASS byte-trùng ·
+  Pha 2 test_f3/test_capture_engine/replay_f3 (C4 7/7) đều
+  exit 0 byte-trùng · Pha 3 reconcile 13/13 + F5 corpus +
+  hardening + tĩnh P3 đều PASS exit 0. replay_f4 (Pha 1)
+  exit 1 nhưng BYTE-TRÙNG file đã lưu — đó là sổ §7 cũ
+  (L-R10 6/7 thời Pha 1, đã được replay_f3 Pha 2 đóng 7/7),
+  không phải thụt lùi mới.
+- PHÁT HIỆN LỆCH CŨ (không thuộc CI-FIX-3, ca không tự sửa):
+  swift_static_check_p2 nay FAIL đúng 1/84 mục —
+  "OCREngine.swift có 'TODO(PHA-3)'": CI-FIX-2 đã thay thân
+  adapter bằng throw `documentsAdapterNotWired` và đồng bộ
+  về nguồn Pha 2, xoá luôn chuỗi TODO(PHA-3) mà kiểm tĩnh
+  Pha 2 còn kỳ vọng tồn tại; diff đầu ra so với file đã lưu
+  chỉ khác đúng 2 dòng (mục đó + dòng kết luận). Hệ quả:
+  câu "toàn bộ bộ kiểm ≡" cho lần đẩy CI-FIX-3 phải ghi
+  ngoại lệ này, hoặc Leader cập nhật kỳ vọng kiểm tĩnh P2
+  (TODO(PHA-3) → documentsAdapterNotWired) ở nhịp chat
+  chính trước khi tuyên bố ≡ toàn bộ.
+- Tuyên bố trung thực — đã chứng minh: phạm vi diff
+  CI-FIX-3 + trạng thái từ xa + kết quả mọi bộ kiểm kể trên
+  bằng chạy thật/đọc trực tiếp trong ca; chưa chứng minh:
+  CI-FIX-3 CHƯA biên dịch thật ở đâu cả (không swiftc tại
+  bàn) — C2 phía BenchShell chỉ đóng khi một run CI xanh
+  trọn cả 2 scheme; chưa làm: chưa đẩy v3, chưa chuẩn bị
+  bản giao nào — đóng băng giao bản vẫn nguyên.
+- **Bước tiếp theo giữ nguyên: CI-FIX-3 ở nhịp chat
+  chính/Leader** — đẩy BenchView.swift đã kiểm chéo này lên
+  v3 (kèm quyết về kỳ vọng kiểm tĩnh P2 ở mục phát hiện
+  trên), chờ run kế tiếp phán quyết. Không kêu anh cài/test
+  gì.
+
+## CA TRỰC 04:40 CST 2026-11-12 — KIỂM CHỨNG LẠI LỆCH KIỂM TĨNH P2 + XÁC NHẬN CI-FIX-3 VẪN CHƯA ĐẨY
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (file này ghi
+  rõ anh duyệt hướng 21:02 + duyệt thiết kế chốt D1–D7
+  21:44 ngày 2026-11-11) — thân lệnh ca này ghi điều kiện
+  cổng tự hết khi WORK-STATE đã ghi duyệt, nên ca quay lại
+  luật chung, làm đúng MỘT bước độc lập trong lúc chờ nhịp
+  chat chính: kiểm chứng lại bằng bằng chứng sơ cấp điểm
+  lệch kiểm tĩnh P2 mà ca 02:40 đã phát hiện. Ca không sửa
+  code, không sửa script kiểm, không đẩy code v3.
+- Trạng thái từ xa (connector GitHub, trong ca này): đầu
+  nhánh v3 VẪN là `399f67a0cd373118585c05ea80b80089e931a7c9`
+  (CI-FIX-2, 2026-11-12T06:30:56Z) — CI-FIX-3 CHƯA đẩy,
+  chưa có run CI mới. Tại bàn, BenchView.swift vẫn giữ
+  đúng sửa CI-FIX-3: `RecognizeDocumentsRequest()` (1 hit)
+  + `RecognizeTextRequest()` (1 hit) ở dòng 211–214.
+- Kiểm tĩnh P2 chạy lại tại bàn (v3-phase2/
+  swift_static_check_p2.py): exit 1 — đếm theo dòng bắt
+  đầu [PASS]/[FAIL] trong đầu ra: **81 PASS / 1 FAIL /
+  82 mục** (ca 02:40 ghi "1/84" — số đếm của ca này theo
+  đầu ra thật là 82 mục; nội dung lệch không đổi). FAIL
+  duy nhất: "OCREngine.swift có 'TODO(PHA-3)'". Diff đầu
+  ra so với swift-static-output.txt đã lưu: ĐÚNG 2 dòng
+  (dòng 58 PASS→FAIL của mục đó + dòng kết luận ALL PASS
+  → FAIL).
+- Nguyên nhân đã đọc trực tiếp: script dòng 193 còn kỳ
+  vọng chuỗi `TODO(PHA-3)` trong OCREngine.swift, trong
+  khi OCREngine.swift Pha 2 dòng 195 nay là
+  `throw OCREngineError.documentsAdapterNotWired` kèm
+  chú thích CI-FIX-2 (dòng 191–194) — kỳ vọng kiểm tĩnh
+  đã CŨ so với sửa fail-closed đã duyệt/đã đẩy ở CI-FIX-2,
+  không phải thụt lùi code mới và không thuộc CI-FIX-3.
+- Tuyên bố trung thực — đã chứng minh: trạng thái đầu
+  nhánh v3 + nội dung BenchView tại bàn + kết quả/diff
+  kiểm tĩnh P2 kể trên, bằng đọc trực tiếp + chạy thật
+  trong ca; chưa chứng minh: CI-FIX-3 vẫn CHƯA biên dịch
+  thật — C2 phía BenchShell chỉ đóng khi một run CI xanh
+  trọn cả 2 scheme; chưa làm: chưa cập nhật kỳ vọng kiểm
+  tĩnh P2 (quyết thuộc Leader ở nhịp chat chính: đổi kỳ
+  vọng TODO(PHA-3) → documentsAdapterNotWired, hoặc ghi
+  ngoại lệ tường minh khi tuyên bố ≡), chưa đẩy v3,
+  chưa chuẩn bị bản giao nào — đóng băng giao bản vẫn
+  nguyên.
+- **Bước tiếp theo giữ nguyên: CI-FIX-3 ở nhịp chat
+  chính/Leader** — quyết kỳ vọng kiểm tĩnh P2 theo mục
+  trên, đẩy BenchView.swift đã kiểm chéo lên v3, chờ run
+  kế tiếp phán quyết. Không kêu anh cài/test gì.
+
+## CA TRỰC 06:40 CST 2026-11-12 — XÁC NHẬN CI-FIX-3 VẪN CHƯA ĐẨY, TRẠNG THÁI CHỜ KHÔNG ĐỔI
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (file này ghi
+  rõ anh duyệt hướng 21:02 + duyệt thiết kế chốt D1–D7
+  21:44 ngày 2026-11-11) — thân lệnh ca này ghi điều kiện
+  cổng tự hết khi WORK-STATE đã ghi duyệt, nên ca quay lại
+  luật chung, làm đúng MỘT bước: kiểm tra trạng thái từ xa
+  của bước tiếp theo đang chờ (CI-FIX-3). Ca không sửa code,
+  không đẩy code v3, không làm trùng nhịp chat chính/Leader.
+- Trạng thái từ xa (connector GitHub, trong ca này): đầu
+  nhánh v3 VẪN là `399f67a0cd373118585c05ea80b80089e931a7c9`
+  (CI-FIX-2, 2026-11-12T06:30:56Z) — giống hệt ca 02:40 và
+  04:40. CI-FIX-3 CHƯA đẩy, chưa có run CI mới, chưa có
+  phán quyết nào mới cho 2 lỗi BenchView của run #41.
+- Tại bàn: BenchView.swift vẫn giữ đúng sửa CI-FIX-3 —
+  `RecognizeDocumentsRequest()` ở dòng 211 và
+  `RecognizeTextRequest()` ở dòng 213 (grep trực tiếp
+  trong ca này).
+- Tuyên bố trung thực — đã chứng minh: trạng thái đầu
+  nhánh v3 + nội dung BenchView tại bàn kể trên, bằng đọc
+  trực tiếp GitHub + grep trong ca; chưa chứng minh:
+  CI-FIX-3 vẫn CHƯA biên dịch thật — C2 phía BenchShell
+  chỉ đóng khi một run CI xanh trọn cả 2 scheme; chưa
+  làm: chưa quyết kỳ vọng kiểm tĩnh P2 (TODO(PHA-3) →
+  documentsAdapterNotWired — quyết thuộc Leader), chưa
+  đẩy v3, chưa chuẩn bị bản giao nào — đóng băng giao
+  bản vẫn nguyên.
+- **Bước tiếp theo giữ nguyên: CI-FIX-3 ở nhịp chat
+  chính/Leader** — quyết kỳ vọng kiểm tĩnh P2, đẩy
+  BenchView.swift đã kiểm chéo lên v3, chờ run kế tiếp
+  phán quyết. Không kêu anh cài/test gì. Đây là ca thứ 3
+  liên tiếp cùng một điểm chờ (02:40 / 04:40 / 06:40) —
+  ghi nhận để chat chính xử lý, ca trực không tự đẩy
+  code v3 theo luật ca.
+- ĐẨY CUỐI CA 06:40: **KHÔNG XÁC ĐỊNH / CHƯA LÊN** — đã thử
+  đẩy docs/planning ĐÚNG 1 LẦN (1 file: WORK-STATE.md) —
+  lần đẩy bị gián đoạn do dịch vụ khởi động lại giữa chừng.
+  Kiểm từ xa ngay sau đó trong cùng ca (chỉ đọc): đầu nhánh
+  docs/planning VẪN là `ce6f6dccfc902a1f3df301a94dc639fcaf047a55`
+  (commit ca 00:40) — lần đẩy 06:40 chưa lên tại thời điểm
+  kiểm. Theo luật chống treo: KHÔNG thử lại trong cùng ca;
+  ca sau kiểm từ xa lại trước khi đẩy bù, không đẩy mù.
+  CHỜ DUYỆT ĐẨY: WORK-STATE.md (gồm các mục 02:40, 04:40,
+  06:40 chưa lên nhánh).
+
+## CA TRỰC 08:40 CST 2026-11-12 — XÁC NHẬN LẦN 4: CI-FIX-3 VẪN CHƯA ĐẨY; LẦN ĐẨY 06:40 XÁC NHẬN CHƯA LÊN
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (file này ghi
+  rõ anh duyệt hướng 21:02 + duyệt thiết kế chốt D1–D7
+  21:44 ngày 2026-11-11) — ca quay lại luật chung, làm đúng
+  MỘT bước: kiểm chứng từ xa hai điểm chờ đang mở (CI-FIX-3
+  + lần đẩy mơ hồ 06:40). Ca không sửa code, không đẩy code
+  v3, không làm trùng nhịp chat chính/Leader.
+- Trạng thái từ xa (connector GitHub, trong ca này):
+  (1) đầu nhánh v3 VẪN là `399f67a0cd373118585c05ea80b80089e931a7c9`
+  (CI-FIX-2, 2026-11-12T06:30:56Z) — CI-FIX-3 CHƯA đẩy, chưa
+  có run CI mới, chưa có phán quyết cho 2 lỗi BenchView của
+  run #41. (2) đầu nhánh docs/planning VẪN là
+  `ce6f6dccfc902a1f3df301a94dc639fcaf047a55` (commit ca
+  00:40) — lần đẩy 06:40 XÁC NHẬN CHƯA LÊN; các mục 02:40,
+  04:40, 06:40 (và mục này) vẫn chỉ có tại bàn cho tới khi
+  lần đẩy cuối ca này / ca sau lên được.
+- Tại bàn: BenchView.swift vẫn giữ đúng sửa CI-FIX-3 —
+  `RecognizeDocumentsRequest()` ở dòng 211 và
+  `RecognizeTextRequest()` ở dòng 213 (grep trực tiếp
+  trong ca này).
+- Tuyên bố trung thực — đã chứng minh: trạng thái đầu
+  nhánh v3 + docs/planning và nội dung BenchView tại bàn
+  kể trên, bằng đọc trực tiếp GitHub + grep trong ca; chưa
+  chứng minh: CI-FIX-3 vẫn CHƯA biên dịch thật — C2 phía
+  BenchShell chỉ đóng khi một run CI xanh trọn cả 2
+  scheme; chưa làm: chưa quyết kỳ vọng kiểm tĩnh P2
+  (TODO(PHA-3) → documentsAdapterNotWired — quyết thuộc
+  Leader), chưa đẩy v3, chưa chuẩn bị bản giao nào — đóng
+  băng giao bản vẫn nguyên.
+- **Bước tiếp theo giữ nguyên: CI-FIX-3 ở nhịp chat
+  chính/Leader** — quyết kỳ vọng kiểm tĩnh P2, đẩy
+  BenchView.swift đã kiểm chéo lên v3, chờ run kế tiếp
+  phán quyết. Không kêu anh cài/test gì. Đây là ca thứ 4
+  liên tiếp cùng một điểm chờ (02:40 / 04:40 / 06:40 /
+  08:40) — theo luật báo cáo mục (c), điểm chờ này cần
+  chat chính xử lý; ca trực không tự đẩy code v3 theo
+  luật ca.
