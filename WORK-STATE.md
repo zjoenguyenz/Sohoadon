@@ -2063,3 +2063,126 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   CI-FIX-6 lên v3 → run CI → bản bench chẩn đoán cho anh chạy
   để lấy breadcrumb/.ips khoá cơ chế crash. Không kêu anh
   cài/test thêm gì ngoài phiên chẩn đoán đó.
+- ĐẨY CUỐI CA 10:40: **THÀNH CÔNG** — đúng 1 lần hoàn tất, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `d12fa0a47738d46a229728709a8458f97b1abfac`. (Dòng này chỉ có
+  tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## BENCH CHẨN ĐOÁN RUN #45 (CI-FIX-6) XANH + ĐÃ KIỂM GÓI (2026-11-12 10:59 CST)
+- Commit 4ab4920 (breadcrumb giai đoạn + cách ly CIDocumentEnhancer
+  mặc định TẮT + sửa QuadGate đổi hệ toạ độ); run #45 xanh 1m10s.
+  Gói bench đã kiểm: 33/33 JPG + 2 JSON; mọi dấu CI-FIX-6 có mặt
+  trong binary (cờ document-enhancer-off, bench-stage-log.txt,
+  stageBreadcrumb, documentEnhancerEnabled, nhãn công tắc).
+  IPA: downloads/SoHoaDon-BENCH-V3-run45-2026-11-12.ipa
+  (sha256 33e36a56…).
+- Đã gửi anh kèm phép đo A/B: (1) enhancer TẮT → chạy hết 33 →
+  xuất chẩn đoán; (2) tuỳ chọn khi (1) trọn: BẬT enhancer → chạy
+  lại; nếu chết, nhật ký giai đoạn trong mục "Chẩn đoán crash"
+  chỉ đích danh tầng chết → khoá/không khoá H1.
+
+## BENCH CHẨN ĐOÁN RUN #45 CRASH SAU FILE ĐẦU TIÊN (anh báo qua voice 11:18 CST 2026-11-12)
+- Anh chạy bản bench chẩn đoán run #45: app vẫn crash sau khi
+  đọc file đầu tiên (giống triệu chứng run #44). Chưa rõ lúc
+  crash công tắc enhancer đang TẮT hay BẬT — nhật ký giai đoạn
+  (breadcrumb) ghi trên đĩa sẽ trả lời cả hai: dòng stage cuối
+  cùng = tầng chết; có dòng civariant-enhancedDocument hay
+  không = enhancer có chạy hay không.
+- Đã hướng dẫn anh (voice): mở lại app đo → mục "Chẩn đoán
+  crash (CI-FIX-6)" → nhật ký tự nạp (hoặc bấm "Đọc lại nhật
+  ký giai đoạn") → "Chia sẻ nhật ký giai đoạn" gửi về đây.
+- Chờ file nhật ký để khoá/không khoá H1. Nếu dòng cuối là
+  civariant-enhancedDocument → H1 khoá ở bộ lọc đó. Nếu chết
+  vẫn với enhancer TẮT và dòng cuối là civariant-shadowRemoved
+  hoặc enhancedContrast → nghi phạm dời sang CIContext GPU
+  dùng chung / biến thể CI còn lại (H1 dạng rộng). Nếu dòng
+  cuối là ocr-* hoặc candidate-* thuần → quay lại họ H4.
+
+## NÚT "ĐỌC LẠI NHẬT KÝ GIAI ĐOẠN" KHÔNG CÓ TÁC DỤNG (anh báo voice 11:21 CST 2026-11-12)
+- Anh báo nguyên văn: "Còn phần đọc lại nhật ký giai đoạn không
+  có tác dụng." Chưa rõ nghĩa chính xác: bấm mà không hiện chữ
+  nào (file nhật ký rỗng/không tồn tại trên máy) hay mục không
+  hiện — cần ảnh chụp mục "Chẩn đoán crash" để phân định, đã
+  xin anh đúng 1 tấm ảnh đó (chốt 3 câu hỏi cùng lúc: đúng bản
+  run #45 chưa / mục có hiện không / nhật ký có chữ nào không).
+- Khả năng phía em đã tự nhận diện (NHÃN: chưa chứng minh):
+  (1) bộ ghi nhật ký nuốt mọi lỗi bằng try? — ghi hỏng là im
+  lặng tuyệt đối, chính nó mù với lỗi của nó (lỗi thiết kế của
+  Leader khi làm CI-FIX-6); (2) breadcrumb đầu tiên chỉ được
+  gắn SAU loadCGImage trong runOne — nếu crash nằm ở khâu nạp
+  ảnh thì không dòng nào kịp ghi; (3) anh có thể đang mở bản
+  run #44 (không có mục chẩn đoán) — chỉ ảnh chụp mới phân
+  định được, không suy đoán về phía anh.
+- Bài học ghi trước: dụng cụ chẩn đoán phải TỰ HIỆN TRẠNG THÁI
+  của chính nó (số dòng đã ghi / lỗi ghi cuối) ngay trong giao
+  diện — bản sửa kế tiếp của bộ ghi phải fail-visible.
+
+## NHẬT KÝ BREADCRUMB RUN #45 ĐÃ VỀ (2026-11-12 11:17 CST)
+- C-003 chạy trọn toàn chuỗi; L-R01 chết bên trong
+  runCandidate(original). H1 (CIDocumentEnhancer/CoreImage)
+  BỊ BÁC — xem phụ lục L-2026-11-12-12 trong TEAM.md.
+- Đang audit tại bàn cửa sổ runCandidate trên dữ liệu L-R01;
+  không còn thao tác nào cần từ anh cho tới khi có cơ chế +
+  bản sửa kiểm chứng tại bàn.
+
+## BENCH CHIA ĐÔI CI-FIX-7 RUN #46 XANH + ĐÃ KIỂM GÓI (2026-11-12 12:41 CST)
+- Commit 54d68a1; run #46 xanh 1m22s. Gói bench kiểm: 33/33 JPG
+  + 2 JSON; đủ dấu CI-FIX-7 trong binary (breadcrumb mịn
+  engine-perform-begin / engine-convert-done /
+  candidate-recognize-done / candidate-parse-done; chuỗi
+  direct-override của bisect; symbol directLanguagesOverride).
+  IPA: downloads/SoHoaDon-BENCH-V3-run46-2026-11-12.ipa.
+- Phiên đo kèm theo: mặc định = cấu hình đã chứng minh (ngôn
+  ngữ "Bản cũ: vi-VN + en-US", topCandidates TẮT) → chạy hết
+  33 → xuất chẩn đoán. Tuỳ chọn cô lập: đổi Picker sang
+  "Hiện tại: vi-VT + en-US" chạy riêng L-R01; rồi bật
+  topCandidates(3) chạy riêng L-R01. Bảng đọc kết quả ở
+  v3-phase4/CI-FIX-7.md.
+
+## RUN #46 VẪN CRASH (anh báo 2026-11-12 12:42 CST: "Tiếp tục crash")
+- Anh báo bản bench CI-FIX-7 (mặc định = cấu hình đã chứng
+  minh: ngôn ngữ kiểu cũ + top-1) vẫn crash. Nếu điểm chết
+  trùng lần trước thì tiền đề chia đôi (hai điểm mới của cấu
+  hình engine) SỤP — thủ phạm nằm sâu hơn hai delta đó.
+- Chưa kết luận gì thêm khi chưa có nhật ký giai đoạn của
+  lượt này: bản này có mốc mịn quanh lượt gọi engine
+  (engine-perform-begin/-done, engine-convert-done) — dòng
+  cuối quyết định hướng. Đã xin anh đúng một thứ: file nhật
+  ký đó. Không xin thao tác nào khác.
+
+## CA TRỰC 12:40 CST 2026-11-12 — KIỂM CHÉO ĐỘC LẬP GÓI BENCH RUN #46 (CI-FIX-7)
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (file này ghi
+  rõ anh duyệt hướng 21:02 + duyệt thiết kế chốt D1–D7
+  21:44 ngày 2026-11-11) — ca quay lại luật chung. Nhịp
+  crash L-R01 đang ở chat chính/Leader (audit
+  CRASH-WINDOW-LR01 + CI-FIX-7 + run #46 xanh, mục 12:41 ở
+  trên) — ca không làm trùng, chỉ làm đúng MỘT bước độc
+  lập: kiểm gói IPA bench run #46 tại bàn theo kỷ luật
+  L-11, bằng mở gói + strings trực tiếp trong ca này.
+- (1) IPA downloads/SoHoaDon-BENCH-V3-run46-2026-11-12.ipa:
+  13.649.159 byte, sha256 tự tính trong ca =
+  dbe6f541ce4d98f81d98c5de52ed8c2d5fc3dbe7083b0a7dad91541f0d57a441
+  (mục 12:41 chưa ghi hash — ca này bổ sung con số đầy đủ).
+- (2) Ruột Payload/SoHoaDonBench.app: 33/33 JPG nằm ở gốc
+  .app (layout phẳng đã biết) + vendors.json +
+  lexicon.json — khớp mục 12:41.
+- (3) Dấu CI-FIX-7 trong binary: đủ 11/11 chuỗi, mỗi chuỗi
+  có hit bằng strings — engine-perform-begin,
+  engine-perform-done, engine-convert-done,
+  candidate-recognize-done, candidate-assemble-done,
+  candidate-parse-done, candidate-evaluation-done,
+  direct-override, directLanguagesOverride,
+  document-enhancer-off, bench-stage-log.txt.
+- Tuyên bố trung thực — đã chứng minh: toàn vẹn gói +
+  sự hiện diện của dấu CI-FIX-7 trong file bench run #46
+  tại bàn, bằng chứng sơ cấp của chính ca này; chưa chứng
+  minh: cơ chế crash L-R01 — bằng chứng quyết định là
+  phiên chia đôi run #46 trên máy anh (chưa chạy), ca này
+  không kết luận thay; chưa làm: không sửa code, không
+  đẩy v3, không chuẩn bị bản giao — đóng băng giao bản
+  vẫn nguyên.
+- **Bước tiếp theo giữ nguyên: phiên đo run #46 ở nhịp
+  chat chính** (mặc định Bản cũ + topCandidates TẮT chạy
+  hết 33 → xuất chẩn đoán; tuỳ chọn cô lập trên L-R01) →
+  Leader đọc kết quả theo bảng v3-phase4/CI-FIX-7.md.
+  Không kêu anh cài/test gì thêm ngoài phiên đó.
