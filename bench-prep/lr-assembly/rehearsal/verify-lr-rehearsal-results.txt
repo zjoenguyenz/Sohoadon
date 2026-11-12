@@ -1,0 +1,9 @@
+PASS  1-catalog-LR-khop-input  10 muc L-R tung truong=True; statusNote dien tap/khong-THIEU=True
+PASS  2-ba-phia-56  tong muc=69 files=56 resource=56 sources=56 yaml_ok=True
+PASS  3-anh-LR-byte-trung  sha256 work == bang input == anh dung thay that: 10/10
+PASS  4-ngoac+appBuild+W  {} 7/7 () 121/121 appBuild=benchapp-3 (ban sao); muc lab=24
+PASS  5-benchapp-that+nen-lab-nguyen  BenchImages that=22 file, 0 file L-R, appBuild that=benchapp-2, hash nen lab khop #ORIG
+PASS  6-tai-lap-byte-trung  chay lai make_lr_rehearsal -> work byte-trung (catalog+project+56 anh)
+PASS  7-bench-score-hoi-quy  exit=0; stdout byte-trung file da luu=True
+PASS  8-gt-co-trong-ANSWERS  gt dien tap ['GT-HD-003', 'GT-SAMS-F'] <= ANSWERS ['GT-HD-003', 'GT-SAMS-F']
+== TONG: 8/8 nhom PASS ==

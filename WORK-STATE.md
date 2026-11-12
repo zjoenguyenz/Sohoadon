@@ -1,5 +1,92 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-11 14:40 CST (ca trực: **DIỄN TẬP
+Cập nhật lần cuối: 2026-11-11 18:40 CST (ca trực: **KIỂM CHỨNG
+TỪ XA LẦN ĐẨY MƠ HỒ 16:40 — KHÔNG LÊN ĐƯỢC CHÚT NÀO, KHÔNG
+TRÙNG; ĐẨY BÙ AN TOÀN** — đúng việc ca 16:40 dặn ca sau, làm
+trước mọi việc khác của ca này: đọc trực tiếp GitHub
+(zjoenguyenz/Sohoadon) ở ref docs/planning trong ca này:
+WORK-STATE.md trên nhánh vẫn là bản 14:40 CST (blob
+`19ebcb15…`) · BENCH-MANIFEST.md trên nhánh vẫn là bản 14:40
+(blob `bb124d0d…` — chứa mục cập nhật 14:40, KHÔNG có mục
+16:40) · cả 6 file `bench-prep/lr-assembly/rehearsal/`
+(LR-REHEARSAL-LEDGER.md · make_lr_rehearsal.py ·
+verify_lr_rehearsal.py · lr-rehearsal-input.csv ·
+lr-rehearsal-manifest.csv · verify-lr-rehearsal-results.txt)
+đều **KHÔNG TỒN TẠI** trên nhánh. Kết luận: lần đẩy bị gián
+đoạn 16:40 KHÔNG lên được phần nào — đẩy bù các file đó
+không tạo trùng và không ghi đè bản mới hơn nào (bản từ xa
+đều cũ hơn bản tại bàn). PHÁT HIỆN SONG SONG (không phải
+việc của ca này, ca không đụng vào): tại bàn đã có gói
+**LR-FREEZE** hoàn thành ~18:12–18:18 CST (việc của chat
+chính/đội khác, ngay trước ca này): anh đã gửi **11 ảnh
+thật**, L-R01…L-R11 đã nhúng benchapp THẬT + đáp án đóng
+băng khép 0 xu từng ca + `appBuild` nâng thành `benchapp-3`,
+verifier PASS 8/8 theo sổ riêng `bench-prep/lr-freeze/
+LR-FREEZE-LEDGER.md` (ca này chỉ đọc sổ + kiểm sự tồn tại
+của file/ảnh/catalog tại bàn — KHÔNG tự chạy lại verifier,
+không nhận công, không khẳng định thay số GT). Hệ quả:
+tiền đề "chờ anh gửi 10 ảnh thật" của mọi ca trước ĐÃ HẾT.
+Tuyên bố trung thực — đã chứng minh: trạng thái từ xa của
+docs/planning tại thời điểm kiểm (blob 2 file + vắng mặt
+6/6 file diễn tập) bằng đọc trực tiếp GitHub, và sự tồn tại
+tại bàn của gói LR-FREEZE; chưa chứng minh: catalog 46 mục /
+33 ảnh của LR-FREEZE CHƯA biên dịch (chỉ phán ở build bench
+cuối), GT của LR-FREEZE ca này chưa tự kiểm lại; chưa làm:
+ráp 24 ca lab vào catalog (công thức đã diễn tập, chờ lần
+ráp cuối) + đối chiếu lấp ca §3 + chốt B-04/B-05 + build
+cloud bản bench cuối + §3.5(3) luồng OCR gốc trên máy của
+Sam's run #26 vẫn chưa về. **Bước tiếp theo: ráp bản bench
+cuối** (nhúng 24 ca lab + chốt B-04/B-05) → build cloud →
+buổi đo duy nhất — việc đang ở nhịp chat chính/Wally theo
+gói LR-FREEZE, ca trực không làm trùng, không kêu anh
+cài/test gì.)
+Cập nhật trước đó: 2026-11-11 16:40 CST (ca trực: **DIỄN TẬP
+RÁP L-R + NÂNG DẤU BẢN ĐÃ CHẠY TRỌN TRÊN BẢN SAO CÁCH LY —
+PASS 8/8** — việc độc lập làm trong lúc chờ ảnh thật, đúng phần
+ca 14:40 ghi "diễn tập chưa gồm L-R + nâng dấu bản". Nay
+`bench-prep/lr-assembly/rehearsal/` đứng trên nền diễn tập lab
+(catalog 69 mục, 46 ảnh, `benchapp-2`): 10 ảnh hạt giống làm ảnh
+đứng thay theo bảng input đóng băng kèm sha256 (phân loại +
+gtID **kế thừa đúng ca hạt giống nguồn** — không bịa phân loại/
+đáp án; `sourceFile` mang tiền tố `REHEARSAL-STANDIN-`,
+statusNote ghi rõ DIỄN TẬP/không phải hoá đơn thật), áp đúng
+quy ước nạp 5 bước của `benchapp/AFTER.md` cho L-R01…L-R10 +
+nâng `appBuild` → `benchapp-3` CHỈ ở bản sao → catalog **69
+mục / 56 có file**. Verifier độc lập **PASS 8/8** (L-R khớp
+input từng trường 10/10 · nhất quán ba phía 56/56/56 + YAML
+parse · sha ảnh 10/10 khớp input lẫn nguồn · ngoặc 7/7+121/121
++ 24 mục W nguyên vẹn · **benchapp thật + nền lab nguyên vẹn**:
+hash khớp #ORIG, BenchImages thật vẫn 22, 0 file L-R thật,
+appBuild thật vẫn `benchapp-2` · tái lập byte-trùng · hồi quy
+bộ chấm byte-trùng · gtID diễn tập có thật trong ANSWERS).
+Vòng đầu PASS trọn — không lỗi maker/verifier nào phải sửa.
+`work/` 11 MB chỉ tại bàn, tái lập bằng script, KHÔNG đẩy.
+Tuyên bố trung thực — đã chứng minh: MỌI thao tác cơ học của
+lần ráp cuối nay đã diễn tập (lab ca trước + L-R + nâng dấu ca
+này) ở mức file/kê khai trên bản sao đúng trạng thái ráp thật;
+chưa chứng minh: catalog 69/56 CHƯA biên dịch (chỉ phán ở build
+bench cuối), chép tay + kiểm số học + đóng băng GT MỚI cho ảnh
+thật (+ nạp `--answers`) chưa diễn tập được vì phụ thuộc nội
+dung ảnh; chưa làm: 10 ca thật L-R vẫn chờ anh, §3.5(3) luồng
+OCR gốc trên máy của Sam's run #26 vẫn chưa về, B-04/B-05 chưa
+chốt tên (phụ thuộc ca thật khó nhất). **Bước tiếp theo giữ
+nguyên: chờ anh gửi 10 ảnh thật** → Leader lấp ô L-R theo quy
+ước 5 bước (thao tác ĐÃ DIỄN TẬP ở lr-assembly/rehearsal) +
+đóng băng GT mới → ráp bản bench cuối (lab theo công thức đã
+diễn tập + chốt B-04/B-05) + build → buổi đo duy nhất. Ca này
+không kêu anh cài/test gì.)
+ĐẨY CUỐI CA 16:40: **KHÔNG XÁC ĐỊNH** — đã thử đẩy
+docs/planning ĐÚNG 1 LẦN (8 file: WORK-STATE.md ·
+bench-prep/BENCH-MANIFEST.md · bench-prep/lr-assembly/
+rehearsal/LR-REHEARSAL-LEDGER.md · make_lr_rehearsal.py ·
+verify_lr_rehearsal.py · lr-rehearsal-input.csv ·
+lr-rehearsal-manifest.csv · verify-lr-rehearsal-results.txt;
+`rehearsal/work/` 56 ảnh KHÔNG đẩy — tái lập được bằng script)
+— lần đẩy bị gián đoạn giữa chừng do dịch vụ khởi động lại,
+kết quả KHÔNG XÁC ĐỊNH (có thể đã lên một phần hoặc chưa);
+ca sau kiểm từ xa trạng thái nhánh docs/planning trước khi
+đẩy lại, không đẩy mù trùng lặp. (Dòng này + mọi sửa sau thời
+điểm đẩy chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+Cập nhật trước đó: 2026-11-11 14:40 CST (ca trực: **DIỄN TẬP
 RÁP LAB ĐÃ CHẠY TRỌN TRÊN BẢN SAO CÁCH LY — PASS 7/7** — việc
 độc lập làm trong lúc chờ ảnh thật: công thức ráp cơ học của
 `LAB-ASSEMBLY-DECISION.md` trước ca này mới là văn bản quyết,
@@ -34,6 +121,17 @@ theo quy ước 5 bước trong benchapp/AFTER.md → ráp bản bench
 cuối (nhúng 24 ca lab theo công thức ĐÃ DIỄN TẬP ở
 lab-assembly/rehearsal + chốt B-04/B-05) + build → buổi đo duy
 nhất. Ca này không kêu anh cài/test gì.)
+ĐẨY CUỐI CA 14:40: **THÀNH CÔNG** — đúng 1 lần, 7 file
+(WORK-STATE.md · bench-prep/BENCH-MANIFEST.md ·
+bench-prep/lab-assembly/rehearsal/REHEARSAL-LEDGER.md ·
+bench-prep/lab-assembly/rehearsal/make_rehearsal.py ·
+bench-prep/lab-assembly/rehearsal/verify_rehearsal.py ·
+bench-prep/lab-assembly/rehearsal/rehearsal-manifest.csv ·
+bench-prep/lab-assembly/rehearsal/verify-rehearsal-results.txt;
+`rehearsal/work/` 46 ảnh KHÔNG đẩy — tái lập được bằng script),
+commit mới trên docs/planning:
+`a5a3f7288cc0aab74879820bfe4b0494f3ab40ef`. (Dòng này + mọi sửa
+sau thời điểm đẩy chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
 Cập nhật trước đó: 2026-11-11 12:40 CST (ca trực: **2 ĐIỂM MỞ
 CỦA LAB-STAGING ĐÃ CHỐT + BỘ CHẤM ĐÃ XỬ LÝ CA LAB TƯỜNG MINH**
 — việc độc lập làm trong lúc chờ ảnh thật, đóng đúng 2 điểm mở
