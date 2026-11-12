@@ -1317,7 +1317,15 @@ enum ReceiptParser {
                     it.name = cleaned
                     name = cleaned
                 }
-                if let cm = matchGroups(name, pattern: #"(?<!\d)\d{7,}(?!\d)"#), let code = cm[0] {
+                // CRASH-FIX (run #16/#18 harness, 2026-11-12):
+                // pattern PHẢI có nhóm bắt quanh dãy số. matchGroups
+                // chỉ trả các NHÓM BẮT (không gồm toàn khớp): pattern
+                // không nhóm khớp thành công sẽ trả mảng RỖNG (không
+                // phải nil) — bản cũ subscript cm[0] trên mảng rỗng
+                // = SIGTRAP, chính là crash trên mọi dòng món có mã
+                // >= 7 chữ số kèm tiền sạch (vd dòng Costco L-R01).
+                if let cm = matchGroups(name, pattern: #"(?<!\d)(\d{7,})(?!\d)"#), cm.count == 1,
+                   let code = cm[0] {
                     it.itemCode = code
                 }
             }
