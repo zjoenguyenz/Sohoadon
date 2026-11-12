@@ -2020,14 +2020,12 @@ enum ReceiptParser {
         return right >= model.lo && right <= model.hi
     }
 
-    /// Tên chứa ít nhất một token chữ ≥2 ký tự (như _has_alpha_token).
-    private static func hasAlphaToken(_ s: String) -> Bool {
-        var run = 0
-        for ch in s {
-            if ch.isLetter { run += 1; if run >= 2 { return true } } else { run = 0 }
-        }
-        return false
-    }
+    // CI-FIX-1 (lỗi 7, run #39): bản hasAlphaToken thứ hai từng
+    // nằm ở đây (vòng lặp isLetter — lệch gương: đếm cả chữ
+    // Unicode) đã XOÁ. Định nghĩa DUY NHẤT là bản regex
+    // [A-Za-z]{2,} ở khối cùng-dòng — đúng _has_alpha_token của
+    // gương port_f4_mirror mà CẢ hai đường (chữ + hình học) dùng
+    // chung; điểm gọi trong geometricItems nối về bản đó.
 
     private static func geometricItems(lines: [OCRLine], boxes: [CGRect?], stop: Int) -> [ParsedLineItem] {
         let model = columnModel(lines: lines, boxes: boxes)
@@ -2058,8 +2056,7 @@ enum ReceiptParser {
                hasAlphaToken(got.name),
                matchGroups(got.name, pattern: #"\d+\.\d{2}"#) == nil {
                 var item = ParsedLineItem(name: got.name, qty: 1, unitPriceCents: got.cents,
-                                          amountCents: got.cents, taxFlag: nil, itemCode: nil,
-                                          confidence: lines[i].confidence)
+                                          amountCents: got.cents, taxFlag: nil, itemCode: nil)
                 item.lineIndex = i
                 tagged.append((i, item))
                 consumed.insert(i)
@@ -2070,8 +2067,7 @@ enum ReceiptParser {
                 if let pb = pendingBefore, pb.index == i - 1 {
                     var item = ParsedLineItem(name: text.trimmingCharacters(in: .whitespaces),
                                               qty: 1, unitPriceCents: pb.cents,
-                                              amountCents: pb.cents, taxFlag: nil, itemCode: nil,
-                                              confidence: lines[i].confidence)
+                                              amountCents: pb.cents, taxFlag: nil, itemCode: nil)
                     item.lineIndex = i
                     tagged.append((i, item))
                     consumed.insert(i)
@@ -2082,8 +2078,7 @@ enum ReceiptParser {
                    inBand(box: i + 1 < boxes.count ? boxes[i + 1] : nil, model: model) {
                     var item = ParsedLineItem(name: text.trimmingCharacters(in: .whitespaces),
                                               qty: 1, unitPriceCents: nc,
-                                              amountCents: nc, taxFlag: nil, itemCode: nil,
-                                              confidence: lines[i].confidence)
+                                              amountCents: nc, taxFlag: nil, itemCode: nil)
                     item.lineIndex = i
                     tagged.append((i, item))
                     consumed.insert(i)
@@ -2109,10 +2104,10 @@ enum ReceiptParser {
         "LOW PRICES", "POLICY", "CONTACT", "ITEM COUNT", "ITEMS SOLD",
         "# ITEMS",
     ]
-    private static let samelineExcludeContains: [String] = [
-        "CASH BACK", "CASH ", "PURCHASE", "TOTAL", "HTTP", ".COM",
-        "SURVEY", "FEEDBACK", "RETURN POLICY", "STORE RETUR",
-    ]
+    // CI-FIX-1 (lỗi 8, run #39): khai báo samelineExcludeContains
+    // thứ hai từng nằm ở đây đã XOÁ — nội dung GIỐNG HỆT bản ở
+    // khối cùng-dòng (đối chiếu từng phần tử + khớp gương);
+    // isSamelineExcluded dùng chung bản đó.
     private static func isSamelineExcluded(_ upper: String) -> Bool {
         if upper.contains("%") { return true }
         if samelineExcludePrefix.contains(where: { upper.hasPrefix($0) }) { return true }

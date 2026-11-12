@@ -93,10 +93,15 @@ final class ClassicTextEngine: OCREngine {
     private let languages: [String]
 
     init(minimumTextHeight: Float = 0) {
-        let supported = VNRecognizeTextRequest
+        // SDK hiện hành: lời gọi này THROW (bằng chứng: bản
+        // BenchRunner đã biên dịch xanh ở run #33 dùng try?).
+        // init không throw -> try? + dự phòng [] để
+        // LanguagePolicy.effective đi đúng nhánh rỗng đã thiết
+        // kế ([en-US] + ghi chú trung thực trong manifest).
+        let supported = (try? VNRecognizeTextRequest
             .supportedRecognitionLanguages(
                 for: .accurate,
-                revision: VNRecognizeTextRequestRevision3)
+                revision: VNRecognizeTextRequestRevision3)) ?? []
         let eff = LanguagePolicy.effective(supported: supported)
         self.languages = eff.languages
         self.languageNote = eff.note
@@ -121,7 +126,7 @@ final class ClassicTextEngine: OCREngine {
             // không gian với hộp mảnh, không lật.
             request.regionOfInterest = region
         }
-        let handler = VNImageRequestHandler(image, options: [:])
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
         try handler.perform([request])
         guard let observations = request.results else {
             throw OCREngineError.noObservations
@@ -169,10 +174,11 @@ final class DocumentsEngine: OCREngine {
         // Họ tài liệu tự chọn ngôn ngữ theo tài liệu; manifest
         // ghi nhận trung thực: hiệu lực = ưu tiên ∩ runtime của
         // họ cổ điển chỉ là THAM CHIẾU — Pha 3 chốt cách khai.
-        let supported = VNRecognizeTextRequest
+        // (try?: như ClassicTextEngine ở trên — lời gọi throw.)
+        let supported = (try? VNRecognizeTextRequest
             .supportedRecognitionLanguages(
                 for: .accurate,
-                revision: VNRecognizeTextRequestRevision3)
+                revision: VNRecognizeTextRequestRevision3)) ?? []
         let eff = LanguagePolicy.effective(supported: supported)
         self.languageNote = eff.note
         self.manifest = EngineManifest(
@@ -188,7 +194,7 @@ final class DocumentsEngine: OCREngine {
         // cấu trúc thật trên thiết bị trước khi chốt cách bóc
         // dòng/đoạn — không đoán mò cấu trúc ở đây).
         let request = RecognizeDocumentsRequest()
-        let handler = VNImageRequestHandler(image, options: [:])
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
         _ = try handler.perform([request])
         // TODO(PHA-3): bóc DocumentObservation thành Fragment
         // theo kết quả đo cô lập E-C/E-D; hiện trả rỗng để không

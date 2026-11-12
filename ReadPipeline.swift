@@ -779,7 +779,7 @@ enum ReceiptReader {
         }
         return CandidateEvaluation(
             e1Closed: e1, e2Within2c: e2, e3Closed: e3,
-            integrity: CandidateScorer.integrity(lines: assembly.lines),
+            integrity: CandidateScorer.integrity(assembly.lines),
             hasSubtotal: parsed.subtotalCents != nil,
             hasTotal: parsed.totalCents != nil,
             hasTaxLine: !parsed.taxes.isEmpty,
@@ -802,7 +802,7 @@ enum ReceiptReader {
         request.maximumObservations = 1
         request.minimumConfidence = 0.6
         request.minimumAspectRatio = 0.2
-        let handler = VNImageRequestHandler(image, options: [:])
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
         do {
             try handler.perform([request])
         } catch {

@@ -183,16 +183,20 @@ struct BenchView: View {
         for (label, rev) in [("Revision1", VNRecognizeTextRequestRevision1),
                              ("Revision2", VNRecognizeTextRequestRevision2),
                              ("Revision3", VNRecognizeTextRequestRevision3)] {
-            let langs = VNRecognizeTextRequest
+            // CI-FIX-1 (cùng họ lỗi 3 của run #39 — lời gọi này
+            // throw trên SDK hiện hành; BenchView chưa tới lượt
+            // biên dịch ở run #39 vì build dừng ở app chính):
+            // try? như BenchRunner đã biên dịch xanh (run #33).
+            let langs = (try? VNRecognizeTextRequest
                 .supportedRecognitionLanguages(for: .accurate,
-                                               revision: rev)
+                                               revision: rev)) ?? []
             out.append("classic/accurate/\(label): \(langs)")
         }
         out.append("classic/currentRevision: \(VNRecognizeTextRequest.currentRevision)")
         out.append("classic/supportedRevisions: \(VNRecognizeTextRequest.supportedRevisions)")
-        let fast = VNRecognizeTextRequest
+        let fast = (try? VNRecognizeTextRequest
             .supportedRecognitionLanguages(
-                for: .fast, revision: VNRecognizeTextRequestRevision3)
+                for: .fast, revision: VNRecognizeTextRequestRevision3)) ?? []
         out.append("classic/fast/Revision3: \(fast)")
         languageOutput = out.joined(separator: "\n")
         // Họ documents (Swift-native, iOS 26+): async — điền tiếp

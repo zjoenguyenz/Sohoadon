@@ -42,10 +42,10 @@ struct IntakeMetadata {
     func diagInput() -> DiagInput {
         DiagInput(source: source.rawValue,
                   imageFileName: imageFileName,
-                  byteSize: byteSize,
                   pixelWidth: pixelWidth,
                   pixelHeight: pixelHeight,
                   exifOrientation: exifOrientation,
+                  byteSize: byteSize,
                   pdfRenderScale: nil)
     }
 }
@@ -550,7 +550,7 @@ enum CandidateScorer {
             let r = CGRect(x: e.box.x, y: e.box.y,
                            width: e.box.width, height: e.box.height)
             let v = LineAssembly.iou(box, r)
-            if v > bestIoU { bestIoU = v; best = e.score }
+            if v > bestIoU { bestIoU = v; best = Int(e.score) }
         }
         return best
     }
