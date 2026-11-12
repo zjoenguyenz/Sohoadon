@@ -50,6 +50,20 @@ import Vision
 // Mọi mốc giai đoạn phải chạm được log kể cả khi process chết.
 setvbuf(stdout, nil, _IONBF, 0)
 
+// Bẫy tín hiệu TỰ CHẨN ĐOÁN (run #13: macOS không để lại .ips nào
+// cho process CLI trên runner CI — thư mục crashreports rỗng).
+// Handler in số tín hiệu + ngăn xếp lời gọi ra stderr (không đệm)
+// rồi thoát 128+sig, để log CI tự nói chết vì gì và chết ở đâu.
+for sig in [SIGILL, SIGSEGV, SIGTRAP, SIGABRT, SIGBUS] {
+    signal(sig, { s in
+        let head = "HARNESS-SIGNAL sig=\(s)\n"
+        FileHandle.standardError.write(Data(head.utf8))
+        let stack = Thread.callStackSymbols.joined(separator: "\n") + "\n"
+        FileHandle.standardError.write(Data(stack.utf8))
+        _exit(128 + s)
+    })
+}
+
 let args = Array(CommandLine.arguments.dropFirst())
 
 func fail(_ msg: String, code: Int32 = 2) -> Never {
@@ -510,23 +524,28 @@ case "bisect":
     let fx = loadFixture(fxPath)
     let n = fx.lines.count
     let selfPath = CommandLine.arguments[0]
-    func runChild(_ keep: [Int]) -> Bool {
-        // true = con sống (in SURVIVED), false = con chết/trap
+    func runChild(_ keep: [Int]) -> (ok: Bool, note: String) {
+        // ok = con sống (in SURVIVED); note ghi cách con kết thúc
+        // (exit code hay signal) để log nói rõ cách chết.
         let p = Process()
         p.executableURL = URL(fileURLWithPath: selfPath)
         p.arguments = ["parseonly", fxPath, "--keep",
                        keep.map(String.init).joined(separator: ",")]
         p.standardOutput = FileHandle.nullDevice
         p.standardError = FileHandle.nullDevice
-        do { try p.run() } catch { return false }
+        do { try p.run() } catch { return (false, "spawn-failed") }
         p.waitUntilExit()
-        return p.terminationReason == .exit && p.terminationStatus == 0
+        let ok = p.terminationReason == .exit && p.terminationStatus == 0
+        let note = p.terminationReason == .exit
+            ? "exit \(p.terminationStatus)" : "signal \(p.terminationStatus)"
+        return (ok, note)
     }
     print("[bisect] total lines=\(n)")
     var fatalPrefix = -1
     for k in 1...n {
-        let ok = runChild(Array(0..<k))
-        print("[bisect] prefix k=\(k) -> \(ok ? "ok" : "DIED")")
+        let r = runChild(Array(0..<k))
+        print("[bisect] prefix k=\(k) -> \(r.ok ? "ok" : "DIED (\(r.note))")")
+        let ok = r.ok
         if !ok { fatalPrefix = k; break }
     }
     guard fatalPrefix > 0 else {
@@ -542,7 +561,7 @@ case "bisect":
         for i in current.reversed() {
             let trial = current.filter { $0 != i }
             if trial.isEmpty { continue }
-            if !runChild(trial) {
+            if !runChild(trial).ok {
                 print("[bisect] drop line \(i) -> still DIED (kept dropped)")
                 current = trial
                 improved = true
