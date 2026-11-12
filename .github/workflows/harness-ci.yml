@@ -103,7 +103,7 @@ jobs:
           while read -r id; do
             [ -z "$id" ] && continue
             if "$BIN" fuzz harness/fixtures/L-R01-raw-a-original.json "$id" > "fuzz-$id.log" 2>&1 \
-              && grep -q "SURVIVED $id" "fuzz-$id.log"; then
+               && grep -q "SURVIVED $id" "fuzz-$id.log"; then
               echo "PASS $id" >> fuzz-results.txt
             else
               echo "DIED $id (exit=$?)" >> fuzz-results.txt
@@ -125,6 +125,6 @@ jobs:
             variants.log
             crashreports/
             images.log
-            matrix-*.log
+                   matrix-*.log
             fuzz-results.txt
             fuzz-*.log
