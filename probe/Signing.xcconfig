@@ -1,0 +1,16 @@
+// Signing for the CarProbe probe build.
+//
+// Unlike Cafari Lite (where the CarPlay entitlements are opt-in and empty by
+// default), this probe enables them unconditionally: carrying them is the
+// thing being tested. The cloud workflow also passes these values on the
+// xcodebuild command line with manual, ad-hoc signing and no provisioning
+// profile, so the entitlements blob is embedded in the .app itself.
+
+// The owner's personal bundle identifier for this probe.
+PROBE_BUNDLE_ID = com.luun.nguyen.cardashprobe
+
+// No developer team: ad-hoc signing ("-") is used, with no profile.
+PROBE_TEAM =
+
+// The CarPlay entitlements file, always on for this probe.
+PROBE_ENTITLEMENTS = CarPlay.entitlements

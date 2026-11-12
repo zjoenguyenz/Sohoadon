@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Adapted from Cafari Lite (MIT, rPlay AI); see LICENSE.
+	     BOTH keys are the whole point of this probe. Signing with
+	     carplay-video alone builds and installs fine, and the app simply
+	     never appears on the head unit: every working CarPlay build
+	     carries the audio entitlement next to the video one. Whether the
+	     owner's own signing app preserves these in the profile it embeds
+	     is exactly what the probe tests. -->
+	<key>com.apple.developer.carplay-audio</key>
+	<true/>
+	<key>com.apple.developer.carplay-video</key>
+	<true/>
+</dict>
+</plist>
