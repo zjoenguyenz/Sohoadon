@@ -1,5 +1,39 @@
 # WORK STATE — Build 2 (ca trực 24/7 cập nhật file này)
-Cập nhật lần cuối: 2026-11-11 18:40 CST (ca trực: **KIỂM CHỨNG
+Cập nhật lần cuối: 2026-11-11 20:40 CST (ca trực: **RÀ TĨNH NGUY
+CƠ CRASH CỦA core-v2-1 XONG — KHÔNG THẤY SMOKING GUN TRONG 3 FILE;
+NGUYÊN NHÂN CRASH 20:37 VẪN CHƯA XÁC ĐỊNH, CHỜ LOG TRÊN MÁY** —
+việc đầu tiên thuộc điều kiện mở băng (a) của L-2026-11-11-8
+(anh báo 20:37: tờ T-Johnnys đọc sống yếu + quét tờ 2 app tự tắt;
+TEAM.md đã đóng băng giao bản): rà toàn bộ 3 file staging
+integrate-v2 (Parser 2647 · ScanView 722 · ReceiptViews 1250
+dòng) + đối chiếu binary IPA run #34 (có ký hiệu
+parseGenericItemsV2/extractSamelineItems/yieldScore). Kết quả
+(sổ đầy đủ: `integrate-v2/crash-audit/CRASH-AUDIT-LEDGER.md`):
+(1) đường sống của lượt quét chỉ gọi `ReceiptParser.parse`
+(ScanView:258/331, ReceiptViews:802) — **khối Reconcile là mã
+chết** trong bản này (parseAndReconcile/ReconcileSession 0 điểm
+gọi từ UI) nên mọi điểm nghi trong đó không thể gây crash khi
+quét; (2) mọi điểm ép kiểu/chỉ số/vòng lặp/chia ở đường sống đã
+đọc trực tiếp — ĐỀU CÓ CHẶN (lines[index+1] ×2 · khoảng
+0...chênh token · Levenshtein · vòng lát while step 1400 ·
+rows[count−1] · save() toàn try?); (3) thực nghiệm: bản gương
+chạy **800 ca** (132 file buổi đo × 5 đột biến + ca biên)
+**0 ngoại lệ**, ca thật chậm nhất 0,032s — chống rủi ro
+watchdog ở tầng parser. Còn mở, ghi nhãn lý thuyết: tràn Int ở
+moneyToCents cần token tiền ≥17 chữ số (khả năng thấp) · jetsam
+ở lượt quét 2 (đỉnh bộ nhớ chưa đo) · ImageStore/model ngoài
+phạm vi staging chưa rà. Tuyên bố trung thực — đã chứng minh:
+các điểm trên bằng grep + đọc code + chạy stress thật; chưa
+chứng minh: NGUYÊN NHÂN GỐC lần tự tắt — bằng chứng quyết định
+là **log Phân tích trên máy anh** tại ~20:37 (SoHoaDon-*.ips =
+trap · JetsamEvent = hết bộ nhớ), ca này không có và không
+đoán thay; chưa làm: không sửa code nào, độ lệch đọc sống
+T-Johnnys là tuyến riêng chưa đụng. **Bước tiếp theo: chat
+chính/Wally lấy log sự cố trên máy anh → phân loại
+trap/jetsam/watchdog → mới định gói sửa**; điều kiện mở băng
+(c) giữ nguyên (quét trong app tờ T-Johnnys từ ảnh gốc + 2 tờ
+liên tiếp không tắt). Ca này không kêu anh cài/test gì.)
+Cập nhật trước đó: 2026-11-11 18:40 CST (ca trực: **KIỂM CHỨNG
 TỪ XA LẦN ĐẨY MƠ HỒ 16:40 — KHÔNG LÊN ĐƯỢC CHÚT NÀO, KHÔNG
 TRÙNG; ĐẨY BÙ AN TOÀN** — đúng việc ca 16:40 dặn ca sau, làm
 trước mọi việc khác của ca này: đọc trực tiếp GitHub
@@ -39,6 +73,17 @@ cuối** (nhúng 24 ca lab + chốt B-04/B-05) → build cloud →
 buổi đo duy nhất — việc đang ở nhịp chat chính/Wally theo
 gói LR-FREEZE, ca trực không làm trùng, không kêu anh
 cài/test gì.)
+ĐẨY CUỐI CA 18:40: **THÀNH CÔNG** — đúng 1 lần, 7 file
+(WORK-STATE.md + 6 file `bench-prep/lr-assembly/rehearsal/`
+liệt kê ở mục trên; `rehearsal/work/` KHÔNG đẩy — tái lập
+được bằng script), commit mới trên docs/planning:
+`31b2461f2e121f16335171aab5863a125a3a082d`; đọc lại từ xa
+xác nhận LR-REHEARSAL-LEDGER.md đã có trên nhánh. Cố ý
+KHÔNG đẩy BENCH-MANIFEST.md ở ca này: bản tại bàn vừa được
+gói LR-FREEZE (việc song song) sửa lúc 18:18 CST — để chủ
+việc đó/chát chính đẩy cùng nhịp của nó, tránh đẩy trạng
+thái dở dang của việc người khác. (Dòng này + mọi sửa sau
+thời điểm đẩy chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
 Cập nhật trước đó: 2026-11-11 16:40 CST (ca trực: **DIỄN TẬP
 RÁP L-R + NÂNG DẤU BẢN ĐÃ CHẠY TRỌN TRÊN BẢN SAO CÁCH LY —
 PASS 8/8** — việc độc lập làm trong lúc chờ ảnh thật, đúng phần
@@ -1212,3 +1257,160 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
 - Chỉ nhắn anh khi: một gói tới cổng, cần anh test/quyết định, hoặc một việc
   hỏng 2 lần liên tiếp. Còn lại im lặng làm.
 - Không hứa thời gian. Không code khi chưa tới gói của nó. Không đụng main.
+
+## BUỔI ĐO — BẢN BENCH CUỐI ĐÃ SẴN SÀNG (2026-11-11 18:5x CST)
+- 11 ảnh thật anh gửi đã đóng băng (LR-FREEZE, khép 11/11 0 xu) + 18
+  synthetic + 4 ca gốc = 33 ảnh trong app đo, catalog benchapp-3.
+- Run #33 (nhánh bench, commit dd7029c) SUCCESS; artifact
+  SoHoaDon-BENCH-run33-2026-11-10 (13.1 MB). Wally tự tải + giải nén:
+  33/33 ảnh nằm trong .app, sha256 mẫu kiểm (L-R01, L-R11,
+  SYN-003-LIGHT, S-0) khớp byte bản đóng băng cục bộ.
+- ĐÃ GỌI ANH CHẠY BUỔI ĐO DUY NHẤT: cài bản bench (app riêng, không
+  đụng dữ liệu Sổ Hóa Đơn), mở app, bấm "Chạy đo", gửi lại file JSON.
+  Nhận JSON → chấm bench_score.py theo lớp → tuyên bố kết cục A/B/C.
+
+## BUỔI ĐO ĐÃ CHẠY — ĐANG KIỂM TOÀN VẸN PHÉP ĐO (2026-11-11 19:3x CST)
+- Anh chạy xong buổi đo và gửi JSON (19:29): đủ 132 runs = 33 ảnh ×
+  4 cấu hình, app tự khai build benchapp-3 / parser p2-core-1, máy
+  iPhone iOS 27.2. SAU KHI CHẠY XONG APP ĐO BỊ FREEZE (anh báo
+  19:31) — lỗi của bản bench, đã ghi nhận; app chính + dữ liệu của
+  anh không liên quan. JSON vẫn nguyên vẹn.
+- Chấm lượt đầu bằng bench_score.py: MỌI cấu hình 0 sổ trọn, điểm 0
+  — NHƯNG kiểm tra chéo file gốc cho thấy dấu hiệu phép đo hỏng ở
+  phía BỘ CHẤM, chưa phải kết luận về engine: các pass OCR trong
+  JSON có đủ dòng thật (vd L-R06 A0 = 28 dòng, đọc đúng tên tiệm)
+  trong khi bộ chấm báo 0 dòng món cho ca đó; chính bench_score.py
+  cũng crash TypeError ở đoạn phán quyết khi nạp --answers.
+  => CHƯA tuyên bố kết cục A/B/C. Việc tiếp theo (phía em): rà soát
+  bộ chấm đối chiếu tay từng ca trên JSON gốc, sửa đường chấm,
+  chấm lại, rồi mới tuyên bố theo §5.5 kèm số liệu.
+- FREEZE — trình tự anh báo nguyên văn (19:31): chạy đo xong → bấm
+  share file → nó chạy → anh cancel, không share nữa → app đứng yên
+  từ đó tới giờ. Suy luận (gắn nhãn): điểm khoá nằm ở tầng giao diện
+  của BenchView quanh việc trình bày/huỷ sheet chia sẻ (trạng thái
+  tiến trình không được dỡ sau khi huỷ share), KHÔNG nằm ở đường OCR
+  — JSON đã xuất trọn trước điểm freeze. Truy nguyên nhân khi tích
+  hợp; app đo là đồ đo dùng một lần, anh xoá không hệ quả gì.
+
+## PHÂN TÍCH BUỔI ĐO — KẾT LUẬN KIỂM TOÀN VẸN (2026-11-11 19:4x CST)
+- Lượt chấm 0-điểm KHÔNG phải hỏng phép đo: port chấm là bản sao
+  TRUNG THỰC của parser Swift hiện tại (đối chiếu mã nguồn hai bên:
+  parseGenericItems chỉ hiểu bố cục khối UPC kiểu Home Depot —
+  dòng mã >=9 số + dòng tiền trần + dòng mô tả). Hệ quả: mọi hoá
+  đơn dạng "tên ... tiền CÙNG DÒNG" (Pan-Asia, Walmart, Costco,
+  T-Johnnys) cho 0 món ở MỌI cấu hình — trong app thật cũng vậy.
+  Đây là PHÁT HIỆN CỐT LÕI của buổi đo: thiếu hẳn chương trích xuất
+  món cùng-dòng trong parser; KHÔNG phải lỗi engine OCR (các pass
+  có đủ 28–44 dòng, số tiền nằm trong văn bản).
+- Mặt trước (OCR/hợp nhất): A0 (đọc đơn + chọn theo sản lượng)
+  KHÔNG thua A1/A2/A3; hợp nhất hiện tại làm TRÙNG dòng và phá
+  chọn neo ở vài ca (vd L-R06 A1: dòng đầu bị nhân đôi, parser vớ
+  thuế $0.22 làm subtotal; N-001 A1–A3 sai total trong khi A0
+  đúng). Engine (b) không cho thắng lợi bù lại. Lỗi ngày M2 lặp ở
+  L-R02/L-R03/L-R08 mọi cấu hình (định dạng ngày chữ + chọn ngày).
+- bench_score.py crash TypeError ở đoạn phán quyết khi nạp
+  --answers (bảng theo lớp in trước crash đã đối chiếu tay với
+  file gốc ở các ca then chốt: L-R06/L-R11/N-001/S-0).
+- XẾP LOẠI: không phải A (không cấu hình nào qua), KHÔNG phải C
+  như đã định nghĩa (engine không phải nút thắt — văn bản đã về,
+  parser của đội vứt bỏ). Gần nhất với B (một phần) + nút thắt xác
+  định chính xác thuộc phía đội. KHÔNG cần buổi đo mới: JSON đã ghi
+  đủ dòng cuối của mọi cấu hình — sửa parser + bộ chấm rồi chấm
+  lại trên CHÍNH file này.
+- Việc tiếp: gói SCORER-FIX + PARSER-GAP (sửa crash bộ chấm; xây
+  trích xuất món cùng-dòng ở port Python trước, kiểm chứng trên
+  corpus đóng băng + 11 ca L-R; chấm lại; khuyến nghị mặt trước).
+  Swift theo sau ở gói tích hợp khi hướng đã chứng minh.
+
+## CHẤM LẠI XONG — PARSER-GAP ĐÃ VÁ Ở PORT, CHỐT MẶT TRƯỚC A0 (2026-11-11 19:5x CST)
+- bench_score crash đã sửa (layer_of nhận dict thay vì id — chỉ nổ
+  khi có ca thật độ khó cao; selftest không có nên ngủ qua các vòng).
+- port_v2 (bản nháp cho Swift): thêm trích xuất món cùng-dòng.
+  Chấm lại CHÍNH JSON buổi đo, ca thật ở A0: trọn sổ 0/15 → 3/15;
+  Σ món khép 8/11 ca L-R (trước 0/11). Leader tự chạy lại kiểm:
+  L-R07 17 món/8283 ✓, L-R02 2/16448 ✓, L-R10 3/9691 ✓, L-R03
+  10/6760 ✓, hồi quy 001 (10 dòng/20330/qty 15) ✓.
+- 3 ca chưa khép (L-R05/L-R08/L-R09): ký tự tiền đã nát ngay trong
+  dòng OCR cuối (vd '$6.29' thành '$0.29'; '3.€8') — cần đọc lại
+  vùng ảnh (ROI) ở tầng tích hợp, không nặn số.
+- Tồn đọng tầng totals/ngày: L-R01 nhãn total bị OCR vỡ ('34.86ł'),
+  L-R02/L-R08 dòng thuế không bắt đầu bằng TAX + ngày tháng chữ,
+  L-R03 subtotal OCR 67.50 (đúng 67.60) — việc của gói tích hợp.
+- MẶT TRƯỚC CHỐT: đọc đơn kiểu A0. A1/A2/A3 trọn 0/15 và phá ca
+  đúng của A0 (C-003 A1 Σ phình 128.038.684¢; L-R10 A1 thừa 6996
+  do KORKY nhân đôi). Thuật toán gộp chỉ được quay lại khi tự chứng
+  minh trên corpus này. Engine (b): cắt theo luật ablation.
+- TIẾP: gói tích hợp Swift (trích xuất cùng-dòng + vá tầng totals/
+  ngày + mặt trước A0) → MỘT bản lớn qua G0–G7 + tem bản mới.
+
+## INTEGRATE-V2 ĐÃ ĐẨY + BUILD XANH — BẢN CORE-V2-1 (2026-11-11 20:0x CST)
+- Đẩy main commit 7c52ddc8 (anh duyệt thẻ): ScanView = OCRFIX
+  nguyên byte (mặt trước A0), Parser = p2-fix + trích món cùng-dòng
+  + vá totals/ngày (anchorTotals/matchTaxRateLine/parseGenericItemsV2),
+  ReceiptViews chỉ đổi tem p2-core-1 → core-v2-1.
+- Run #34 THÀNH CÔNG (40s). Wally tự mở file IPA thật kiểm nhị
+  phân: có đủ parseGenericItemsV2/matchTaxRateLine/anchorTotals/
+  yieldScore + nhãn nút Đọc lại/Ảnh gốc/Chụp lại. File giao:
+  downloads/SoHoaDon-CORE-V2-run34-2026-11-11.ipa, sha256 82d06a2a…
+  (artifact GitHub vẫn mang tên cũ SoHoaDon-P2-CORE-run34-2026-11-10
+  do workflow chưa đổi tên — cùng một file).
+- Số kiểm trên dòng-đọc-thật của buổi đo (bản gương Swift): trọn
+  sổ 5/11 ca L-R (trước làm lại: 0/11), Σ khép 8/11; hồi quy
+  001/002/003 nguyên vẹn. 3 ca tiền bị OCR phá (L-R05/08/09) vẫn mở
+  — chờ tầng đọc-lại-ROI; L-R03 số subtotal sai ngay trong chữ OCR
+  (67.50 vs 67.60) được cổng sổ gắn cờ, không sửa thầm.
+- Chờ anh test mốc lớn trên máy (quét mới + nút Đọc lại trên hồ sơ
+  đã lưu) — phán quyết Điều 1 thuộc mốc này.
+
+## TRUY LỖI FREEZE APP ĐO (đọc tĩnh, 2026-11-11 20:1x CST)
+- Đọc BenchView.swift: đường share là ShareLink(item:) thuần của
+  SwiftUI — không trạng thái trình bày tự chế, không handler huỷ;
+  isRunning đã về false trước khi nút Xuất hiện. KHÔNG tìm thấy cơ
+  chế app-side nào khoá UI khi huỷ share. Khả năng nhất quán nhất:
+  treo ở tầng share-sheet hệ thống trên iOS 27.2 (bản beta anh
+  chạy) — NHÃN: suy luận, không chứng minh được từ đây (không có
+  crash log). App đo là đồ bỏ, không sửa; app chính không dùng
+  đường share này. ĐÓNG mục truy lỗi.
+
+## CORE-V2 RỚT TEST TRÊN MÁY ANH (2026-11-11 20:37 CST) — ĐÓNG BĂNG
+- Anh báo: "Không được và quét thử tờ 2 thì app crash tự tắt" +
+  ảnh màn Kiểm Lại tờ T-Johnnys (L-R08): ngày ✓, subtotal ✓
+  155.64, total ✓ 170.20; Σ món 47.87 ✗, thuế 2.56 ✗, vendor ✗.
+  Cờ lệch sổ bung đúng cả hai. Tờ 2 crash — chưa rõ tờ nào.
+- Đã ghi L-2026-11-11-8 vào TEAM.md + đóng băng giao bản (Điều 4).
+  Cần từ anh: ảnh tờ 2 + văn bản OCR gốc của tờ 1 (mục "Văn bản OCR
+  gốc" trong màn Kiểm Lại) để tái hiện đúng luồng dòng trên máy.
+- Điều kiện mở băng đã chốt (chat chính 20:38): nguyên nhân gốc có
+  bằng chứng cho cả cụm lỗi + chặn tái diễn trong TEAM.md + kiểm
+  chứng đầu-cuối: quét trong app tờ L-R08 từ ảnh gốc (đúng món +
+  thuế 2 tầng 1.33/13.23 + vendor) và 2 tờ liên tiếp không crash.
+  Gói truy crash (crashfix/) đang chạy, đã nhận bổ sung dữ kiện này.
+
+## LỆNH 20:40 CST 2026-11-11 — LÀM LẠI TOÀN BỘ CỐT LÕI, NGHIÊN CỨU SÂU TRƯỚC
+- Bỏ truy tờ 2. Tập trung: vì sao ngay tờ 1 (L-R08) cũng không qua
+  được cốt lõi khi quét sống trong app chính.
+- Mở chương trình NGHIÊN CỨU SÂU toàn đội (chưa giải pháp, chưa
+  bản giao): giải phẫu vấn đề từ bằng chứng đóng băng + đối chiếu
+  từng dòng cấu hình giữa đường OCR app đo và đường OCR app chính
+  + nghiên cứu engine/capture từ tài liệu gốc. Báo cáo nghiên cứu
+  trình anh trước khi thiết kế lại.
+
+## AUDIT + ĐỐI CHIẾU XONG — LỆCH NẰM Ở ẢNH ĐẦU VÀO (2026-11-11 20:46 CST)
+- Cấu hình OCR app-đo ≡ app-chính từng dòng. Lệch là PIXEL: bench
+  đọc JPG 1320×1760 một lượt (cắt lát không kích hoạt); app chính
+  đọc ảnh VisionKit đã xử lý, ảnh quét cao 2868px → cắt lát kích
+  hoạt + lỗi xé ở đường nối. Ứng viên phái sinh: bench thua 8/8 khi
+  xuất hiện, sống lại gần như luôn có mặt + yieldScore không đo cột
+  tiền. integrate-v2 đã bỏ OCRDiagnostics → mất luồng dòng sống.
+- CRASH: chứng minh bằng mô phỏng Int64 hai điểm TRAP tràn số
+  trong code mới (moneyToCents token 17–19 số; anchorTotals
+  implied×100) + họ hàng ở validate/lastCommaMoney/qty — gương
+  Python mù với lớp này. Đã loại: chỉ số mảng, regex, state 2 lần
+  quét, đệ quy Reconcile (không nối). Bản vá sàn an toàn 5 điểm ở
+  crashfix/ (parse ≡ trên 20 bộ đầu vào) — KHÔNG phải bản sửa
+  chất lượng. Kịch bản kiểm chứng mở băng: crashfix/
+  VERIFICATION-SCRIPT.md (Phần A phía đội + Phần B một phiên máy).
+- L-R08 phân rã: vendor = khoảng trống từ điển (9 hãng chuỗi;
+  T-Johnnys/Pan-Asia vắng — mọi đường đọc đều trống); thuế mất ký
+  tự "3" ở tầng ảnh→chữ sống; Σ sống 47.87 ≠ bench 23.97.
+- Toàn bộ đã chuyển làm đầu vào cho chương trình nghiên cứu sâu.

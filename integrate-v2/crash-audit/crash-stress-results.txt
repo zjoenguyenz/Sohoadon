@@ -1,0 +1,8 @@
+files=132 cases=800 errors=0
+top-5 slowest:
+  0.768s edge:5000-lines(L-R01__A2.txtx77)
+  0.070s edge:long-line
+  0.032s L-R01__A1.txt:triple
+  0.032s L-R01__A2.txt:triple
+  0.032s L-R01__A3.txt:triple
+NO EXCEPTIONS in any case.
