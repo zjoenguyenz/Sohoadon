@@ -2332,3 +2332,107 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   census/fuzz để khoá A/B; nếu Cổng 1 qua thì Cổng 2 (100
   lượt) mới là phán quyết luật của anh. Không kêu anh
   cài/test gì.
+
+## HARNESS RUN #5 (2026-11-12 13:42 CST) — PROBE THẬT, CONTROL CHẾT LẶNG
+- BIN đã đúng file chạy; probe PASS thật (macOS Vision rev3
+  cũng ghi "vi-VT" như iPhone). Cổng 1 (control, parse luồng
+  đã ghi L-R01) chết với control.log = 0 byte, KHÔNG một
+  dòng stdout/stderr: giả thuyết làm việc = Swift print qua
+  pipe bị đệm theo khối, process trap trong parse thì mất
+  toàn bộ log (chưa chứng minh — cũng có thể log UI thiếu).
+- Đã vá dụng cụ: driver setvbuf(stdout,_IONBF) + mốc
+  [fixture] từng chặng (19b40a6); workflow gộp stderr vào
+  log cổng (6716f22). Run #6 đang được theo dõi — lượt này
+  hoặc control SURVIVED, hoặc log chỉ đúng chặng chết.
+- ĐẨY CUỐI CA 14:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `f0a8222d9d159f9bcb8ae7015fb9bb8665be25f9`; đọc lại từ xa
+  xác nhận đầu nhánh = commit này. (Dòng này chỉ có tại bàn,
+  sẽ đi theo lần đẩy của ca sau.)
+
+## *** TÁI HIỆN ĐƯỢC CRASH BẰNG SWIFT THẬT (run #6, 2026-11-12 14:50 CST) ***
+- Cổng control: mốc [fixture] start → data-loaded →
+  lines=53 boxes=yes → [fixture] parsing → PROCESS CHẾT,
+  không có [fixture] parsed. ReceiptParser.parse TRAP trên
+  chính LUỒNG ĐÃ GHI của L-R01 (53 mảnh, hộp hữu hạn) khi
+  chạy bằng Swift thật trên macOS.
+- Hệ quả: kết luận "parser sạch trên luồng đã ghi" của
+  CRASH-WINDOW-LR01 (kết luận qua gương Python + đọc tĩnh)
+  BỊ THU HỒI — gương mù với ngữ nghĩa trap của Swift, đúng
+  họ lỗi L-2026-11-11-9 (kiểm trên cái không phải thứ thật).
+- Bước tiếp: chế độ bisect trong harness — parse từng tiền
+  tố + thu nhỏ tập dòng trong process con riêng, khoanh
+  dòng/nội dung gây chết tối thiểu ngay trong một lượt CI.
+
+## CƠ CHẾ CHẾT ĐÃ CÓ NGĂN XẾP (run #16, 2026-11-12 16:32 CST)
+- Bẫy tín hiệu tự chẩn đoán hoạt động: HARNESS-SIGNAL sig=5
+  (SIGTRAP — bẫy runtime của Swift), mã thoát 133.
+  Ngăn xếp: parse -> parseGeneric -> parseGenericItemsV2 ->
+  extractSamelineItems (+4312) -> TRAP. Điểm chết nằm TRONG
+  nhánh trích món cùng-dòng, trên dòng tối thiểu
+  "3006152 BOUNCE 400 11.49 A".
+- matchGroups đã đọc lại: an toàn (xử NSNotFound tường
+  minh). Vòng desk truy tay dòng này qua extractSamelineItems
+  chưa thấy điểm trap — cần chẻ biến thể để chỉ đặc điểm
+  kích hoạt. Harness đã thêm chế độ variants (10 biến thể,
+  process con riêng) + bước CI tương ứng; đang đẩy chạy.
+
+## CA TRỰC 16:40 CST 2026-11-12 — PHÁN QUYẾT RUN #17: VARIANTS ĐÃ ĐẨY XONG NHƯNG BƯỚC VARIANTS CHƯA TỪNG CHẠY; CỔNG 1 RỚT Y HỆT RUN #16
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước: lấy phán quyết
+  lượt harness sau mục 16:32 ("variants … đang đẩy chạy"),
+  là bước tiếp theo đang chờ ở mục đó. Ca không sửa code,
+  không đẩy code v3, không kích lượt chạy nào.
+- ĐẨY VARIANTS ĐÃ XONG Ở NHỊP CHAT CHÍNH (ca kiểm từ xa):
+  (1) mã variants — commit `dc13cf64` trên v3 (16:42 CST,
+  "HARNESS-VARIANTS: parseonly --text + chế độ variants");
+  blob `main.swift` tại bàn `50110b92…` (30.755 byte) KHỚP
+  blob trên nhánh v3 tại thời điểm kiểm — bản tại bàn và
+  bản trên repo là một. (2) bước CI variants — commit
+  `86d8e934` trên v3 (16:48 CST, "Add variants step after
+  bisect and upload variants.log") = đầu v3 tại thời điểm
+  kiểm của ca.
+- RUN #17 (cho `dc13cf64`, run id 43322329122, đọc trực tiếp
+  Actions trong ca; 44s, completed/FAILED): Build harness
+  PASS · Probe PASS · **Cổng 1 control RỚT** (exit 133) —
+  log: [fixture] start → data-loaded → lines=53 boxes=yes →
+  parsing → **HARNESS-SIGNAL sig=5**, ngăn xếp y hệt run #16:
+  parse → parseGeneric → parseGenericItemsV2 →
+  extractSameLineItems **+4312** → TRAP (ký hiệu trong log
+  run #17 ghi "extractSameLineItems"). Bước bisect PASS và
+  xác nhận lại độc lập: tiền tố k=9 DIED, thu nhỏ còn đúng
+  **idx=8, 1 dòng duy nhất "3006152 BOUNCE 400 11.49 A"**
+  (BISECT-DONE fatalPrefix=9 minimalCount=1). Cổng 2 (luật
+  100 lượt) · ma trận · Cổng 3 SKIPPED.
+- **BƯỚC VARIANTS CHƯA TỪNG CHẠY**: run #17 chạy theo
+  workflow của `dc13cf64` — lúc đó CHƯA có bước variants
+  (bước chỉ vào ở `86d8e934`). Và tính tới 16:54 CST (kiểm
+  2 lần trên danh sách Actions lọc branch v3): **CHƯA CÓ
+  LƯỢT CHẠY NÀO cho `86d8e934`** — không run #18, không
+  lượt đang chạy. Giải thích ghi nhãn SUY LUẬN (chưa chứng
+  minh — ca chưa đọc danh sách file của commit `86d8e934`):
+  workflow chỉ tự kích khi push chạm `*.swift` hoặc
+  `harness/**` (đọc từ bản nháp tại bàn, dòng on.push.paths);
+  một commit chỉ sửa `.github/workflows/harness-ci.yml`
+  không khớp cả hai mẫu đó nên không tự sinh lượt — khớp
+  với việc `dc13cf64` (chạm harness/**) sinh run #17 ngay.
+  Dù nguyên nhân nào, hệ quả thực tế như nhau: phán quyết
+  V1–V10 chưa tồn tại.
+- Tuyên bố trung thực — đã chứng minh: trạng thái đẩy 2
+  commit + phán quyết run #17 từng bước + vắng mặt lượt
+  chạy của `86d8e934` tới 16:54 CST, bằng đọc trực tiếp
+  GitHub/Actions trong ca; chưa chứng minh: ĐẶC ĐIỂM nào
+  của dòng chết kích hoạt trap (đúng việc variants sinh ra
+  để trả lời — chưa có dữ kiện), và nguyên nhân vắng lượt
+  của `86d8e934` mới ở mức suy luận trên; chưa làm: chưa
+  sửa code, chưa đụng hàng sửa trap A/B, chưa chuẩn bị
+  bản giao nào — đóng băng giao bản + luật 100 lượt vẫn
+  nguyên, không kêu anh cài/test gì.
+- **Bước tiếp theo: Leader kích tay (workflow_dispatch)
+  một lượt harness trên đầu v3 `86d8e934`** → đọc mục
+  variants trong artifact/log: biến thể V1–V10 nào
+  ok/DIED sẽ chỉ đặc điểm kích hoạt của dòng chết → mới
+  định điểm trap cụ thể trong extractSameLineItems.
+- ĐẨY CUỐI CA 16:40: (đang thử — kết quả ghi ở dòng này
+  sau lần đẩy, sẽ đi theo lần đẩy của ca sau.)
