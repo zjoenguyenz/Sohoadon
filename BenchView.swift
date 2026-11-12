@@ -205,9 +205,12 @@ struct BenchView: View {
         // liệu, đối chiếu SDK ở lần biên dịch CI đầu tiên).
         if #available(iOS 26.0, *) {
             Task {
-                let docLangs = await RecognizeDocumentsRequest
+                // CI-FIX-3 (run #41): supportedRecognitionLanguages
+                // la thuoc tinh cua INSTANCE, khong phai type member
+                // — phai tao instance truoc khi doc.
+                let docLangs = await RecognizeDocumentsRequest()
                     .supportedRecognitionLanguages
-                let textLangs = await RecognizeTextRequest
+                let textLangs = await RecognizeTextRequest()
                     .supportedRecognitionLanguages
                 await MainActor.run {
                     languageOutput += "\ndocuments/RecognizeDocumentsRequest: \(docLangs)"
