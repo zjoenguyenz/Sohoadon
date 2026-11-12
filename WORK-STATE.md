@@ -1967,3 +1967,99 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   08:40) — theo luật báo cáo mục (c), điểm chờ này cần
   chat chính xử lý; ca trực không tự đẩy code v3 theo
   luật ca.
+- ĐẨY CUỐI CA 08:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `0466434067d6e0c03162800296a0c535948d4099`; đọc lại từ xa
+  xác nhận đầu nhánh = commit này. Nhờ đó các mục 02:40,
+  04:40, 06:40 bị kẹt từ ca 06:40 NAY ĐÃ LÊN nhánh.
+  (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## RUN #42 XANH TRỌN — C2 ĐÃ ĐÓNG HOÀN TOÀN (2026-11-12 09:22 CST)
+- Run #42 (45244ff, CI-FIX-3): 14/14 bước thành công — Build main
+  app 29s + Build bench app 22s + đóng gói + tải lên. Hai
+  artifact: SoHoaDon-V3-run42-2026-11-12 (814,341 B) và
+  SoHoaDon-BENCH-V3-run42-2026-11-12 (13,633,361 B). Tổng hành
+  trình C2: run #38 (byte 0x08) → #39 (13 lỗi nối) → #40 (cầu
+  documents) → #41 (app chính xanh; bench rớt 2 lỗi probe) → #42
+  XANH TRỌN. Điều kiện treo C2 từ Pha 0 chính thức đóng; C1 (in
+  ngôn ngữ trên máy) sẽ đóng trong phiên đo M-1.
+- Đang tải 2 artifact về máy để kiểm đếm tài nguyên trong .app
+  bench (33 ảnh + vendors.json + lexicon.json — bài học run #33:
+  đếm file trong .app trước khi tin) rồi mới chuẩn bị gói phiên
+  đo thiết bị M-1..M-7 trình anh.
+
+## KIỂM ĐẾM ARTIFACT RUN #42 (2026-11-12 09:27 CST) — ĐẠT
+- Tải cả 2 artifact về, mở gói kiểm tận nơi: .app bench chứa
+  ĐÚ 33/33 ảnh JPG + vendors.json + lexicon.json; .app chính có
+  đủ 2 JSON; ký hiệu documentsAdapterNotWired có mặt trong cả 2
+  binary (bản sửa CI-FIX-2 thật sự ở trong bản biên dịch).
+  IPA lưu tại downloads/: SoHoaDon-BENCH-V3-run42-2026-11-12.ipa
+  (sha256 56342258…) + SoHoaDon-V3-run42-2026-11-12.ipa
+  (sha256 d0d95032…). Đây là BẢN BIÊN DỊCH KIỂM CHỨNG + BẢN ĐO —
+  không phải bản giao (luật GATE100).
+- BƯỚC TIẾP: phiên đo thiết bị bằng BenchShell (gói IPA bench ở
+  trên, bundle riêng com.nje.sohoadon.bench — cài song song,
+  không đụng app chính/dữ liệu của anh): in ngôn ngữ (đóng C1) +
+  chạy pipeline trên 33 ảnh bundle + dò họ documents + xuất
+  chẩn đoán gửi lại. Trình anh xếp lịch phiên đo.
+
+## C1 ĐÃ ĐÓNG + CI-FIX-5 (2026-11-12 10:20 CST)
+- Anh chạy BenchShell run #42 và gửi toàn văn LanguageProbe:
+  máy đích (iPhone, iOS 27.2) classic Rev3/accurate có 33 ngôn
+  ngữ GỒM tiếng Việt — viết là "vi-VT"; họ documents cũng có vi.
+  Hồ sơ: deep-study/LANGUAGE-PROBE-2026-11-12.md. C1 ĐÓNG.
+- Bẫy phát hiện từ chính bản in: LanguagePolicy cũ khớp chuỗi
+  nguyên văn "vi-VN" → sẽ đánh rớt tiếng Việt và ghi manifest
+  SAI. CI-FIX-5: khớp theo mã ngôn ngữ + dùng nguyên văn cách
+  viết của runtime; gương + fixture ENG-LANG-VT PASS; tĩnh P4/P5
+  PASS. (Kèm L-2026-11-12-11 cho lỗi BenchView 0 ảnh — CI-FIX-4
+  đang biên dịch ở run kế tiếp; bản bench giao tiếp theo sẽ gồm
+  cả CI-FIX-4 + CI-FIX-5.)
+
+## BENCH RUN #44 XANH + ĐÃ KIỂM GÓI (2026-11-12 10:25 CST)
+- Run #43 (CI-FIX-4) và #44 (CI-FIX-5, HEAD 4678dce) đều xanh.
+  Gói bench run #44 đã tải về và kiểm theo kỷ luật L-11 mới:
+  33/33 JPG + vendors.json + lexicon.json trong .app; chuỗi ghi
+  chú ngôn ngữ mới của CI-FIX-5 có mặt trong binary;
+  documentsAdapterNotWired có mặt. IPA: downloads/
+  SoHoaDon-BENCH-V3-run44-2026-11-12.ipa (sha256 da06bd00…).
+- Đã gửi anh bản này: cài đè bản đo cũ → "Chạy tất cả qua
+  ReceiptReader" (33 ảnh) → dò documents → xuất chẩn đoán gửi
+  lại. File chẩn đoán về = nguyên liệu phân tích M-2..M-7 +
+  Phần A.
+
+## CA TRỰC 10:40 CST 2026-11-12 — KIỂM CHÉO ĐỘC LẬP L-2026-11-12-12 + GÓI CI-FIX-6 TẠI BÀN
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế D1–D7 21:44 ngày 2026-11-11). Sau mục
+  10:25, TEAM.md đã có L-2026-11-12-12 (anh báo 10:27: BenchShell
+  run #44 crash ở file đầu tiên; QuadGate lệch hệ toạ độ ĐÃ
+  CHỨNG MINH tĩnh; giả thuyết crash H1 CHƯA chứng minh, chờ .ips
+  hoặc bản đo breadcrumb). Ca làm đúng MỘT bước độc lập: kiểm
+  chéo bằng chứng sơ cấp tại bàn, không sửa code, không đẩy v3.
+- (1) IPA run #44 tại bàn: downloads/SoHoaDon-BENCH-V3-run44-
+  2026-11-12.ipa sha256 = da06bd00aba67d790383ff70629bfa2cb9549
+  b37c1ddcaae9a42c5c382957e3a — khớp dòng 10:25 (da06bd00…).
+- (2) QuadGate: hợp đồng cổng ở CaptureIntake.swift:112-135
+  tính theo ĐIỂM ẢNH (diện tích ≥ 55% × imageWidth×imageHeight)
+  — khớp khẳng định L-12. Caller tại bàn (ReadPipeline.swift:
+  838-853) NAY ĐÃ đổi điểm chuẩn hoá 0..1 → pixelQuad TRƯỚC khi
+  gọi QuadGate.evaluate, kèm chú thích ghi rõ đây là lỗi riêng
+  fail-closed, KHÔNG trình bày là bản sửa crash — đúng kỷ luật
+  L-12.
+- (3) Cả 3 biện pháp chặn của L-12 đã có trong nguồn tại bàn
+  (gói CI-FIX-6, nhịp chat chính): stageBreadcrumb khai báo ở
+  ReadPipeline.swift:363 + 8 điểm gọi (candidate/ocr/perspective/
+  civariant/scoring/finalize); CIDocumentEnhancer cách ly sau
+  cờ mặc định TẮT (dòng 365 + cờ "document-enhancer-off" dòng
+  604, filter ở 915); đổi hệ toạ độ QuadGate ở mục (2) trên.
+- Tuyên bố trung thực — đã chứng minh: hash IPA + hợp đồng
+  QuadGate + sự hiện diện của 3 biện pháp CI-FIX-6 trong nguồn
+  tại bàn, bằng đọc trực tiếp + grep trong ca; chưa chứng minh:
+  cơ chế crash run #44 (H1 vẫn chờ .ips/bản đo breadcrumb —
+  ca không đoán thay), CI-FIX-6 CHƯA biên dịch/chưa chạy thiết
+  bị ở ca này; chưa làm: chưa đẩy v3, chưa chuẩn bị bản giao —
+  đóng băng giao bản vẫn nguyên.
+- **Bước tiếp theo giữ nguyên: nhịp chat chính/Leader** — đẩy
+  CI-FIX-6 lên v3 → run CI → bản bench chẩn đoán cho anh chạy
+  để lấy breadcrumb/.ips khoá cơ chế crash. Không kêu anh
+  cài/test thêm gì ngoài phiên chẩn đoán đó.
