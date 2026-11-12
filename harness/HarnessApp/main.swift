@@ -373,7 +373,7 @@ func mutationTable() -> [(id: String, body: Mutation)] {
     // (d) hộp suy biến — họ (A): dòng 28 của fixture là "125.48"
     // (dòng tiền trần) — columnModel chỉ quét dòng CÓ TIỀN.
     add("box-nan-maxx-moneyline") { _, boxes in
-        if boxes.count > 28 { boxes[28] = CGRect(x: .nan, y: 0.47, width: 0.05, height: 0.013) }
+        if boxes.count > 28 { boxes[28] = CGRect(x: CGFloat.nan, y: 0.47, width: 0.05, height: 0.013) }
     }
     add("box-inf-maxx-moneyline") { _, boxes in
         if boxes.count > 28 { boxes[28] = CGRect(x: 0.52, y: 0.47, width: .infinity, height: 0.013) }
@@ -382,10 +382,10 @@ func mutationTable() -> [(id: String, body: Mutation)] {
         if boxes.count > 28 { boxes[28] = CGRect(x: 0, y: 0.47, width: 1e17, height: 0.013) }
     }
     add("box-nan-firstline") { _, boxes in
-        if !boxes.isEmpty { boxes[0] = CGRect(x: .nan, y: .nan, width: .nan, height: .nan) }
+        if !boxes.isEmpty { boxes[0] = CGRect(x: CGFloat.nan, y: .nan, width: .nan, height: .nan) }
     }
     add("box-nan-everywhere") { _, boxes in
-        boxes = boxes.map { _ in CGRect(x: .nan, y: .nan, width: .nan, height: .nan) }
+        boxes = boxes.map { _ in CGRect(x: CGFloat.nan, y: .nan, width: .nan, height: .nan) }
     }
     add("box-all-identical") { _, boxes in
         boxes = boxes.map { _ in CGRect(x: 0.3, y: 0.5, width: 0.28, height: 0.015) }
