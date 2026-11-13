@@ -8,7 +8,7 @@ name: Build DaBanh IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, dabanh-ios]
 
 permissions:
   contents: read
