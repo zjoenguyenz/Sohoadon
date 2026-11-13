@@ -40,10 +40,12 @@ enum Classification: String, CaseIterable {
 // MARK: - Màu theo DESIGN-V2 (4 tín hiệu: màu + icon + chữ + badge đuôi thẻ)
 
 enum Theme {
-    /// Cá nhân — xanh dương #005EB8
-    static let personalColor = Color(red: 0.0, green: 94.0 / 255.0, blue: 184.0 / 255.0)
-    /// Business — cam đất #9A4A00
-    static let businessColor = Color(red: 154.0 / 255.0, green: 74.0 / 255.0, blue: 0.0)
+    /// Cá nhân — xanh dương sáng #0A84FF (UI-2026-11-13: nâng
+    /// độ sáng cho nền tối; bản cũ #005EB8 chìm trên nền đen).
+    static let personalColor = Color(red: 10.0 / 255.0, green: 132.0 / 255.0, blue: 1.0)
+    /// Business — cam hổ phách #FF9F0A (bản cũ #9A4A00 quá tối
+    /// trên nền đen; cùng tông cam, chỉ nâng sáng).
+    static let businessColor = Color(red: 1.0, green: 159.0 / 255.0, blue: 10.0 / 255.0)
 }
 
 // MARK: - Danh mục khởi điểm (BLUEPRINT mục 5 — bám Schedule C cho business)

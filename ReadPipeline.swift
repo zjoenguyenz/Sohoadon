@@ -378,7 +378,7 @@ enum ReceiptReader {
     static var documentEnhancerEnabled = false
 
     /// Chính sách lát hiệu lực: toàn khung một lượt (§3.3(a)).
-    static let tilePolicyID = "full-frame-v3-p4"
+    static let tilePolicyID = "full-frame-v3"
 
     private static let iso8601: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -1055,6 +1055,7 @@ enum ReceiptReader {
             vendor: outcome.parsedBeforeReconcile.vendor,
             vendorKey: outcome.parsedBeforeReconcile.vendorKey,
             vendorSource: outcome.parsedBeforeReconcile.vendorSource,
+            vendorDataVersion: outcome.parsedBeforeReconcile.vendorDataVersion,
             dateISO: outcome.parsedBeforeReconcile.date.map {
                 iso8601.string(from: $0)
             },

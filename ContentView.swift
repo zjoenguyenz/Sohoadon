@@ -42,9 +42,22 @@ struct ContentView: View {
 
     private var lockScreen: some View {
         VStack(spacing: 20) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(.secondary)
+            // UI-2026-11-13: dấu hiệu thương hiệu ở màn khoá —
+            // vòng tròn xanh ngọc + biểu tượng quét hoá đơn.
+            ZStack {
+                Circle()
+                    .fill(DS.brand.opacity(0.15))
+                    .frame(width: 92, height: 92)
+                Image(systemName: "doc.viewfinder")
+                    .font(.system(size: 40))
+                    .foregroundStyle(DS.brand)
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white)
+                    .padding(6)
+                    .background(Circle().fill(DS.brand))
+                    .offset(x: 32, y: 32)
+            }
             Text("Sổ Hóa Đơn đang khoá")
                 .font(.title3.bold())
             if let lockNote {
@@ -118,6 +131,7 @@ struct TabShellView: View {
                 .tabItem { Label("Thẻ & Cài Đặt", systemImage: "creditcard.fill") }
                 .tag(4)
         }
+        .tint(DS.brand)
         .task { seedStarterCardIfNeeded() }
         // WP3 bước 2: có file mở-từ-ngoài đang chờ -> nhảy thẳng sang
         // tab CHỤP để ScanView hút vào hàng chờ và mở màn Kiểm Lại.

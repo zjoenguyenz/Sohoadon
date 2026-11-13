@@ -193,41 +193,49 @@ struct ReceiptRowView: View {
     var receipt: Receipt
 
     var body: some View {
-        HStack(spacing: 12) {
+        // UI-2026-11-13: hàng chuẩn DesignSystem — thumbnail bo
+        // 10 + viền tóc; không có ảnh thì monogram tiệm (màu ổn
+        // định theo tên); "Chờ duyệt" thành chip trạng thái.
+        HStack(spacing: DS.spaceM) {
             if let image = ImageStore.load(fileName: receipt.imageFileName) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 44, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .frame(width: 46, height: 58)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.radiusThumb))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.radiusThumb)
+                            .strokeBorder(DS.cardStroke, lineWidth: 1)
+                    )
             } else {
-                Image(systemName: "doc.text")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 56)
+                VendorMonogram(vendor: receipt.vendor.isEmpty ? "?" : receipt.vendor, size: 46)
+                    .frame(width: 46, height: 58)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(receipt.vendor.isEmpty ? "(Chưa rõ tiệm)" : receipt.vendor)
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
-                Text(receipt.date, format: .dateTime.day().month().year())
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(receipt.date, format: .dateTime.day().month().year())
+                    if !receipt.category.isEmpty {
+                        Text("·")
+                        Text(receipt.category)
+                            .lineLimit(1)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     ClassificationBadge(kind: receipt.classification, cardLast4: receipt.cardLast4)
                     if receipt.status == .needsReview {
-                        Text("Chờ duyệt")
-                            .font(.caption.bold())
-                            .foregroundStyle(.orange)
+                        StatusChip(text: "CHỜ DUYỆT", color: DS.warning)
                     }
                 }
             }
             Spacer()
-            Text(formatMoney(optionalCents: receipt.totalCents))
-                .font(.body.weight(.semibold))
-                .monospacedDigit()
+            MoneyAmount(cents: receipt.totalCents)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, DS.spaceXS)
     }
 }
 
@@ -432,6 +440,39 @@ struct ReceiptDetailView: View {
 
     var body: some View {
         List {
+            // UI-2026-11-13: thẻ hero đầu màn Chi Tiết (chuẩn app
+            // tài chính top: monogram tiệm + TỔNG thật lớn + chip
+            // trạng thái). Thuần hiển thị, cộng thêm — không đụng
+            // bất kỳ mục chức năng nào bên dưới.
+            Section {
+                VStack(spacing: DS.spaceS) {
+                    VendorMonogram(vendor: receipt.vendor.isEmpty ? "?" : receipt.vendor, size: 56)
+                    Text(receipt.vendor.isEmpty ? "(Chưa rõ tiệm)" : receipt.vendor)
+                        .font(.title3.weight(.bold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                    Text(receipt.date, format: .dateTime.weekday().day().month().year().hour().minute())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(formatMoney(optionalCents: receipt.totalCents))
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .padding(.top, 2)
+                    HStack(spacing: 6) {
+                        ClassificationBadge(kind: receipt.classification, cardLast4: receipt.cardLast4)
+                        if receipt.status == .needsReview {
+                            StatusChip(text: "CHỜ DUYỆT", color: DS.warning)
+                        } else {
+                            StatusChip(text: "ĐÃ DUYỆT", color: DS.brand)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DS.spaceM)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
+            .listRowBackground(Color.clear)
+
             if let image = ImageStore.load(fileName: receipt.imageFileName) {
                 Section("Ảnh gốc (bằng chứng)") {
                     Image(uiImage: image)
@@ -1278,6 +1319,8 @@ struct ReviewView: View {
                         Spacer()
                         moneyField($totalText)
                     }
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(DS.brand)
                     if draft.result.totalConfidence > 0 {
                         Text("Độ tin cậy của tổng tiền: \(Int(draft.result.totalConfidence * 100))%")
                             .font(.caption)
@@ -1353,7 +1396,7 @@ struct ReviewView: View {
                         ForEach(Array(draft.result.items.enumerated()), id: \.offset) { index, item in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name).font(.callout)
+                                    Text(item.name).font(.callout.weight(.medium))
                                     Text("SL \(item.qty)" + (item.taxFlag.map { " · cờ \($0)" } ?? ""))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -1375,7 +1418,7 @@ struct ReviewView: View {
                                 }
                                 Spacer()
                                 Text(formatMoney(optionalCents: item.amountCents))
-                                    .font(.callout)
+                                    .font(.callout.weight(.semibold))
                                     .monospacedDigit()
                             }
                         }
@@ -1383,14 +1426,19 @@ struct ReviewView: View {
                 }
 
                 Section {
+                    // UI-2026-11-13: nút Lưu theo DesignSystem
+                    // (xanh ngọc thương hiệu, full-width, bo 14)
+                    // thay borderedProminent xanh dương mặc định.
+                    // Hành động attemptSave() giữ nguyên.
                     Button { attemptSave() } label: {
-                        Label("Lưu hoá đơn", systemImage: "checkmark.circle.fill")
-                            .frame(maxWidth: .infinity)
+                        Text("Lưu hoá đơn")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(PrimaryButtonStyle())
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
                     Button("Huỷ, không lưu") { onDone() }
                         .frame(maxWidth: .infinity)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Kiểm Lại Hoá Đơn")

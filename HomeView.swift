@@ -33,113 +33,201 @@ struct HomeView: View {
             .map { $0 }
     }
 
+    // UI-2026-11-13: Trang Chủ dựng lại theo DesignSystem —
+    // thẻ hero tổng năm + thanh chia tỉ lệ Cá nhân/Business,
+    // banner chờ duyệt dạng thẻ cảnh báo, các khối là DSCard
+    // trên ScrollView (chuẩn app tài chính top: số liệu lớn
+    // lên đầu, một điểm nhấn màu, khoảng trắng đều thang 4).
+    // MỌI phép tính dữ liệu giữ nguyên như bản List cũ.
+    private var yearTotalCents: Int {
+        yearSum(.personal) + yearSum(.business) + yearSum(.unknown)
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                if needsReviewCount > 0 {
-                    Section {
+            ScrollView {
+                VStack(spacing: DS.spaceL) {
+                    if needsReviewCount > 0 {
                         NavigationLink {
                             ReceiptListView(onlyNeedsReview: true)
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: DS.spaceM) {
                                 Image(systemName: "tray.full.fill")
                                     .font(.title3)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(DS.warning)
+                                    .frame(width: 40, height: 40)
+                                    .background(DS.warning.opacity(0.14))
+                                    .clipShape(Circle())
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("\(needsReviewCount) hoá đơn chờ phân loại / duyệt")
                                         .font(.body.weight(.semibold))
+                                        .foregroundStyle(.primary)
                                     Text("Chưa duyệt = chưa phải chứng từ chính thức")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.tertiary)
                             }
+                            .padding(DS.spaceL)
+                            .dsCard()
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    heroCard
+
+                    if !topCategories.isEmpty {
+                        VStack(alignment: .leading, spacing: DS.spaceS) {
+                            sectionTitle("Theo mục")
+                            VStack(spacing: 0) {
+                                ForEach(Array(topCategories.enumerated()), id: \.element.name) { index, entry in
+                                    HStack(spacing: DS.spaceM) {
+                                        Image(systemName: entry.kind.iconName)
+                                            .font(.callout)
+                                            .foregroundStyle(entry.kind.color)
+                                            .frame(width: 32, height: 32)
+                                            .background(entry.kind.color.opacity(0.13))
+                                            .clipShape(Circle())
+                                        Text(entry.name)
+                                            .lineLimit(1)
+                                        Spacer()
+                                        MoneyAmount(cents: entry.total, font: .callout.weight(.semibold))
+                                    }
+                                    .padding(.vertical, DS.spaceS)
+                                    if index < topCategories.count - 1 {
+                                        Divider()
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, DS.spaceL)
+                            .padding(.vertical, DS.spaceS)
+                            .dsCard()
                         }
                     }
-                }
 
-                Section("Năm nay — \(String(Calendar.current.component(.year, from: Date())))") {
-                    HStack(spacing: 12) {
-                        totalTile(kind: .personal, cents: yearSum(.personal))
-                        totalTile(kind: .business, cents: yearSum(.business))
-                    }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                    if yearSum(.unknown) != 0 {
-                        Text("Chưa rõ: \(formatMoney(cents: yearSum(.unknown)))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if !topCategories.isEmpty {
-                    Section("Theo mục") {
-                        ForEach(topCategories, id: \.name) { entry in
-                            HStack {
-                                Image(systemName: entry.kind.iconName)
-                                    .foregroundStyle(entry.kind.color)
-                                Text(entry.name)
-                                Spacer()
-                                Text(formatMoney(cents: entry.total))
-                                    .monospacedDigit()
+                    if !receipts.isEmpty {
+                        VStack(alignment: .leading, spacing: DS.spaceS) {
+                            sectionTitle("Gần đây")
+                            VStack(spacing: 0) {
+                                ForEach(Array(receipts.prefix(5).enumerated()), id: \.element.id) { index, receipt in
+                                    NavigationLink {
+                                        ReceiptDetailView(receipt: receipt)
+                                    } label: {
+                                        ReceiptRowView(receipt: receipt)
+                                    }
+                                    .buttonStyle(.plain)
+                                    if index < min(5, receipts.count) - 1 {
+                                        Divider()
+                                    }
+                                }
                             }
+                            .padding(.horizontal, DS.spaceL)
+                            .padding(.vertical, DS.spaceS)
+                            .dsCard()
                         }
-                    }
-                }
-
-                if !receipts.isEmpty {
-                    Section("Gần đây") {
-                        ForEach(receipts.prefix(5)) { receipt in
-                            NavigationLink {
-                                ReceiptDetailView(receipt: receipt)
-                            } label: {
-                                ReceiptRowView(receipt: receipt)
-                            }
-                        }
-                    }
-                } else {
-                    Section {
-                        VStack(spacing: 8) {
+                    } else {
+                        VStack(spacing: DS.spaceS) {
                             Image(systemName: "doc.viewfinder")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                            Text("Chưa có hoá đơn nào. Bấm nút CHỤP ở dưới để quét tờ đầu tiên.")
+                                .font(.system(size: 40))
+                                .foregroundStyle(DS.brand)
+                            Text("Chưa có hoá đơn nào")
+                                .font(.headline)
+                            Text("Bấm nút CHỤP ở dưới để quét tờ đầu tiên.")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .padding(DS.spaceXL)
+                        .dsCard()
                     }
-                }
 
-                Section {
                     Text("Đọc ngay trên máy — ảnh hoá đơn không rời khỏi iPhone. Ảnh gốc lưu trong thư mục của app (Files → Trên iPhone → Sổ Hóa Đơn).")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(DS.spaceL)
             }
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Sổ Hóa Đơn")
         }
     }
 
-    private func totalTile(kind: Classification, cents: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 5) {
-                Image(systemName: kind.iconName)
-                Text(kind.label)
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var heroCard: some View {
+        VStack(alignment: .leading, spacing: DS.spaceM) {
+            Text("NĂM NAY — \(String(Calendar.current.component(.year, from: Date())))")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+                .tracking(0.6)
+            Text(formatMoney(cents: yearTotalCents))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            splitBar
+            HStack(spacing: DS.spaceL) {
+                splitLegend(kind: .personal)
+                splitLegend(kind: .business)
+                if yearSum(.unknown) != 0 {
+                    splitLegend(kind: .unknown)
+                }
             }
-            .font(.caption.bold())
-            Text(formatMoney(cents: cents))
-                .font(.title3.weight(.bold))
+        }
+        .padding(DS.spaceL)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dsCard()
+    }
+
+    private var splitBar: some View {
+        GeometryReader { geo in
+            let total = max(yearTotalCents, 1)
+            HStack(spacing: 2) {
+                Rectangle()
+                    .fill(Theme.personalColor)
+                    .frame(width: geo.size.width * CGFloat(yearSum(.personal)) / CGFloat(total))
+                Rectangle()
+                    .fill(Theme.businessColor)
+                    .frame(width: geo.size.width * CGFloat(yearSum(.business)) / CGFloat(total))
+                if yearSum(.unknown) != 0 {
+                    Rectangle()
+                        .fill(Color.gray)
+                        .frame(width: geo.size.width * CGFloat(yearSum(.unknown)) / CGFloat(total))
+                }
+            }
+        }
+        .frame(height: 8)
+        .clipShape(Capsule())
+    }
+
+    private func splitLegend(kind: Classification) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(kind.color)
+                    .frame(width: 8, height: 8)
+                Text(kind.label)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(formatMoney(cents: yearSum(kind)))
+                .font(.callout.weight(.bold))
                 .monospacedDigit()
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
         }
-        .foregroundStyle(kind.color)
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(kind.color.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

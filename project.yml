@@ -23,6 +23,7 @@ targets:
       - ScanView.swift
       - ReceiptViews.swift
       - CardsView.swift
+      - DesignSystem.swift
       # --- Tập module đường đọc v3 (Pha 0-3, dùng CHUNG với
       # target SoHoaDonBench ở dưới — luật 1.6: một nguồn duy
       # nhất, không fork). Parser.swift là bản Pha 3 (M6+M8 đã
@@ -124,6 +125,16 @@ targets:
       - BenchImages/SYN-003-NOISE.jpg
       - BenchImages/SYN-003-TILT.jpg
       - BenchImages/SYN-003-WRINKLE.jpg
+      - BenchImages/WR-bestbuy-1.jpg
+      - BenchImages/WR-cvs-1.jpg
+      - BenchImages/WR-dollartree-1.jpg
+      - BenchImages/WR-mcdonalds-1.jpg
+      - BenchImages/WR-shell-1.jpg
+      - BenchImages/WR-starbucks-1.jpg
+      - BenchImages/WR-target-1.jpg
+      - BenchImages/WR-traderjoes-1.jpg
+      - BenchImages/WR-walgreens-1.jpg
+      - BenchImages/WR-wendys-1.jpg
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nje.sohoadon.bench

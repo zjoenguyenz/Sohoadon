@@ -219,6 +219,14 @@ struct DiagParseSnapshot: Codable, Equatable {
     var vendor: String? = nil
     var vendorKey: String = "generic"
     var vendorSource: String? = nil
+    /// A2-08 (rà soát vòng 2, 2026-11-13): phiên bản dữ liệu
+    /// tiệm của lần đọc (ParseResult.vendorDataVersion —
+    /// có sẵn ở tầng parse nhưng trước đây rơi mất trước
+    /// khi vào hồ sơ). Nhờ trường này, một lần đọc chạy với
+    /// vendors.json nạp hỏng ("unloaded") không còn trông
+    /// như lần đọc bình thường. Cộng thêm trường Optional —
+    /// tương thích ngược với hồ sơ đã ghi.
+    var vendorDataVersion: String? = nil
     var dateISO: String? = nil      // ISO8601 của ngày đọc được
     var items: [DiagItem] = []
     var subtotalCents: Int? = nil

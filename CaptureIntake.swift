@@ -341,13 +341,34 @@ struct LuminanceGrid {
     var height: Int
     var samples: [Double]       // 0..1, row-major từ trên
 
+    /// TRAP-FIX A2-01 (rà soát vòng 2, 2026-11-13): chuẩn hoá
+    /// một toạ độ hộp về miền an toàn [-1, 2] TRƯỚC mọi phép
+    /// đổi Double->Int. Bản cũ đổi thẳng rồi mới kẹp bằng
+    /// max/min — hộp hữu-hạn-khổng-lồ (dạng ca fuzz box-huge)
+    /// hoặc NaN sẽ trap ngay trong Int(...), kẹp không kịp
+    /// chạy. Hộp thật (Vision + ráp trang) sống quanh [0, 1]
+    /// nên miền [-1, 2] không bao giờ chạm dữ liệu thật;
+    /// toạ độ không hữu hạn -> 0.
+    private func clampedCoord(_ v: Double) -> Double {
+        guard v.isFinite else { return 0 }
+        return min(2, max(-1, v))
+    }
+
     func sampleRect(_ box: CGRect) -> [Double] {
+        // Bất biến lưới (A2-01): producer fromImage dựng khớp,
+        // nhưng chính hàm này phải tự vệ — subscript ở dưới
+        // chỉ an toàn khi samples đủ width*height phần tử.
+        guard samples.count == width * height else { return [] }
         // box: chuẩn hoá gốc-dưới -> vùng lưới gốc-trên.
-        let x0 = max(0, Int(box.minX * Double(width)))
-        let x1 = min(width, Int(ceil(box.maxX * Double(width))))
-        let yTop = max(0, Int((1 - Double(box.maxY)) * Double(height)))
+        let bx0 = clampedCoord(Double(box.minX))
+        let bx1 = clampedCoord(Double(box.maxX))
+        let byTop = clampedCoord(Double(box.maxY))
+        let byBot = clampedCoord(Double(box.minY))
+        let x0 = max(0, Int(bx0 * Double(width)))
+        let x1 = min(width, Int(ceil(bx1 * Double(width))))
+        let yTop = max(0, Int((1 - byTop) * Double(height)))
         let yBot = min(height,
-                       Int(ceil((1 - Double(box.minY)) * Double(height))))
+                       Int(ceil((1 - byBot) * Double(height))))
         if x1 <= x0 || yBot <= yTop { return [] }
         var out: [Double] = []
         for y in yTop..<yBot {
@@ -359,11 +380,18 @@ struct LuminanceGrid {
     }
 
     func laplacianVariance(_ box: CGRect) -> Double {
-        let x0 = max(1, Int(box.minX * Double(width)))
-        let x1 = min(width - 1, Int(ceil(box.maxX * Double(width))))
-        let yTop = max(1, Int((1 - Double(box.maxY)) * Double(height)))
+        // A2-01: cùng kỷ luật như sampleRect — bất biến lưới +
+        // toạ độ qua clampedCoord trước khi đổi Int.
+        guard samples.count == width * height else { return 0 }
+        let bx0 = clampedCoord(Double(box.minX))
+        let bx1 = clampedCoord(Double(box.maxX))
+        let byTop = clampedCoord(Double(box.maxY))
+        let byBot = clampedCoord(Double(box.minY))
+        let x0 = max(1, Int(bx0 * Double(width)))
+        let x1 = min(width - 1, Int(ceil(bx1 * Double(width))))
+        let yTop = max(1, Int((1 - byTop) * Double(height)))
         let yBot = min(height - 1,
-                       Int(ceil((1 - Double(box.minY)) * Double(height))))
+                       Int(ceil((1 - byBot) * Double(height))))
         if x1 <= x0 || yBot <= yTop { return 0 }
         var laps: [Double] = []
         for y in yTop..<yBot {

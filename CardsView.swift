@@ -97,9 +97,14 @@ struct CardsView: View {
     private func cardRow(_ card: CardTail) -> some View {
         HStack(spacing: 12) {
             ZStack {
+                // UI-2026-11-13: thẻ mini có gradient chéo + bóng
+                // đổ nhuộm màu loại thẻ (cảm giác thẻ vật lý).
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(card.kind.color)
+                    .fill(LinearGradient(
+                        colors: [card.kind.color, card.kind.color.opacity(0.6)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 86, height: 56)
+                    .shadow(color: card.kind.color.opacity(0.35), radius: 6, y: 3)
                 VStack(alignment: .leading, spacing: 3) {
                     Image(systemName: card.kind.iconName)
                     Text("•• \(card.last4)")
@@ -110,12 +115,17 @@ struct CardsView: View {
                 .frame(width: 86, alignment: .leading)
                 .padding(.leading, 10)
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(card.brand.isEmpty ? "Thẻ" : card.brand)
                     .font(.body.weight(.semibold))
-                Text(card.kind.label + (card.archived ? " · đã ngưng" : ""))
-                    .font(.caption)
-                    .foregroundStyle(card.kind.color)
+                HStack(spacing: 6) {
+                    StatusChip(text: card.kind.label, color: card.kind.color)
+                    if card.archived {
+                        Text("đã ngưng")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             Spacer()
             Menu {

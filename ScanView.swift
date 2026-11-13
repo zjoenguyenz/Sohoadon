@@ -90,9 +90,16 @@ struct ScanView: View {
         NavigationStack {
             VStack(spacing: 24) {
                 Spacer()
-                Image(systemName: "doc.viewfinder")
-                    .font(.system(size: 56))
-                    .foregroundStyle(.secondary)
+                // UI-2026-11-13: biểu tượng thương hiệu + tiêu đề
+                // lớn ở tab Chụp (điểm vào chính của app).
+                ZStack {
+                    Circle()
+                        .fill(DS.brand.opacity(0.15))
+                        .frame(width: 104, height: 104)
+                    Image(systemName: "doc.viewfinder")
+                        .font(.system(size: 46))
+                        .foregroundStyle(DS.brand)
+                }
                 Text("Chụp hoá đơn giấy, app tự đọc: tiệm, ngày, từng món, tổng tiền và đuôi thẻ — rồi gợi ý Cá nhân / Business theo thẻ đã đăng ký.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -110,10 +117,8 @@ struct ScanView: View {
                         showCamera = true
                     } label: {
                         Label("Quét hoá đơn", systemImage: "camera.fill")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(!cameraSupported)
                     .padding(.horizontal)
 
@@ -126,6 +131,7 @@ struct ScanView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                    .tint(DS.brand)
                     .padding(.horizontal)
 
                     Button {
@@ -137,6 +143,7 @@ struct ScanView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                    .tint(DS.brand)
                     .padding(.horizontal)
 
                     if !cameraSupported {
@@ -525,7 +532,20 @@ struct ScanView: View {
         let bounds = page.bounds(for: .cropBox)
         guard bounds.width > 0, bounds.height > 0 else { return nil }
         let scaleFactor = 200.0 / 72.0
-        let size = CGSize(width: bounds.width * scaleFactor, height: bounds.height * scaleFactor)
+        var size = CGSize(width: bounds.width * scaleFactor, height: bounds.height * scaleFactor)
+        // A2-06 (rà soát vòng 2, 2026-11-13): trần cạnh dài
+        // 4096px — PDF khổ lớn ở 200dpi có thể dựng bitmap
+        // hàng chục MP và bị hệ thống giết vì bộ nhớ ngay
+        // trong thao tác nạp. Hạ kích thước tương ứng, giữ
+        // tỉ lệ (phép vẽ ở dưới tỉ lệ theo size/bounds nên
+        // tự đúng); trang PDF thường (Letter/A4 ~1700x2200)
+        // không chạm trần này.
+        let maxSide: CGFloat = 4096
+        let longest = max(size.width, size.height)
+        if longest > maxSide {
+            let shrink = maxSide / longest
+            size = CGSize(width: size.width * shrink, height: size.height * shrink)
+        }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
