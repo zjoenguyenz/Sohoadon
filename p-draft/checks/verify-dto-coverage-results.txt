@@ -1,0 +1,9 @@
+[PASS] ParsedLineItem -> ParsedLineItemDTO: gốc 9 trường, DTO 9 trường
+[PASS] ParsedTaxLine -> ParsedTaxLineDTO: gốc 4 trường, DTO 4 trường
+[PASS] TotalCandidate -> TotalCandidateDTO: gốc 4 trường, DTO 4 trường
+[PASS] ParseResult -> ParseResultDTO: gốc 38 trường, DTO 38 trường
+[PASS] ReconcileFix -> ReconcileFixDTO: gốc 12 trường, DTO 12 trường
+[PASS] ReconcileRegionHint -> ReconcileRegionHintDTO: gốc 6 trường, DTO 7 trường
+[PASS] ReconcileReport -> ReconcileReportDTO: gốc 14 trường, DTO 14 trường
+[PASS] ScanDraft -> PendingDraftSnapshot: gốc 10 trường, DTO 10 trường
+KẾT QUẢ: PASS TOÀN BỘ

@@ -3427,3 +3427,50 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
   → Gói trên kho là ĐÚNG gói Leader đã rà ở `v4-1/CHECKS.md` phụ lục (kèm INT-V4-01 vô hiệu bậc 4/5 + luật bằng chứng thuế, ghi ở `core-v4-design/AMENDMENTS-V4.md`); không thiếu file, không lẫn bản cũ.
 - Tuyên bố trung thực — đã chứng minh: tính nguyên vẹn byte của gói V4-1 trên v3 bằng blob hash đọc trực tiếp trong ca này; chưa chứng minh: Swift thật vẫn CHƯA chạy (số V4-1 tới nay vẫn là mô phỏng Python 30/34, 0 thụt — chưa phải bằng chứng Swift); chưa làm: chưa dispatch lượt harness nào trong ca này (chi phí CI + đúng nhịp cổng của Leader/chat chính), AMD-V4-01 vẫn chờ anh phán kèm báo cáo V4-1.
 - **Bước tiếp theo giữ nguyên, nay đã sẵn sàng thi hành: Leader/chat chính dispatch harness-ci job=streams trên v3 @2952edad ĐÚNG MỘT lượt → lấy artifact streams.log có dòng STREAM4-RESULT → chấm bằng `core-v4-design/score_v4.py` (bộ chấm đã kiểm chứng ở ca 12:40): kỳ vọng SAMS-20260930 thuế [630,382], S-0 thuế [960,390], L-R01 [822,116], 0 ca thụt so với cơ sở v3, STREAM4-DIED = 0, prov đủ làn cổng. Ca này không kêu anh cài/test gì.**
+- ĐẨY CUỐI CA 14:40: **THÀNH CÔNG** — đúng 1 lần, 1 file (WORK-STATE.md), commit mới trên docs/planning: `a6019b927a1579d77dbcbe078f222f3f54859f1a`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- ★ V4-1 NGHIỆM THU ĐẠT trên Swift thật (run #26,
+  commit 2952edad, 1m38s ~$0.21): STREAM4 169/169
+  died=0; làn cổng khối tổng v4 KHÉP 30/34 so với v3
+  25/34 — KHỚP TUYỆT ĐỐI mô phỏng tại bàn; 5 ca tiến
+  (D-04, D-09, N-001, S-0, SAMS-20260930 thuế [630,382]
+  arb=closed prov=4); 0 ca thụt; 4 ca mở (D-17, L-R03,
+  L-R08, L-R09) đều arb=unclosed + thâm hụt định vị —
+  đúng lớp mất vật lý; provenance có ở 34/34 ca.
+  Trạng thái trọng tài toàn corpus: 98 closed / 69
+  unclosed / 2 ambiguous (2 ca mơ hồ ở làn đối chứng).
+  Gói V4-1 ĐÓNG. Tiếp: V4-2 (ứng viên món + nối số
+  lượng — ca Sam's phải lên FULL-LEDGER). AMD-V4-01
+  đang trình anh phán kèm báo cáo.
+- AMD-V4-01 ĐÃ DUYỆT (anh, 2026-11-13 15:55 CST): mơ hồ
+  thì để trống trường tranh chấp — thành chữ thiết kế.
+- ĐÍNH CHÍNH (Leader): mức chốt V4-4 đếm trùng L-R05 —
+  đọc lại: FULL >= 29/34 + khối tổng 30/34 + 5 ca cờ
+  đúng khối (chi tiết ở AMENDMENTS-V4.md). Đã trình anh.
+- GÓI V4-2 MỞ: ứng viên món + nối số lượng.
+- V4-2 run #27 (commit 347cc2f2) BUILD FAIL: đúng 1 lỗi
+  biên dịch — ItemCandidates.swift:600 thứ tự đối số
+  ItemLink (unitCents phải trước weightLb). Kiểm tĩnh
+  không thấy được loại lỗi này (đúng giới hạn đã tuyên
+  bố). Leader sửa tại chỗ, đẩy commit 6c356f08, đang
+  chạy lại cổng (run #28). Chi phí run hỏng ~$0.05.
+- ★ V4-2 NGHIỆM THU ĐẠT trên Swift thật (run #28,
+  commit 6c356f08, 1m32s ~$0.20; run #27 hỏng build
+  1 lỗi đối số — đã sửa): làn cổng FULL-LEDGER 27/34
+  (từ 8; A0 26 + SAMS trọn sổ ở làn DEVICE), khối
+  tổng giữ 30/34, thụt = 0, SILENT = 0, died = 0/169
+  cả hai lõi. 7 ca chưa trọn = đúng danh sách đã rà:
+  L-R03, L-R05 (δ1=-1275), L-R08, L-R09, D-17 (thiếu
+  tổng vật lý), D-18 (tái phân loại b), D-06 (chỉ
+  thiếu thẻ — chờ V4-3). Trần FULL V4-4 = 28/34.
+  Phán quyết Leader INT-V4-02 + đính chính L-R05 +
+  tái phân loại D-18 + trần thời gian 100/500ms đã
+  ghi ở AMENDMENTS-V4.md. TIẾP: V4-3 (hạ công tắc
+  parserPath + ứng viên thẻ/ngày/vendor dạng gợi ý)
+  và P-DRAFT song song.
+
+## CA TRỰC 16:40 CST 2026-11-13 — KIỂM CHỨNG ĐỘC LẬP ĐỘ PHỦ DTO CỦA P-DRAFT: PASS 8/8
+- Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; Phương án A 10:46, DESIGN-V4 10:52, mức chốt V4-4 12:36, AMD-V4-01 15:55 hôm nay; V4-1 + V4-2 đã nghiệm thu đạt trên Swift thật). Ca quay lại luật chung.
+- Bối cảnh ca: Leader/chat chính đang ráp song song V4-3 (sim/simulate_v43.py mới tạo, chưa có sổ kết quả) và P-DRAFT (app/ + assembled/ + tests/ vừa tạo trong cùng nhịp) — ca trực KHÔNG làm trùng việc đang ráp, chỉ làm MỘT bước kiểm chứng độc lập trên phần đã có tại bàn.
+- Việc của ca: chạy bộ kiểm `p-draft/checks/verify_dto_coverage.py` trên cây `p-draft/assembled/` (bộ kiểm có sẵn tại bàn từ nhịp Leader, ca này không tạo, không sửa). Kết quả **PASS TOÀN BỘ 8/8 ánh xạ DTO**: ParsedLineItem 9/9 · ParsedTaxLine 4/4 · TotalCandidate 4/4 · ParseResult 38/38 (trừ taxTotalCents là thuộc tính tính toán, đã khai loại trừ có lý do) · ReconcileFix 12/12 · ReconcileRegionHint 6 gốc → 7 DTO (lineRange tách Lower/Upper, đã ghi chú) · ReconcileReport 14/14 · ScanDraft → PendingDraftSnapshot 10/10. Kết quả lưu tại `p-draft/checks/verify-dto-coverage-results.txt`.
+- Tuyên bố trung thực — đã chứng minh: ánh xạ DTO của P-DRAFT không rơi thầm trường lưu trữ nào ở mức kê khai trường (đọc từ chính mã assembled thật); chưa chứng minh: hành vi round-trip thật (mã hoá/giải mã giữ nguyên giá trị) — đó là việc của `p-draft/tests/PendingDraftRoundTripTest.swift` chưa chạy trong ca này, và toàn bộ P-DRAFT/V4-3 chưa qua cổng Swift thật; chưa làm: không viết/sửa code lõi hay code P-DRAFT, không build, không dispatch CI trong ca này.
+- **Bước tiếp theo giữ nguyên: Leader/chat chính hoàn tất ráp V4-3 (hạ công tắc parserPath + ứng viên thẻ/ngày, ca đích danh D-06) và P-DRAFT, chạy cổng luồng Swift thật + bài test round-trip của P-DRAFT trước khi trình. Ca này không kêu anh cài/test gì.**
