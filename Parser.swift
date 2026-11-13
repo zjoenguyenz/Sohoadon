@@ -135,6 +135,11 @@ struct ParseResult {
     // được ReadPipeline.finalize ghi vào ngăn provenance sẵn có
     // của hồ sơ chẩn đoán (tiền lệ cộng thêm, không đổi schema).
     var totalsProvenance: [String: FieldProvenance] = [:]
+    /// CORE-V4 (gói V4-2, THUẦN CỘNG THÊM): provenance từng món
+    /// của pha 3/4 (ItemsArbiter) — khoá "item[j]"; ReadPipeline
+    /// .finalize ghi vào ngăn provenance của chẩn đoán cùng cách
+    /// với totalsProvenance (schema giữ v2).
+    var itemsProvenance: [String: FieldProvenance] = [:]
     var arbiterStatus: String? = nil   // closed|ambiguous|unclosed|budgetExceeded
     var arbiterDisputed: [String] = []
     var arbiterDeficitE1: Int? = nil
@@ -382,12 +387,17 @@ enum ReceiptParser {
         return result
     }
 
-    // MARK: - CORE-V4 (gói V4-1): khối tổng bằng ứng viên + trọng tài
+    // MARK: - CORE-V4 (gói V4-1 + V4-2): ứng viên + trọng tài
     //
-    // parseV4 = parse() của v3 cho vendor/date/items/card NGUYÊN
-    // VĂN, riêng khối subtotal/taxes/total được THAY bằng tầng ứng
+    // parseV4 = parse() của v3 cho vendor/date/card NGUYÊN VĂN,
+    // riêng khối subtotal/taxes/total được THAY bằng tầng ứng
     // viên (Candidates.swift) + trọng tài (Arbiter.swift) theo
-    // DESIGN-V4 §2/§3. parserPath GIỮ NGUYÊN ở gói này (hạ công
+    // DESIGN-V4 §2/§3 và — từ V4-2 — khối MÓN được thay bằng
+    // ứng viên món + nối số lượng + pha 3/4 (ItemCandidates
+    // .swift + ItemsArbiter): parseV4 dùng ĐƯỜNG MÓN MỚI THAY
+    // HẲN đường món của v3. Neo ITEMS SOLD + soldContribution
+    // vẫn của v3 (dữ liệu printSemantics của tiệm — §4.4 khai
+    // dạng dữ liệu). parserPath GIỮ NGUYÊN ở gói này (hạ công
     // tắc tiệm là V4-3); mặc định app vẫn chạy parse() — parseV4
     // chỉ được chọn qua công tắc ở harness/bench (§8: lõi v4 nằm
     // CẠNH v3 sau một công tắc, không thay thầm đường đang chạy).
@@ -399,36 +409,50 @@ enum ReceiptParser {
             .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces),
                            confidence: $0.confidence) }
             .filter { !$0.text.isEmpty }
-        // Σmón chỉ tính món CÓ tiền; không món nào có tiền → nil
-        // (chưa đo được) thay vì 0 giả tạo thâm hụt E1.
+        // Σmón của v3 chỉ còn là SỐ ĐO tham chiếu cho trọng tài
+        // khối tổng (deficitE1 sơ bộ) — món trình bày là của pha
+        // món V4-2 ở dưới.
         let amounts = result.items.compactMap { $0.amountCents }
         let itemsSum = amounts.isEmpty ? nil : SafeMoney.sumCents(amounts)
         let arb = TotalsArbiter.arbitrate(lines: lines, itemsSumCents: itemsSum)
-        result.subtotalCents = arb.subtotalCents
-        result.taxes = arb.taxes
-        result.totalCents = arb.totalCents
-        result.totalConfidence = arb.totalLineConfidence
-        result.totalsProvenance = arb.provenance
-        result.arbiterStatus = arb.status
-        result.arbiterDisputed = arb.disputedSolutions
-        result.arbiterDeficitE1 = arb.deficitE1
-        result.arbiterDeficitE2 = arb.deficitE2
-        result.arbiterRegionHint = arb.regionHint
-        if !arb.totalCandidates.isEmpty {
-            result.totalCandidates = arb.totalCandidates
+        // PHA 3/4 (V4-2): gán món + nối số lượng + E1/E3 + phân
+        // định liên khối (E1 chỉ lật khối tổng khi đang MƠ HỒ).
+        let itemPhase = ItemsArbiter.assign(
+            lines: lines, totals: arb,
+            soldAnchor: result.itemsSold,
+            contribution: result.soldContribution)
+        let finalTotals = itemPhase.totals
+        result.items = itemPhase.items
+        result.itemsProvenance = itemPhase.provenance
+        result.subtotalCents = finalTotals.subtotalCents
+        result.taxes = finalTotals.taxes
+        result.totalCents = finalTotals.totalCents
+        result.totalConfidence = finalTotals.totalLineConfidence
+        result.totalsProvenance = finalTotals.provenance
+        result.arbiterStatus = finalTotals.status
+        result.arbiterDisputed = finalTotals.disputedSolutions
+        result.arbiterDeficitE1 = itemPhase.deficitE1
+        result.arbiterDeficitE2 = finalTotals.deficitE2
+        result.arbiterRegionHint = finalTotals.regionHint
+        if !finalTotals.totalCandidates.isEmpty {
+            result.totalCandidates = finalTotals.totalCandidates
         }
-        result.selectionTrace = ["arbiter-v4/\(arb.status)"]
-            + arb.trace + result.selectionTrace
-        // validate() chạy lại trên khối tổng ĐÃ THAY — cảnh báo v3
-        // tính trên số cũ không được để sót sang kết quả v4.
+        result.selectionTrace = ["arbiter-v4/\(finalTotals.status)"]
+            + arb.trace + itemPhase.trace + result.selectionTrace
+        // validate() chạy lại trên khối tổng + món ĐÃ THAY — cảnh
+        // báo v3 tính trên số cũ không được để sót sang kết quả v4.
         result.warnings = validate(result)
-        if arb.status == "ambiguous" {
+        if finalTotals.status == "ambiguous" {
             result.warnings.append(
-                "Trọng tài khối tổng: có \(arb.disputedSolutions.count) cách khép sổ khác nhau — trường tranh chấp để trống, anh kiểm tra giúp.")
+                "Trọng tài khối tổng: có \(finalTotals.disputedSolutions.count) cách khép sổ khác nhau — trường tranh chấp để trống, anh kiểm tra giúp.")
         }
-        if arb.status == "budgetExceeded" {
+        if finalTotals.status == "budgetExceeded" {
             result.warnings.append(
                 "Trọng tài khối tổng: vượt ngân sách tìm kiếm — khối tổng chưa khép sổ.")
+        }
+        if let d1 = itemPhase.deficitE1, abs(d1) > ItemsArbiter.e1ToleranceCents {
+            result.warnings.append(
+                "Khối món chưa khép: tổng tiền món lệch tạm tính \(d1) xu (δ1) — thâm hụt nằm ở khối món.")
         }
         return result
     }

@@ -1047,6 +1047,13 @@ enum ReceiptReader {
         where snapshotProvenance[key] == nil {
             snapshotProvenance[key] = value
         }
+        // CORE-V4 (gói V4-2): provenance từng món của trọng tài
+        // (khoá "item[j]") vào cùng ngăn — cộng thêm thuần, như
+        // totalsProvenance ở trên.
+        for (key, value) in outcome.parsedBeforeReconcile.itemsProvenance
+        where snapshotProvenance[key] == nil {
+            snapshotProvenance[key] = value
+        }
         // Provenance mức UI = provenance khung (F5/ROI) + corrected.
         var uiProvenance = outcome.provenance
         for (key, value) in snapshotProvenance {

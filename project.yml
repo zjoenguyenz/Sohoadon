@@ -37,6 +37,7 @@ targets:
       - Parser.swift
       - Candidates.swift
       - Arbiter.swift
+      - ItemCandidates.swift
       - Reconcile.swift
       - RegionReReader.swift
       - ReadPipeline.swift
@@ -94,6 +95,7 @@ targets:
       - Parser.swift
       - Candidates.swift
       - Arbiter.swift
+      - ItemCandidates.swift
       - Reconcile.swift
       - RegionReReader.swift
       - ReadPipeline.swift

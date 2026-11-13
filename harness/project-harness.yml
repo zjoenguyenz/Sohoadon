@@ -41,6 +41,7 @@ targets:
       # tổng — chỉ Foundation, vào harness như mọi module đọc.
       - ../Candidates.swift
       - ../Arbiter.swift
+      - ../ItemCandidates.swift
       - ../Reconcile.swift
       - ../RegionReReader.swift
       # --- Driver + shim của harness (thư mục này):

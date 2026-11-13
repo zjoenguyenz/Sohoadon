@@ -84,6 +84,26 @@ struct TotalsArbitration {
     var trace: [String] = []
     /// Bản đồ ứng viên cửa sổ → vai trò phán quyết (P1-CANDIDATES).
     var totalCandidates: [TotalCandidate] = []
+    // V4-2 (THUẦN CỘNG THÊM): chỉ số dòng bắt đầu cửa sổ khối
+    // tổng — pha món dùng để neo cửa sổ khối món (§4.5).
+    var windowStart: Int = 0
+    /// V4-2 (THUẦN CỘNG THÊM): tập nghiệm SAU thang phân định,
+    /// mỗi giá trị phân biệt một đại diện token — pha món dùng
+    /// để phân định liên khối khi khối tổng MƠ HỒ (§3.2 pha 3).
+    var effectiveSolutions: [TotalsSolutionView] = []
+}
+
+/// Một nghiệm khối tổng nhìn từ ngoài trọng tài (V4-2): bộ giá
+/// trị + token đại diện để dựng lại dòng thuế khi E1 phân định.
+struct TotalsSolutionView {
+    var subtotalCents: Int
+    var taxTokens: [MoneyCandidate]
+    var totalCents: Int
+    var subtotalToken: MoneyCandidate
+    var totalToken: MoneyCandidate
+    var describe: String {
+        "S=\(subtotalCents) taxes=\(taxTokens.map { $0.cents }) T=\(totalCents)"
+    }
 }
 
 enum TotalsArbiter {
@@ -330,23 +350,21 @@ enum TotalsArbiter {
         }
         out.trace.append("solutions=\(solutions.count) effective=\(distinctKeys(effective).count)")
 
+        // V4-2 (THUẦN CỘNG THÊM): cửa sổ + tập nghiệm sau thang
+        // cho pha món — KHÔNG đổi bất kỳ quyết định nào ở trên.
+        out.windowStart = wStart
+        var seenEff = Set<String>()
+        for sol in effective where !seenEff.contains(sol.key) {
+            seenEff.insert(sol.key)
+            out.effectiveSolutions.append(TotalsSolutionView(
+                subtotalCents: sol.subtotal, taxTokens: sol.taxTokens,
+                totalCents: sol.total, subtotalToken: sol.subtotalToken,
+                totalToken: sol.totalToken))
+        }
+
         // ---- Dựng dòng thuế từ token của một nghiệm ----
         func buildTaxes(_ toks: [MoneyCandidate]) -> [ParsedTaxLine] {
-            toks.map { tok in
-                let lab = labels[tok.lineIndex]
-                let labelLine: Int? = lab.family == "TAX" ? tok.lineIndex
-                    : (tok.lineIndex > 0 && labels[tok.lineIndex - 1].family == "TAX"
-                        && labels[tok.lineIndex - 1].labelOnly
-                        ? tok.lineIndex - 1 : nil)
-                let rank = lab.family == "TAX" ? lab.rank
-                    : (labelLine != nil ? labels[labelLine!].rank : nil)
-                return ParsedTaxLine(
-                    label: rank != nil ? "TAX \(rank!)" : "TAX",
-                    rateText: CandidateFactory.rateText(
-                        forTaxLine: tok.lineIndex, labelLine: labelLine, rates: rates),
-                    amountCents: tok.cents,
-                    lineIndex: tok.lineIndex)
-            }
+            buildTaxLines(tokens: toks, labels: labels, rates: rates)
         }
         func prov(_ kind: String, _ detail: String) -> FieldProvenance {
             FieldProvenance(kind: kind, detail: detail)
@@ -476,6 +494,30 @@ enum TotalsArbiter {
         return out
     }
 
+    /// Dựng dòng thuế từ token của một nghiệm — bản TĨNH dùng
+    /// chung (V4-2: pha món dựng lại dòng thuế của nghiệm được
+    /// E1 chọn khi phân định liên khối). Thân hàm là nguyên văn
+    /// closure buildTaxes của arbitrate() trước V4-2.
+    static func buildTaxLines(tokens: [MoneyCandidate],
+                              labels: [LineLabel],
+                              rates: [RateCandidate]) -> [ParsedTaxLine] {
+        tokens.map { tok in
+            let lab = labels[tok.lineIndex]
+            let labelLine: Int? = lab.family == "TAX" ? tok.lineIndex
+                : (tok.lineIndex > 0 && labels[tok.lineIndex - 1].family == "TAX"
+                    && labels[tok.lineIndex - 1].labelOnly
+                    ? tok.lineIndex - 1 : nil)
+            let rank = lab.family == "TAX" ? lab.rank
+                : (labelLine != nil ? labels[labelLine!].rank : nil)
+            return ParsedTaxLine(
+                label: rank != nil ? "TAX \(rank!)" : "TAX",
+                rateText: CandidateFactory.rateText(
+                    forTaxLine: tok.lineIndex, labelLine: labelLine, rates: rates),
+                amountCents: tok.cents,
+                lineIndex: tok.lineIndex)
+        }
+    }
+
     /// Bản đọc tốt nhất khi không khép: neo nhãn CUỐI theo vai
     /// (tạm tính/tổng in cuối khối là bản cuối của tờ) + dòng thuế
     /// thu hoạch từ bằng chứng in (token trên dòng TAX — thừa kế
@@ -528,5 +570,400 @@ enum TotalsArbiter {
         for (i, _) in out.taxes.enumerated() {
             out.provenance["tax[\(i)]"] = prov("read", "hintOnlyUnclosed")
         }
+    }
+}
+
+
+// =====================================================================
+//  ItemsArbiter — CORE-V4 · GÓI V4-2 (DESIGN-V4 §3.2 pha 3/4,
+//  §3.5, §4)
+//
+//  Nhận khối tổng ĐÃ phán của TotalsArbiter (V4-1) và:
+//   Pha 3 — GÁN MÓN: lắp ứng viên món (ItemCandidates.swift),
+//     gán TẤT CẢ món trong bể cho mỗi món phương án tiền tốt
+//     nhất theo |δ| tại chỗ (tinh thần §4.1: dòng trong khối
+//     món LÀ món cho tới khi số học nói khác), kiểm E1 chống
+//     lại subtotal đã trình. Lệch E1 → tối đa 3 nước sửa ĐÚNG
+//     BA LOẠI của §3.5 — (i) loại món yếu nhất, (ii) nhận một
+//     ứng viên ngoài cửa sổ (chỉ từ phía TRÊN cửa sổ: món in
+//     trước khối tổng; dòng dưới cửa sổ là vùng tender/tổng),
+//     (iii) nhận một ứng viên bị họ nhãn loại trừ trong cửa sổ
+//     — mỗi nước thử mọi ứng viên của loại nước đó theo thứ tự
+//     xác định và chốt nước tốt nhất; vẫn lệch → trình BẢN GÁN
+//     TỐT NHẤT đã thấy kèm δ1 định vị khối món + cờ. TUYỆT ĐỐI
+//     không subset-sum trên khối món (§3.2): phép gán là tuyến
+//     tính theo dòng + tối đa 3 nước sửa, mỗi nước ≤ cỡ bể lượt
+//     gán lại — bị chặn cứng, xác định, truy vết được.
+//     Luật "mỗi bước gán giảm |dư|" của §10.1(c) thuộc về tìm
+//     kiếm tập con của KHỐI TỔNG — áp nó vào tầng món thì chết
+//     ở L-R01 (món dương cộng dồn 15498 vượt subtotal trước
+//     khi 8 dòng INST SV −2950 kéo về; bằng chứng mô phỏng ở
+//     v4-2/sim + CHECKS.md — diễn giải đã khai, chờ Leader).
+//   Phân định liên khối (§3.2 pha 3 + AMD-V4-01): E1 CHỈ phân
+//     định khi khối tổng đang MƠ HỒ — đúng một nghiệm sau thang
+//     mà E1 khép được → chuyển khối tổng sang nghiệm đó
+//     (provenance closureUnique, vết "e1-discriminated"). Khối
+//     tổng đã CHỐT duy nhất thì E1 lệch → cờ ở khối món, KHÔNG
+//     lật tổng đã có bằng chứng thang (thứ tự pha của §3.2).
+//   Pha 4 — E3: đóng góp soldContribution (dữ liệu tiệm của
+//     v3: onePerLine đếm dòng dương; byQuantity cộng qty của
+//     món dương) so với neo ITEMS SOLD. Lệch → MỘT nước sửa
+//     của thiết kế: khoảng lệch đúng bằng qty của đúng một
+//     liên kết N@ chưa nối được → gắn nó vào món gần nhất.
+// =====================================================================
+
+struct ItemArbitration {
+    var items: [ParsedLineItem] = []
+    /// Provenance từng món (§3.7) — khoá "item[j]".
+    var provenance: [String: FieldProvenance] = [:]
+    /// Khối tổng CUỐI (sau phân định liên khối — có thể đã
+    /// chuyển nghiệm so với bản TotalsArbiter đưa vào).
+    var totals: TotalsArbitration = TotalsArbitration()
+    /// δ1 = Σmón − subtotal đã trình (nil khi thiếu một phía).
+    var deficitE1: Int? = nil
+    var sumItemsCents: Int? = nil
+    var e3Contribution: Int? = nil
+    var e3Mismatch: Bool = false
+    var switched: Bool = false
+    var trace: [String] = []
+}
+
+enum ItemsArbiter {
+
+    static let e1ToleranceCents = 2
+    static let linkWindow = ItemCandidateFactory.linkWindow
+
+    /// Một lượt gán: mọi món trong bể, theo thứ tự dòng, nhận
+    /// phương án tiền tối thiểu hoá |δ| tại chỗ (hoà → số
+    /// chính). Trả (bản gán theo dòng, Σ).
+    private static func assignPass(
+        pool: [ItemCandidate], target: Int
+    ) -> (chosen: [Int: Int], sigma: Int) {
+        var sigma = 0
+        var chosen: [Int: Int] = [:]
+        for it in pool.sorted(by: { $0.line < $1.line }) {
+            guard !it.amountOptions.isEmpty else { continue }
+            let primary = it.primaryCents
+            let best = it.amountOptions.min { a, b in
+                let ka = (abs(sigma + a - target), a == primary ? 0 : 1)
+                let kb = (abs(sigma + b - target), b == primary ? 0 : 1)
+                return ka < kb
+            }
+            if let best {
+                chosen[it.line] = best
+                sigma += best
+            }
+        }
+        return (chosen, sigma)
+    }
+
+    /// Thứ tự "yếu nhất trước" cho nước loại (§3.5 nước i):
+    /// mảnh không tên → biến thể hậu tố → chưa có liên kết đỡ →
+    /// dòng muộn.
+    private static func weakKey(_ it: ItemCandidate,
+                                chosen: [Int: Int]) -> (Int, Int, Int, Int) {
+        (it.kind == "fragment" ? 0 : 1,
+         chosen[it.line] != it.primaryCents ? 0 : 1,
+         (!it.qtyLocked && it.weightLb == nil) ? 0 : 1,
+         -it.line)
+    }
+
+    static func assign(lines: [OCRLine], totals: TotalsArbitration,
+                       soldAnchor: Int?,
+                       contribution: String) -> ItemArbitration {
+        var out = ItemArbitration()
+        var finalTotals = totals
+        let (_, rates, labels) = CandidateFactory.generate(lines: lines)
+        let classified = lines.enumerated().map { i, line in
+            ItemLineClassifier.classify(text: line.text,
+                                        family: labels[i].family)
+        }
+        let window = ItemLineClassifier.itemsWindow(
+            lines: lines, classified: classified,
+            totalsStart: totals.windowStart)
+        out.trace.append("items-window=\(window.start)..<\(window.end)")
+        let (items, links) = ItemCandidateFactory.buildItems(
+            lines: lines, classified: classified, window: window)
+
+        // Đích E1 + tập subtotal ứng viên cho phân định (§3.2).
+        let presentedSub = totals.subtotalCents
+        var candSubs = Set(totals.effectiveSolutions.map { $0.subtotalCents })
+        if let s = presentedSub { candSubs.insert(s) }
+        let target = presentedSub ?? candSubs.min()
+
+        // Bể ngoài cửa sổ (CHỈ phía trên — xem đầu mục) + bể bị
+        // họ loại trừ trong cửa sổ (hai nước sửa ii/iii).
+        var oowPool: [ItemCandidate] = []
+        var exclPool: [ItemCandidate] = []
+        for (i, c) in classified.enumerated() {
+            if i < window.start,
+               c.kind == .itemLine || c.kind == .fragment {
+                let it = ItemCandidate(line: i, name: "", kind: "oow")
+                it.amountOptions = c.amountOptions
+                it.primaryCents = c.primaryCents
+                it.primaryTokenText = c.primaryTokenText
+                oowPool.append(it)
+            }
+            if i >= window.start && i < window.end, c.kind == .excluded,
+               c.family == "TENDER" || c.family == "CHANGE",
+               let last = c.tokens.last {
+                let it = ItemCandidate(line: i, name: "", kind: "excl")
+                it.amountOptions = [last.cents]
+                it.primaryCents = last.cents
+                it.primaryTokenText = last.text
+                exclPool.append(it)
+            }
+        }
+
+        let pool = items.filter {
+            $0.kind != "broken" && ($0.kind != "hang" || $0.filled)
+        }
+        let broken = items.filter { $0.kind == "broken" }
+
+        var chosen: [Int: Int] = [:]
+        var sigma = 0
+        var finalPool = pool
+        if let target {
+            let first = assignPass(pool: pool, target: target)
+            chosen = first.chosen
+            sigma = first.sigma
+            var best = (abs: abs(sigma - target), chosen: chosen,
+                        sigma: sigma, pool: pool)
+            var deficit = sigma - target
+            var excludedLines = Set<Int>()
+            var statePool = pool
+            var moveTypes = ["exclude", "admitOOW", "admitExcluded"]
+            var mv = 0
+            while abs(deficit) > e1ToleranceCents && mv < 3
+                    && !moveTypes.isEmpty {
+                let mtype = moveTypes.removeFirst()
+                mv += 1
+                let basePool = statePool.filter {
+                    !excludedLines.contains($0.line)
+                }
+                var trials: [(absDef: Int, order: Int,
+                               chosen: [Int: Int], sigma: Int,
+                               pool: [ItemCandidate], desc: String)] = []
+                if mtype == "exclude" {
+                    let assigned = basePool.filter {
+                        chosen[$0.line] != nil && !$0.amountOptions.isEmpty
+                    }.sorted { weakKey($0, chosen: chosen)
+                               < weakKey($1, chosen: chosen) }
+                    for (order, cand) in assigned.enumerated() {
+                        let tp = basePool.filter { $0.line != cand.line }
+                        let r = assignPass(pool: tp, target: target)
+                        trials.append((abs(r.sigma - target), order,
+                                       r.chosen, r.sigma, tp,
+                                       "exclude line \(cand.line + 1)"))
+                    }
+                } else if mtype == "admitOOW" {
+                    let baseLines = Set(basePool.map { $0.line })
+                    let rest = oowPool.filter {
+                        !baseLines.contains($0.line)
+                    }
+                    for (order, cand) in rest.enumerated() {
+                        let tp = basePool + [cand]
+                        let r = assignPass(pool: tp, target: target)
+                        trials.append((abs(r.sigma - target), order,
+                                       r.chosen, r.sigma, tp,
+                                       "admitOOW line \(cand.line + 1)"))
+                    }
+                } else {
+                    let baseLines = Set(basePool.map { $0.line })
+                    let rest = exclPool.filter {
+                        !baseLines.contains($0.line)
+                    }
+                    for (order, cand) in rest.enumerated() {
+                        let tp = basePool + [cand]
+                        let r = assignPass(pool: tp, target: target)
+                        trials.append((abs(r.sigma - target), order,
+                                       r.chosen, r.sigma, tp,
+                                       "admitExcluded line \(cand.line + 1)"))
+                    }
+                }
+                if trials.isEmpty { continue }
+                trials.sort { ($0.absDef, $0.order) < ($1.absDef, $1.order) }
+                let t = trials[0]
+                out.trace.append("move\(mv):\(t.desc) (trials=\(trials.count))")
+                statePool = t.pool
+                if mtype == "exclude" {
+                    excludedLines.formUnion(
+                        Set(basePool.map { $0.line })
+                            .subtracting(t.pool.map { $0.line }))
+                }
+                chosen = t.chosen
+                sigma = t.sigma
+                deficit = sigma - target
+                if abs(deficit) < best.abs {
+                    best = (abs(deficit), chosen, sigma, t.pool)
+                }
+            }
+            if best.abs < abs(sigma - target) {
+                chosen = best.chosen
+                sigma = best.sigma
+                finalPool = best.pool
+            } else {
+                finalPool = statePool.filter {
+                    !excludedLines.contains($0.line)
+                }
+            }
+        } else {
+            for it in pool {
+                if let first = it.amountOptions.first {
+                    chosen[it.line] = first
+                    sigma += first
+                }
+            }
+            finalPool = pool
+        }
+
+        // Trình bày: món gãy luôn trình (tiền nil); món có tiền
+        // trình khi được gán. Σ/δ1 tính trên đúng bản trình này.
+        let presented = (finalPool + broken).sorted { $0.line < $1.line }
+            .filter { $0.kind == "broken" || chosen[$0.line] != nil }
+        let sumItems = presented.reduce(0) { $0 + (chosen[$1.line] ?? 0) }
+        out.sumItemsCents = sumItems
+        var deficitE1: Int? = nil
+        if let target {
+            deficitE1 = sumItems - target
+        }
+        out.deficitE1 = deficitE1
+        let closingSubs = candSubs.filter {
+            abs(sumItems - $0) <= e1ToleranceCents
+        }
+
+        // ---- Pha 4: E3 + một nước sửa (§3.2 pha 4) ----
+        func contributionOf(_ pres: [ItemCandidate]) -> Int {
+            if contribution == "onePerLine" {
+                return pres.filter { (chosen[$0.line] ?? 0) > 0 }.count
+            }
+            return pres.reduce(0) {
+                $0 + ((chosen[$1.line] ?? 0) > 0 ? $1.qty : 0)
+            }
+        }
+        var e3 = contributionOf(presented)
+        var e3Mismatch = false
+        if let sold = soldAnchor, e3 != sold {
+            let gap = sold - e3
+            let unlinked = links.filter {
+                $0.kind == "qty" && $0.state == "unlinked" && $0.qty == gap
+            }
+            var fixed = false
+            if unlinked.count == 1, gap > 0 {
+                let lk = unlinked[0]
+                let cands = presented.filter {
+                    chosen[$0.line] != nil && !$0.qtyLocked
+                        && abs($0.line - lk.line) <= linkWindow
+                }
+                if let tgt = cands.min(by: { a, b in
+                    let da = abs(a.line - lk.line)
+                    let db = abs(b.line - lk.line)
+                    if da != db { return da < db }
+                    let pa = a.line < lk.line ? 0 : 1
+                    let pb = b.line < lk.line ? 0 : 1
+                    if pa != pb { return pa < pb }
+                    return a.line < b.line
+                }) {
+                    tgt.qty = lk.qty
+                    tgt.qtyLocked = true
+                    e3 = contributionOf(presented)
+                    fixed = e3 == sold
+                    if fixed {
+                        out.trace.append("e3Repair: qty \(lk.qty) "
+                            + "gắn dòng \(tgt.line + 1)")
+                    }
+                }
+            }
+            e3Mismatch = !fixed
+        }
+        out.e3Contribution = e3
+        out.e3Mismatch = e3Mismatch
+
+        // ---- Phân định liên khối: CHỈ khi mơ hồ (§3.2 pha 3) ----
+        if finalTotals.status == "ambiguous", !closingSubs.isEmpty {
+            var seen = Set<String>()
+            var fulls: [TotalsSolutionView] = []
+            for sol in finalTotals.effectiveSolutions
+            where closingSubs.contains(sol.subtotalCents) {
+                let key = "\(sol.subtotalCents)|"
+                    + sol.taxTokens.map { $0.cents }.sorted()
+                        .map(String.init).joined(separator: ",")
+                    + "|\(sol.totalCents)"
+                if !seen.contains(key) {
+                    seen.insert(key)
+                    fulls.append(sol)
+                }
+            }
+            if fulls.count == 1 {
+                let sol = fulls[0]
+                finalTotals.status = "closed"
+                finalTotals.subtotalCents = sol.subtotalCents
+                finalTotals.taxes = TotalsArbiter.buildTaxLines(
+                    tokens: sol.taxTokens, labels: labels, rates: rates)
+                finalTotals.totalCents = sol.totalCents
+                finalTotals.totalLineConfidence =
+                    lines[sol.totalToken.lineIndex].confidence
+                var prov: [String: FieldProvenance] = [
+                    "subtotal": FieldProvenance(kind: "read",
+                                                detail: "closureUnique"),
+                    "total": FieldProvenance(kind: "read",
+                                             detail: "closureUnique"),
+                ]
+                for (i, _) in finalTotals.taxes.enumerated() {
+                    prov["tax[\(i)]"] = FieldProvenance(
+                        kind: "read", detail: "closureUnique")
+                }
+                finalTotals.provenance = prov
+                finalTotals.disputedSolutions = []
+                out.switched = true
+                out.trace.append("e1-discriminated: \(sol.describe)")
+            }
+        }
+
+        // δ2 + gợi ý vùng trên khối tổng CUỐI.
+        if let s = finalTotals.subtotalCents,
+           let t = finalTotals.totalCents,
+           let taxSum = SafeMoney.sumCents(
+               finalTotals.taxes.map { $0.amountCents }),
+           let st = SafeMoney.checkedAdd(s, taxSum) {
+            finalTotals.deficitE2 = SafeMoney.checkedSubtract(st, t)
+        }
+        finalTotals.deficitE1 = deficitE1
+        if finalTotals.status == "closed",
+           let d = deficitE1, abs(d) > e1ToleranceCents {
+            finalTotals.regionHint = "items-block/e1-deficit:\(d)"
+        }
+        out.totals = finalTotals
+
+        // ---- Vật hoá món + provenance ----
+        let e1Closed = target != nil && deficitE1 != nil
+            && abs(deficitE1!) <= e1ToleranceCents
+        for (j, it) in presented.enumerated() {
+            let amount = it.kind == "broken" ? nil : chosen[it.line]
+            out.items.append(ParsedLineItem(
+                name: it.name, qty: it.qty,
+                unitPriceCents: it.unitPriceCents,
+                amountCents: amount,
+                taxFlag: it.taxFlag, itemCode: it.itemCode,
+                weightLb: it.weightLb,
+                weightUnitCents: it.weightUnitCents,
+                lineIndex: it.line))
+            let detail: String
+            if it.kind == "broken" {
+                detail = "brokenMoney"
+            } else if let amount, amount != it.primaryCents {
+                detail = "suffixVariantOf:\(it.primaryTokenText)"
+            } else if e1Closed {
+                detail = "closureUnique"
+            } else {
+                detail = "hintOnlyUnclosed"
+            }
+            out.provenance["item[\(j)]"] = FieldProvenance(
+                kind: "read", detail: detail)
+        }
+        out.trace.append("items=\(out.items.count) sumItems=\(sumItems) "
+            + "deficitE1=\(deficitE1.map(String.init) ?? "nil") "
+            + "e3=\(e3) e3Mismatch=\(e3Mismatch)")
+        return out
     }
 }
