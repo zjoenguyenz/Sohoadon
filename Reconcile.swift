@@ -188,6 +188,15 @@ private let reconcileLetterDigit: [String: String] = [
     "G": "6", "B": "8", "I": "1", "L": "1"
 ]
 
+// GÓI V4-4 / D-V4-3: toàn bộ ĐỘNG CƠ sửa sổ của v3 dưới đây (DFS,
+// ReceiptParser.reconcile/parseAndReconcile + ReconcileSession) KHÔNG
+// biên dịch vào bản giao khi project.yml của app khai
+// GLKEEPER_V4_ONLY. Các KIỂU ở trên (ReconcileReport/Fix/RegionHint,
+// ReOCRService, ReconcileConstants) VẪN biên dịch vì ReadOutcome, hồ
+// sơ chẩn đoán và PendingDraft DTO dùng chúng. Harness không khai
+// điều kiện này nên vẫn giữ nguyên đường đối chứng v3.
+#if !GLKEEPER_V4_ONLY
+
 // MARK: P2-3 — DFS chọn tập con có ràng buộc (port của Search trong mirror)
 //
 // Tìm tổ hợp ứng viên (mỗi món tối đa 1 sửa) cho tổng delta cần đạt,
@@ -1043,3 +1052,5 @@ final class ReconcileSession {
         }
     }
 }
+
+#endif // !GLKEEPER_V4_ONLY — hết động cơ sửa sổ v3 (V4-4)

@@ -332,6 +332,15 @@ enum DomainCorrector {
 
 enum ReceiptParser {
 
+    // V4-4 (D-V4-3 + DESIGN-V4 §8.2): đường đọc v3 — parse()
+    // ở ngay dưới + parseSams/parseGeneric và toàn bộ helper
+    // chỉ phục vụ chúng — bị biên dịch LOẠI khỏi bản giao
+    // (target app khai GLKEEPER_V4_ONLY trong project.yml).
+    // Nguồn giữ nguyên một bản duy nhất: bench + harness
+    // không khai điều kiện nên vẫn biên dịch đủ đường v3 làm
+    // làn đối chứng đo (§0/§8.1). Các vùng #if trong file
+    // này đều mang cùng điều kiện và cùng lý do.
+#if !GLKEEPER_V4_ONLY
     static func parse(lines input: [OCRLine], boxes: [CGRect?]? = nil) -> ParseResult {
         let lines = input
             .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces), confidence: $0.confidence) }
@@ -386,8 +395,9 @@ enum ReceiptParser {
         result.warnings = validate(result)
         return result
     }
+#endif
 
-    // MARK: - CORE-V4 (V4-1 + V4-2 + V4-3): ứng viên + trọng tài
+    // MARK: - CORE-V4 (V4-1 + V4-2 + V4-3 + V4-4): ứng viên + trọng tài
     //
     // parseV4 là ĐƯỜNG ĐỌC DUY NHẤT VỀ CẤU TRÚC từ gói V4-3
     // (DESIGN-V4 §5/§9): KHÔNG gọi parse() của v3, KHÔNG đọc
@@ -402,9 +412,11 @@ enum ReceiptParser {
     // dạng DỮ LIỆU: tên + printSemantics (soldContribution) +
     // hints của vendors.json (biến thể nhãn + hình dạng mã —
     // chấm điểm, không phải cổng; xem VendorData.Hints).
-    // parse() của v3 GIỮ NGUYÊN làm đối chứng đo ở cổng luồng;
-    // app vẫn mặc định v3, tem giữ core-v3-2 (§8.4: chuyển mặc
-    // định + tem core-v4-1 là việc của gói V4-4).
+    // parse() của v3 GIỮ NGUYÊN làm đối chứng đo ở cổng luồng
+    // (bench/harness biên dịch không điều kiện); từ gói V4-4
+    // app mặc định v4 qua ReadPipeline, tem nâng core-v4-1,
+    // và đường v3 bị loại khỏi bản giao bằng điều kiện biên
+    // dịch (xem chú thích ở parse() + project.yml).
     static func parseV4(lines input: [OCRLine], boxes: [CGRect?]? = nil) -> ParseResult {
         // Cùng phép chuẩn hoá dòng mà parse() áp ở đầu vào —
         // lineIndex phải khớp giữa mọi tầng của đường v4.
@@ -551,16 +563,20 @@ enum ReceiptParser {
     static let recoveredLineConfidence: Double = 0.5
 
     /// Đọc lại một hoá đơn ĐÃ LƯU: tách văn bản thô đã lưu theo "\n"
-    /// thành [OCRLine] rồi gọi đúng parse(lines:) hiện hành — cùng
-    /// một bộ đọc như lần quét mới, không fork logic. Dòng rỗng/xen
-    /// khoảng trắng được parse(lines:) tự cắt/lọc như đường quét.
+    /// thành [OCRLine] rồi gọi đúng bộ đọc hiện hành — cùng một
+    /// bộ đọc như lần quét mới, không fork logic. Dòng rỗng/xen
+    /// khoảng trắng được bộ đọc tự cắt/lọc như đường quét.
+    /// V4-4 (§8.5 — Điều 2 B2): bộ đọc hiện hành là parseV4 —
+    /// đường đọc lại này là nơi bản sửa lõi áp lên DỮ LIỆU ĐÃ
+    /// LƯU của anh (nút "Đọc lại" ở màn Chi Tiết).
     static func reparse(storedText: String) -> ParseResult {
         let lines = storedText
             .split(separator: "\n")
             .map { OCRLine(text: String($0), confidence: recoveredLineConfidence) }
-        return parse(lines: lines)
+        return parseV4(lines: lines)
     }
 
+#if !GLKEEPER_V4_ONLY
     // MARK: - SAM'S CLUB (cổng từ prototype v0.1 đã đạt Mẫu 001)
 
     private static func parseSams(lines: [OCRLine]) -> ParseResult {
@@ -1310,6 +1326,8 @@ enum ReceiptParser {
         return (qty, unit, amount, m[5])
     }
 
+#endif
+
     /// Nhãn số món đọc TRỰC TIẾP từ bill ở đường generic (bản gốc chỉ
     /// đọc các nhãn này ở đường Sam's nên hoá đơn generic luôn mất
     /// itemsSold — cổng E3 không kiểm được). nil khi không nhãn nào
@@ -1332,6 +1350,7 @@ enum ReceiptParser {
         return nil
     }
 
+#if !GLKEEPER_V4_ONLY
     /// Kiểm nhãn số món trên ĐÚNG một dòng (cho vòng cùng-dòng bỏ qua
     /// dòng nhãn — tương đương findItemsSoldGeneric trên danh sách
     /// 1 dòng, nơi luật dòng-kế không áp dụng được).
@@ -1674,6 +1693,7 @@ enum ReceiptParser {
         comps.minute = minute
         return Calendar.current.date(from: comps)
     }
+#endif
 
     // MARK: - WP5: Nhận diện tiệm 3 nấc — NAY LÀ DỮ LIỆU (PHA 1)
     //
@@ -1742,6 +1762,7 @@ enum ReceiptParser {
         return (address, phone, storeNumber)
     }
 
+#if !GLKEEPER_V4_ONLY
     // MARK: - Thẻ: CHỈ từ dòng có ký tự che (luật toàn cục số 2)
 
     // PHA 3: trả kèm (confidence của dòng nguồn, contaminated).
@@ -1944,6 +1965,8 @@ enum ReceiptParser {
 
     // MARK: - Đối chiếu chéo (luật toàn cục số 1 — chỉ gắn cờ, không sửa số)
 
+#endif
+
     /// PHA 4 (điểm nối, khuyết P4-D4): định dạng tiền cho CHUỖI
     /// CẢNH BÁO nội bộ của validate(). Trước Pha 4 hai điểm gọi
     /// dưới đây dùng formatMoney(cents:) của Models.swift (tầng
@@ -2072,6 +2095,7 @@ enum ReceiptParser {
     // MARK: - Tiện ích regex / tiền
 
     /// Số tiền ở CUỐI một phần chữ: "POM TISSUE 2.00-T" -> (name: "POM TISSUE", -200, flag "T")
+#if !GLKEEPER_V4_ONLY
     static func trailingAmount(in text: String) -> (name: String, cents: Int, flag: String?)? {
         guard let ns = matchWithRange(text, pattern: #"\s(\d[\d,]*\.\d{2})(-)?\s*([YT])?$"#),
               let cents = SafeMoney.parseCents(ns.groups[0] ?? "", negative: ns.groups[1] != nil) else { return nil }
@@ -2327,6 +2351,8 @@ enum ReceiptParser {
         return (lb, unit)
     }
 
+#endif
+
     private static func regex(_ pattern: String) -> NSRegularExpression? {
         return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }
@@ -2351,6 +2377,7 @@ enum ReceiptParser {
     }
 
     /// Nhóm bắt đầu tiên — dùng khi cần tiền tố sau pattern (vd "INST SV ...").
+#if !GLKEEPER_V4_ONLY
     private static func matchPrefix(_ text: String, pattern: String) -> String? {
         guard let groups = matchGroups(text, pattern: pattern), let first = groups.first else { return nil }
         return first
@@ -2375,6 +2402,7 @@ enum ReceiptParser {
         }
         return (groups, whole.lowerBound)
     }
+#endif
 }
 
 // MARK: - P2-3 — Lớp trọng tài ĐÃ TÁCH SANG Reconcile.swift (Pha 3)

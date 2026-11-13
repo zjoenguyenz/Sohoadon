@@ -77,10 +77,14 @@ struct ScanView: View {
     /// WP3: hàng chờ nạp NHIỀU file một lúc (Master Plan WP3) — xử lý lần
     /// lượt từng file, mỗi file một màn Review; đóng Review thì nạp tiếp.
     @State private var importQueue: [URL] = []
-    /// V3 (Pha 4): cổng chất lượng lúc chụp — MỘT instance cho cả phiên
-    /// (trạng thái fail-safe đếm lần từ chối liên tiếp nằm trong nó;
-    /// quyết định chặn mặc định TẮT, xem QualityThresholds của Pha 2).
-    @State private var qualityGate = QualityGate()
+    /// GÓI V4-4 (D-V4-2, sửa A2-05): cổng chất lượng theo TỪNG TỜ —
+    /// mỗi lần đọc tạo một QualityGate MỚI (xem các điểm gọi
+    /// runRead), không còn instance sống cho cả phiên. Tờ bị cổng
+    /// chặn (.block) được giữ ở hai trạng thái riêng dưới đây và
+    /// hiện khung quyết định riêng trong body: không mở Review
+    /// thầm, không chụp snapshot P-DRAFT, không biến mất.
+    @State private var blockedDraft: ScanDraft? = nil
+    @State private var blockedQuality: QualityOutcome? = nil
 
     private var cameraSupported: Bool {
         VNDocumentCameraViewController.isSupported
@@ -169,6 +173,54 @@ struct ScanView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                }
+                // GÓI V4-4 (D-V4-2): trạng thái giao diện RIÊNG của
+                // tờ bị cổng chất lượng chặn. Tờ nằm yên ở đây cho
+                // tới khi anh chọn một trong hai hành động — hàng
+                // chờ nạp cũng đứng chờ (processNextImportedFile
+                // canh blockedDraft), không tờ nào chen qua mặt.
+                if blockedDraft != nil, let blockedQuality {
+                    VStack(spacing: 12) {
+                        Label("Tờ này bị cổng chất lượng chặn",
+                              systemImage: "exclamationmark.triangle.fill")
+                            .font(.headline)
+                            .foregroundStyle(.orange)
+                        Text("Ảnh \(qualityIssueText(blockedQuality)) — app chưa mở tờ này để kiểm hay lưu. Ảnh gốc của tờ vẫn đã lưu trong máy. Anh chụp / chọn lại rõ hơn, hoặc vẫn đọc tờ này nếu không chụp lại được.")
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                        HStack(spacing: 12) {
+                            Button {
+                                blockedDraft = nil
+                                blockedQuality = nil
+                                statusText = nil
+                                errorText = nil
+                                processNextImportedFile()
+                            } label: {
+                                Label("Chụp / chọn lại", systemImage: "camera.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+
+                            Button {
+                                guard let d = blockedDraft,
+                                      let q = blockedQuality else { return }
+                                blockedDraft = nil
+                                blockedQuality = nil
+                                presentDraft(d, note: blockedNote(q))
+                            } label: {
+                                Label("Vẫn đọc tờ này", systemImage: "doc.text.magnifyingglass")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                            .tint(DS.brand)
+                        }
+                    }
+                    .padding()
+                    .background(Color.orange.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal)
                 }
                 Spacer()
                 Text("Đọc ngay trên máy — ảnh hoá đơn không rời khỏi iPhone.")
@@ -324,6 +376,12 @@ struct ScanView: View {
     /// dở dang thì xoá phần đã lưu và báo lỗi, không đọc nửa vời),
     /// rồi đọc đa trang qua pipeline (nối chữ ở tầng ráp dòng).
     private func process(scan: VNDocumentCameraScan) {
+        // Tờ bị chặn chưa được quyết định thì không đọc tờ mới
+        // chen qua (trạng thái bị chặn là của riêng tờ đó).
+        guard blockedDraft == nil else {
+            statusText = "Anh quyết định tờ đang bị chặn trước, rồi mới đọc tờ tiếp theo giúp."
+            return
+        }
         var names: [String] = []
         var images: [UIImage] = []
         for index in 0..<scan.pageCount {
@@ -348,7 +406,7 @@ struct ScanView: View {
                     image: firstCG,
                     pageImages: pageCG,
                     diagnosticsDirectory: ImageStore.directory,
-                    qualityGate: qualityGate),
+                    qualityGate: QualityGate()),
                 sourceType: .camera,
                 originalFileNames: names)
     }
@@ -359,6 +417,11 @@ struct ScanView: View {
                          sourceFileName: String? = nil,
                          originalFileNames: [String] = [],
                          pdfRenderScale: Double? = nil) {
+        guard blockedDraft == nil else {
+            statusText = "Anh quyết định tờ đang bị chặn trước, rồi mới đọc tờ tiếp theo giúp."
+            processNextImportedFile()
+            return
+        }
         guard let fileName = ImageStore.saveJPEG(image) else {
             errorText = "Không lưu được ảnh gốc vào máy — anh kiểm tra dung lượng trống giúp."
             processNextImportedFile()
@@ -375,7 +438,7 @@ struct ScanView: View {
                     image: cg,
                     pdfRenderScale: pdfRenderScale,
                     diagnosticsDirectory: ImageStore.directory,
-                    qualityGate: qualityGate),
+                    qualityGate: QualityGate()),
                 sourceType: source,
                 sourceFileName: sourceFileName,
                 originalFileNames: originalFileNames)
@@ -393,9 +456,10 @@ struct ScanView: View {
         isProcessing = true
         statusText = "Đang đọc hoá đơn…"
         errorText = nil
-        let gate = qualityGate
         var request = request
-        if request.qualityGate == nil { request.qualityGate = gate }
+        // GÓI V4-4 (D-V4-2): cổng MỚI cho riêng lần đọc này khi
+        // tầng gọi chưa cấp — không bao giờ dùng cổng của tờ khác.
+        if request.qualityGate == nil { request.qualityGate = QualityGate() }
         DispatchQueue.global(qos: .userInitiated).async {
             let outcome = ReceiptReader.read(request)
             DispatchQueue.main.async {
@@ -410,7 +474,6 @@ struct ScanView: View {
                     processNextImportedFile()
                     return
                 }
-                statusText = qualityNote(outcome.qualityOutcome)
                 let newDraft = ScanDraft(
                     result: outcome.result,
                     imageFileName: request.imageFileName,
@@ -422,27 +485,45 @@ struct ScanView: View {
                     reconcileReport: outcome.report,
                     diagnosticsID: outcome.diagnosticsID,
                     diagnosticsWriteFailed: outcome.diagnosticsWriteFailed)
-                draft = newDraft
-                // P-DRAFT (L-2026-11-13-14): chụp bản nháp xuống
-                // đĩa NGAY khi nó ra đời, TRƯỚC khi sheet Kiểm Lại
-                // hiện — từ khoảnh khắc này, việc dở của anh sống
-                // trên đĩa chứ không chỉ trong @State. Ghi hỏng
-                // (hết dung lượng...) thì nói thật bằng dòng trạng
-                // thái để anh biết mà lưu sớm, không lặng im quay
-                // về chế độ dễ mất như trước.
-                if !PendingDraftStore.save(PendingDraftSnapshot(draft: newDraft)) {
-                    let note = "Chưa ghi được bản nháp phòng hờ xuống máy — anh lưu sớm giúp, đừng rời app lâu kẻo mất bản đang kiểm."
-                    statusText = statusText.map { $0 + " " + note } ?? note
+                // GÓI V4-4 (D-V4-2): cổng phán .block => tờ KHÔNG
+                // vào Review và KHÔNG chụp snapshot P-DRAFT; nó
+                // nằm ở trạng thái bị chặn riêng cho tới khi anh
+                // quyết định (xem khung cảnh báo trong body).
+                if outcome.qualityOutcome?.decision == .block {
+                    blockedDraft = newDraft
+                    blockedQuality = outcome.qualityOutcome
+                    statusText = "Một tờ đã bị cổng chất lượng chặn — anh quyết định ở khung cảnh báo bên dưới giúp."
+                    return
                 }
+                presentDraft(newDraft,
+                             note: qualityNote(outcome.qualityOutcome))
             }
         }
     }
 
-    /// Dòng nhắc chất lượng lúc chụp (§7 Pha 4 — UI tối thiểu: chỉ
-    /// state + dòng nhắc, cổng chặn đang TẮT nên không bao giờ
-    /// chặn lượt quét; anh vẫn kiểm lại số ở màn Review).
-    private func qualityNote(_ outcome: QualityOutcome?) -> String? {
-        guard let outcome, outcome.decision == .warn else { return nil }
+    /// Trình MỘT bản nháp lên màn Kiểm Lại + chụp snapshot
+    /// P-DRAFT — điểm hạ cánh DUY NHẤT của cả đường đọc thường
+    /// lẫn đường "Vẫn đọc tờ này" từ trạng thái bị chặn, để hợp
+    /// đồng chống mất bản nháp (L-2026-11-13-14) chỉ có một nơi
+    /// thi hành.
+    private func presentDraft(_ newDraft: ScanDraft, note: String?) {
+        statusText = note
+        draft = newDraft
+        // P-DRAFT (L-2026-11-13-14): chụp bản nháp xuống đĩa NGAY
+        // khi nó được trình, TRƯỚC khi sheet Kiểm Lại hiện — từ
+        // khoảnh khắc này, việc dở của anh sống trên đĩa chứ
+        // không chỉ trong @State. Ghi hỏng (hết dung lượng...)
+        // thì nói thật bằng dòng trạng thái để anh biết mà lưu
+        // sớm, không lặng im quay về chế độ dễ mất như trước.
+        if !PendingDraftStore.save(PendingDraftSnapshot(draft: newDraft)) {
+            let warning = "Chưa ghi được bản nháp phòng hờ xuống máy — anh lưu sớm giúp, đừng rời app lâu kẻo mất bản đang kiểm."
+            statusText = statusText.map { $0 + " " + warning } ?? warning
+        }
+    }
+
+    /// Chữ mô tả các vấn đề chất lượng đã phát hiện — dùng chung
+    /// cho dòng nhắc .warn, khung .block và dòng ghi đè.
+    private func qualityIssueText(_ outcome: QualityOutcome) -> String {
         var issues: [String] = []
         for detected in outcome.detected {
             switch detected {
@@ -452,8 +533,22 @@ struct ScanView: View {
             default: issues.append(detected)
             }
         }
-        if issues.isEmpty { return nil }
-        return "Ảnh \(issues.joined(separator: ", ")) — anh kiểm tra kỹ các số ở màn sau giúp."
+        return issues.isEmpty ? "chất lượng chưa đạt"
+            : issues.joined(separator: ", ")
+    }
+
+    /// Dòng nhắc chất lượng lúc chụp cho quyết định .warn.
+    /// Quyết định .block KHÔNG đi qua đây — nó có trạng thái
+    /// giao diện riêng (GÓI V4-4 / D-V4-2).
+    private func qualityNote(_ outcome: QualityOutcome?) -> String? {
+        guard let outcome, outcome.decision == .warn else { return nil }
+        return "Ảnh \(qualityIssueText(outcome)) — anh kiểm tra kỹ các số ở màn sau giúp."
+    }
+
+    /// Dòng trạng thái khi anh bấm "Vẫn đọc tờ này" ở khung bị
+    /// chặn: nói rõ đây là đọc theo quyết định của anh.
+    private func blockedNote(_ outcome: QualityOutcome) -> String {
+        "Đã đọc tờ bị chặn theo yêu cầu của anh (ảnh \(qualityIssueText(outcome))) — anh kiểm tra kỹ các số ở màn sau giúp."
     }
 
     // MARK: - WP3: nạp file từ Files (CODE-AUDIT F1)
@@ -463,7 +558,7 @@ struct ScanView: View {
     /// fileImporter, lúc đóng màn Review (onDismiss), và các nhánh lỗi của
     /// đường nạp file (để một file hỏng không chặn cả lô).
     private func processNextImportedFile() {
-        guard draft == nil, !isProcessing, !importQueue.isEmpty else { return }
+        guard draft == nil, blockedDraft == nil, !isProcessing, !importQueue.isEmpty else { return }
         let url = importQueue.removeFirst()
         processImportedFile(url: url)
     }
@@ -528,7 +623,7 @@ struct ScanView: View {
                         byteSize: data.count,
                         textLines: lines,
                         diagnosticsDirectory: ImageStore.directory,
-                        qualityGate: qualityGate),
+                        qualityGate: QualityGate()),
                     sourceType: .pdfImport,
                     sourceFileName: sourceFileName,
                     originalFileNames: [storedPDFName],

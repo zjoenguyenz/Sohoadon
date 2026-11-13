@@ -51,6 +51,16 @@ import UIKit
 import CoreImage
 import Vision
 
+/// GÓI V4-4 (DESIGN-V4 §8.2): lựa chọn lõi ở MỨC MÃ — tham số có
+/// mặc định .v4 cho app, BenchShell và harness; KHÔNG có nút chọn
+/// trên giao diện và KHÔNG đọc từ UserDefaults. Đường .v3 chỉ còn
+/// là làn đối chứng của harness; bản giao khai GLKEEPER_V4_ONLY
+/// trong project.yml nên nhánh .v3 bị loại khỏi nhị phân app.
+enum ReadCore {
+    case v3
+    case v4
+}
+
 /// Kết quả một lần chạy đường đọc F3->F4->F5(+ROI).
 struct ReadPipelineOutcome {
     /// Kết quả cuối (F4 + các sửa F5 đã áp + vòng ROI đã nhận).
@@ -116,7 +126,8 @@ enum ReadPipeline {
                     lineBoxes: [CGRect?]? = nil,
                     qualityMap: [QualityMapEntry] = [],
                     reReader: RegionReReader? = nil,
-                    mergeRegionLines: RegionLineMerger = ReadPipeline.defaultMerge)
+                    mergeRegionLines: RegionLineMerger = ReadPipeline.defaultMerge,
+                    core: ReadCore = .v4)
         -> ReadPipelineOutcome {
         let started = Date()
         let lines = rawLines
@@ -124,6 +135,17 @@ enum ReadPipeline {
                            confidence: $0.confidence) }
             .filter { !$0.text.isEmpty }
 
+        // GÓI V4-4: đường mặc định của app là trọng tài v4
+        // (parseV4 tự chạy trọn pha 0–4, ROI được nuôi bằng
+        // regionHints tổng hợp từ trạng thái + thâm hụt của nó).
+        if core == .v4 {
+            return runArbiter(lines: lines, lineBoxes: lineBoxes,
+                              qualityMap: qualityMap, reReader: reReader,
+                              mergeRegionLines: mergeRegionLines,
+                              started: started)
+        }
+
+#if !GLKEEPER_V4_ONLY
         // ── F4 -> F5: session tự chạy reconcile lượt nền ──────
         let f4 = ReceiptParser.parse(lines: lines)
         let session = ReconcileSession(result: f4, lines: lines, lineBoxes: lineBoxes)
@@ -231,6 +253,343 @@ enum ReadPipeline {
                                    reconcileSnapshot: snapshot,
                                    roiRounds: roiRounds,
                                    usedROI: lastAcceptedRound > 0)
+#else
+        // Bản giao (GLKEEPER_V4_ONLY): nhánh .v3 ở trên bị loại
+        // khỏi nhị phân; mọi lời gọi đều hạ xuống đường trọng tài.
+        return runArbiter(lines: lines, lineBoxes: lineBoxes,
+                          qualityMap: qualityMap, reReader: reReader,
+                          mergeRegionLines: mergeRegionLines,
+                          started: started)
+#endif
+    }
+
+    // MARK: - Đường trọng tài v4 (GÓI V4-4, DESIGN-V4 §1/§3.5)
+
+    /// Trần vòng ROI của đường v4: cùng giá trị với
+    /// ReconcileSession.maxRounds của đường đối chứng v3. Hằng
+    /// riêng vì ReconcileSession bị loại khỏi bản giao (V4-4 C).
+    private static let arbiterMaxROIRounds = 2
+
+    /// Chạy parseV4 rồi nuôi vòng ROI bằng regionHints TỔNG HỢP
+    /// từ trạng thái trọng tài (động cơ sửa sổ v3 KHÔNG chạy chồng
+    /// lên kết quả v4 — không trọng tài hai lần). Mỗi vòng được
+    /// chấp nhận đều parse lại từ pha 0 trên dòng đã gộp (§3.5).
+    private static func runArbiter(lines: [OCRLine],
+                                   lineBoxes: [CGRect?]?,
+                                   qualityMap: [QualityMapEntry],
+                                   reReader: RegionReReader?,
+                                   mergeRegionLines: RegionLineMerger,
+                                   started: Date) -> ReadPipelineOutcome {
+        let f4 = ReceiptParser.parseV4(lines: lines, boxes: lineBoxes)
+        var currentResult = f4
+        var currentReport = arbiterReport(for: f4, lines: lines,
+                                          lineBoxes: lineBoxes)
+        var roiRounds: [DiagROIRound] = []
+        var lastAcceptedRound = 0
+
+        if let reReader = reReader {
+            var round = 0
+            while round < arbiterMaxROIRounds {
+                // Trần mềm 4 giây: quá trần => không mở vòng mới.
+                if Date().timeIntervalSince(started)
+                    > RegionReReader.softDeadlineSeconds { break }
+                let hints = Array(currentReport.regionHints.prefix(
+                    RegionReReader.maxRegionsPerRound))
+                if hints.isEmpty { break }
+                let regions = RegionReReader.targetRegions(
+                    hints: hints, lineBoxes: lineBoxes,
+                    qualityMap: qualityMap,
+                    maxRegions: RegionReReader.maxRegionsPerRound)
+                if regions.isEmpty { break }
+                var replacements: [(hint: ReconcileRegionHint, lines: [OCRLine])] = []
+                var added = 0
+                for region in regions {
+                    guard let firstHintIdx = region.hintIndices.first
+                    else { continue }
+                    let hint = hints[firstHintIdx]
+                    let fresh = reReader.recognizeRegion(hint, upscale: 2.0)
+                    if !fresh.isEmpty {
+                        replacements.append((hint, fresh))
+                        added += fresh.count
+                    }
+                }
+                if replacements.isEmpty { break }
+                let before = arbiterStateString(currentReport, currentResult)
+                let merged = mergeRegionLines(lines, replacements)
+                // §3.5: trọng tài chạy lại từ pha 0 trên dòng mới.
+                let reparsed = ReceiptParser.parseV4(lines: merged)
+                let candidateReport = arbiterReport(
+                    for: reparsed, lines: merged, lineBoxes: lineBoxes)
+                round += 1
+                let accepted = arbiterIsBetter(
+                    newResult: reparsed, newReport: candidateReport,
+                    oldResult: currentResult, oldReport: currentReport)
+                if accepted {
+                    currentResult = reparsed
+                    currentReport = candidateReport
+                    lastAcceptedRound = round
+                }
+                roiRounds.append(DiagROIRound(
+                    round: round,
+                    hints: regions.flatMap { $0.hintIndices }
+                        .map { diagHint(hints[$0]) },
+                    fragmentsAdded: added,
+                    stateBefore: before,
+                    stateAfter: arbiterStateString(currentReport,
+                                                   currentResult),
+                    accepted: accepted))
+                if !accepted { break }
+            }
+        }
+
+        // Provenance ROI: trường ĐỔI so với F4 của v4 => giá trị
+        // đến từ vòng đọc lại (bằng chứng tại chỗ mới). Đường v4
+        // không có fix của động cơ v3 nên fixes luôn rỗng.
+        var provenance: [String: FieldProvenance] = [:]
+        if lastAcceptedRound > 0 {
+            let n = min(f4.items.count, currentResult.items.count)
+            for i in 0..<n {
+                let a = f4.items[i], b = currentResult.items[i]
+                if a.amountCents != b.amountCents {
+                    provenance["items[\(i)].amount"] =
+                        .roiRecovered(round: lastAcceptedRound)
+                }
+                if a.qty != b.qty {
+                    provenance["items[\(i)].qty"] =
+                        .roiRecovered(round: lastAcceptedRound)
+                }
+                if a.unitPriceCents != b.unitPriceCents {
+                    provenance["items[\(i)].unitPrice"] =
+                        .roiRecovered(round: lastAcceptedRound)
+                }
+            }
+            if f4.subtotalCents != currentResult.subtotalCents {
+                provenance["subtotal"] =
+                    .roiRecovered(round: lastAcceptedRound)
+            }
+            if f4.totalCents != currentResult.totalCents {
+                provenance["total"] =
+                    .roiRecovered(round: lastAcceptedRound)
+            }
+            if f4.taxes.map({ $0.amountCents })
+                != currentResult.taxes.map({ $0.amountCents }) {
+                provenance["taxes"] =
+                    .roiRecovered(round: lastAcceptedRound)
+            }
+        }
+
+        let snapshot = DiagReconcileSnapshot(
+            status: snapshotStatus(currentReport.status),
+            fixes: [],
+            suggestions: [],
+            regionHints: currentReport.regionHints.map { diagHint($0) })
+
+        return ReadPipelineOutcome(result: currentResult,
+                                   parsedBeforeReconcile: f4,
+                                   report: currentReport,
+                                   provenance: provenance,
+                                   reconcileSnapshot: snapshot,
+                                   roiRounds: roiRounds,
+                                   usedROI: lastAcceptedRound > 0)
+    }
+
+    /// Báo cáo tương thích ReconcileReport TỔNG HỢP từ trạng thái
+    /// trọng tài v4 (fixes/suggestions của động cơ v3 để rỗng;
+    /// các nghiệm tranh chấp nằm ở notes qua arbiterDisputed).
+    private static func arbiterReport(for result: ParseResult,
+                                      lines: [OCRLine],
+                                      lineBoxes: [CGRect?]?)
+        -> ReconcileReport {
+        var report = ReconcileReport()
+        switch result.arbiterStatus {
+        case "closed":
+            report.status = .ok
+            report.solutionCount = 1
+            report.requiresReview = !result.warnings.isEmpty
+        case "ambiguous":
+            report.status = .ambiguous
+            report.solutionCount = max(2, result.arbiterDisputed.count)
+            report.requiresReview = true
+        case "budgetExceeded":
+            report.status = .tooComplex
+            report.requiresReview = true
+        case "unclosed":
+            report.status = .noSolution
+            report.requiresReview = true
+        default:
+            report.status = .partial
+            report.requiresReview = true
+        }
+        report.moneyDeltaCents = result.arbiterDeficitE2
+            ?? result.arbiterDeficitE1
+        if let sold = result.itemsSold {
+            let positive = result.items.filter {
+                ($0.amountCents ?? 0) > 0
+            }
+            let counted = result.soldContribution == "onePerLine"
+                ? positive.count
+                : positive.reduce(0) { $0 + $1.qty }
+            if counted != sold { report.qtyDelta = counted - sold }
+        }
+        if result.subtotalCents != nil {
+            report.anchorsPresent.append("subtotal")
+        } else {
+            report.anchorsMissing.append("subtotal")
+        }
+        if result.taxes.isEmpty {
+            report.anchorsMissing.append("tax")
+            report.taxMissing = result.arbiterStatus != "closed"
+        } else {
+            report.anchorsPresent.append("tax")
+        }
+        if result.totalCents != nil {
+            report.anchorsPresent.append("total")
+        } else {
+            report.anchorsMissing.append("total")
+        }
+        report.notes = result.arbiterDisputed
+        if let d1 = result.arbiterDeficitE1,
+           abs(d1) > ItemsArbiter.e1ToleranceCents {
+            report.notes.append(
+                "Khối món còn lệch E1 \(d1) xu so với subtotal in.")
+        }
+        if let d2 = result.arbiterDeficitE2, d2 != 0 {
+            report.notes.append(
+                "Khối tổng còn lệch E2 \(d2) xu so với total in.")
+        }
+        report.regionHints = arbiterRegionHints(for: result,
+                                                lines: lines,
+                                                lineBoxes: lineBoxes)
+        return report
+    }
+
+    /// Gợi ý vùng từ thâm hụt khoanh khối của trọng tài: khối món
+    /// khi E1 lệch quá dung sai; khối tổng khi mơ hồ / vượt ngân
+    /// sách tìm kiếm / không khép. lineRange + band dựng cùng luật
+    /// với Reconcile.finalizeHints (band nở ±50% chiều cao mỗi phía).
+    private static func arbiterRegionHints(for result: ParseResult,
+                                           lines: [OCRLine],
+                                           lineBoxes: [CGRect?]?)
+        -> [ReconcileRegionHint] {
+        var hints: [ReconcileRegionHint] = []
+        var priority = 0
+        func appendHint(_ block: ReconcileRegionHint.Block,
+                        _ reason: ReconcileRegionHint.Reason,
+                        _ delta: Int?) {
+            priority += 1
+            let range = arbiterBlockRange(block: block, result: result,
+                                          lines: lines)
+            hints.append(ReconcileRegionHint(
+                block: block, reason: reason, priority: priority,
+                deltaCents: delta, lineRange: range,
+                band: arbiterBand(for: range, lineBoxes: lineBoxes)))
+        }
+        if let d1 = result.arbiterDeficitE1,
+           abs(d1) > ItemsArbiter.e1ToleranceCents {
+            appendHint(.items, .missingOrUnrepairable, d1)
+        }
+        switch result.arbiterStatus {
+        case "ambiguous", "budgetExceeded":
+            appendHint(.totals, .anchorConflict, result.arbiterDeficitE2)
+        case "unclosed":
+            if result.arbiterRegionHint?.hasPrefix("items-block") == true,
+               !hints.contains(where: { $0.block == .items }) {
+                appendHint(.items, .missingOrUnrepairable,
+                           result.arbiterDeficitE1)
+            } else if !hints.contains(where: { $0.block == .totals }) {
+                appendHint(.totals,
+                           result.arbiterDeficitE2 == nil
+                               ? .totalOnlyAnchor
+                               : .missingOrUnrepairable,
+                           result.arbiterDeficitE2)
+            }
+        default:
+            break
+        }
+        return hints
+    }
+
+    private static func arbiterBlockRange(
+        block: ReconcileRegionHint.Block, result: ParseResult,
+        lines: [OCRLine]) -> ClosedRange<Int>? {
+        let indices: [Int]
+        switch block {
+        case .items:
+            indices = result.items.compactMap { $0.lineIndex }
+                .filter { $0 >= 0 && $0 < lines.count }
+        case .totals:
+            indices = lines.indices.filter {
+                let up = lines[$0].text.uppercased()
+                return up.contains("SUBTOTAL") || up.contains("TOTAL")
+                    || up.contains("TAX")
+            }
+        }
+        guard let lo = indices.min(), let hi = indices.max()
+        else { return nil }
+        return lo...hi
+    }
+
+    private static func arbiterBand(for range: ClosedRange<Int>?,
+                                    lineBoxes: [CGRect?]?) -> CGRect? {
+        guard let range = range, let boxes = lineBoxes else { return nil }
+        let rects = range.compactMap { idx -> CGRect? in
+            (idx >= 0 && idx < boxes.count) ? boxes[idx] : nil
+        }
+        guard let first = rects.first else { return nil }
+        var union = first
+        for rect in rects.dropFirst() { union = union.union(rect) }
+        // Nở ±50% chiều cao mỗi phía (AMD-001) như finalizeHints.
+        let height = union.height * 2
+        return CGRect(x: union.minX, y: union.midY - height / 2,
+                      width: union.width, height: height)
+    }
+
+    /// Thứ tự chấp nhận một vòng ROI của đường v4: trạng thái
+    /// trọng tài (khép > mơ hồ > không khép > vượt ngân sách), rồi
+    /// tổng thâm hụt tuyệt đối nhỏ hơn, rồi nhiều món hơn, rồi
+    /// nhiều dòng thuế hơn; hoà => từ chối và dừng vòng.
+    private static func arbiterIsBetter(newResult: ParseResult,
+                                        newReport: ReconcileReport,
+                                        oldResult: ParseResult,
+                                        oldReport: ReconcileReport)
+        -> Bool {
+        let nr = arbiterRank(newResult), orank = arbiterRank(oldResult)
+        if nr != orank { return nr > orank }
+        let ns = arbiterDeficitScore(newResult)
+        let os = arbiterDeficitScore(oldResult)
+        if ns != os { return ns < os }
+        if newResult.items.count != oldResult.items.count {
+            return newResult.items.count > oldResult.items.count
+        }
+        if newResult.taxes.count != oldResult.taxes.count {
+            return newResult.taxes.count > oldResult.taxes.count
+        }
+        return false
+    }
+
+    private static func arbiterRank(_ result: ParseResult) -> Int {
+        switch result.arbiterStatus {
+        case "closed": return 3
+        case "ambiguous": return 2
+        case "unclosed": return 1
+        default: return 0
+        }
+    }
+
+    private static func arbiterDeficitScore(_ result: ParseResult) -> Int {
+        if result.arbiterStatus == "closed" { return 0 }
+        let d1 = result.arbiterDeficitE1.map { abs($0) }
+        let d2 = result.arbiterDeficitE2.map { abs($0) }
+        if d1 == nil && d2 == nil { return Int.max / 4 }
+        return (d1 ?? 0) + (d2 ?? 0)
+    }
+
+    private static func arbiterStateString(_ rep: ReconcileReport,
+                                           _ r: ParseResult) -> String {
+        let d1 = r.arbiterDeficitE1.map { String(abs($0)) } ?? "nil"
+        let d2 = r.arbiterDeficitE2.map { String(abs($0)) } ?? "nil"
+        return "\(r.arbiterStatus ?? rep.status.rawValue) "
+            + "δ1=\(d1) δ2=\(d2) món=\(r.items.count)"
     }
 
     // MARK: - Phụ trợ trình bày hồ sơ
@@ -300,19 +659,22 @@ enum ReadPipeline {
 // viên cho đa trang để sau phiên đo lát).
 // ============================================================
 
-/// Tem bộ đọc thế hệ v3 — NGUỒN DUY NHẤT của tem: ReceiptViews
+/// Tem bộ đọc — NGUỒN DUY NHẤT của tem: ReceiptViews
 /// (currentParserVersion) tham chiếu hằng này và hồ sơ chẩn
 /// đoán ghi đúng giá trị này ở identity.parserVersion, nên tem
 /// trong app và tem trong hồ sơ không thể lệch nhau.
 enum ReadCoreVersion {
-    /// core-v3-2 (2026-11-12): bản giao patch lớn đầu tiên của
-    /// thế hệ v3 — crash-fix matchGroups (L-2026-11-12-13) +
-    /// gói FULL-REVIEW (T1/T2/N1-N5/C8/C9) + trap-fix họ A
-    /// dạng hữu-hạn-khổng-lồ ở 3 site binning. Harness run
-    /// #21 xanh trọn 4 cổng trên core-v3-1 + trap-fix; bản
-    /// này chỉ đổi tem so với commit đó, và lượt harness xác
-    /// nhận trên đúng commit giao là điều kiện giao bản.
-    static let parserVersion = "core-v3-2"
+    /// core-v4-1 (GÓI V4-4, DESIGN-V4 §8): bản giao đầu tiên của
+    /// lõi v4 — trích ứng viên cho mọi trường ở mọi tiệm, tiệm hạ
+    /// xuống dữ liệu gợi ý, trọng tài gán vai trò bằng đẳng thức
+    /// sổ E1/E2/E3 (gói V4-1/V4-2/V4-3 đã nghiệm thu trên Swift
+    /// thật ở harness run #26/#28/#29: cổng luồng FULL 28/34,
+    /// khối tổng 30/34, SILENT 0, died 0). Gói này chuyển app
+    /// sang parseV4 làm mặc định, loại đường v3 khỏi bản giao
+    /// (D-V4-3) và bật cổng chất lượng theo từng tờ với trạng
+    /// thái .block thật (D-V4-2). Tem cũ của thế hệ v3 là
+    /// "core-v3-2" (bản giao 2026-11-13, harness run #21).
+    static let parserVersion = "core-v4-1"
 }
 
 /// Yêu cầu đọc (DESIGN-DETAIL §1.3, cụ thể hoá cho các đường
@@ -336,10 +698,16 @@ struct ReadRequest {
     /// Thư mục ghi file phụ chẩn đoán (app: ImageStore.directory;
     /// nil = không ghi — chỉ dùng cho kiểm ngoại tuyến).
     var diagnosticsDirectory: URL? = nil
-    /// Cổng chất lượng dùng CHUNG cho cả phiên chụp (trạng thái
-    /// fail-safe đếm liên tiếp nằm trong instance; ScanView giữ
-    /// một instance). nil = cổng mới cho lần đọc này.
+    /// Cổng chất lượng của RIÊNG tờ này (GÓI V4-4 / D-V4-2, sửa
+    /// A2-05): tầng gọi tạo một QualityGate MỚI cho mỗi lần đọc
+    /// một tờ — bộ đếm fail-safe không còn chảy qua các tờ khác
+    /// nhau trong cùng phiên. nil = cổng mới cho lần đọc này.
     var qualityGate: QualityGate? = nil
+    /// Lõi đọc ở mức mã (DESIGN-V4 §8.2): mặc định .v4; tầng app
+    /// KHÔNG truyền trường này (không có chọn lõi trên giao
+    /// diện). Chỉ harness/bench ngoại tuyến mới truyền .v3 để đo
+    /// làn đối chứng.
+    var core: ReadCore = .v4
     var receiptID: UUID? = nil
 }
 
@@ -493,7 +861,8 @@ enum ReceiptReader {
         let outcome = ReadPipeline.run(lines: rawLines,
                                        lineBoxes: nil,
                                        qualityMap: [],
-                                       reReader: nil)
+                                       reReader: nil,
+                                       core: req.core)
         let candidate = DiagCandidate(
             kind: "text", transformDesc: passID, gateVerdict: nil,
             scoreComponents: [:], scoreTotal: nil, winner: true)
@@ -573,7 +942,7 @@ enum ReceiptReader {
             switch step.kind {
             case "original":
                 if let run = runCandidate(step: step, images: pages,
-                                          engine: engine) {
+                                          engine: engine, core: req.core) {
                     runs.append(run)
                     anyE1Closed = anyE1Closed || run.evaluation.e1Closed
                 }
@@ -584,7 +953,7 @@ enum ReceiptReader {
                 let (img, verdict) = perspectiveCandidate(from: first)
                 guard let img else { continue }
                 if let run = runCandidate(step: step, images: [img],
-                                          engine: engine) {
+                                          engine: engine, core: req.core) {
                     var run = run
                     run.gateVerdict = verdict
                     runs.append(run)
@@ -597,7 +966,7 @@ enum ReceiptReader {
                       let img = ciVariant(first, kind: "shadowRemoved")
                 else { continue }
                 if let run = runCandidate(step: step, images: [img],
-                                          engine: engine) {
+                                          engine: engine, core: req.core) {
                     runs.append(run)
                     anyE1Closed = anyE1Closed || run.evaluation.e1Closed
                 }
@@ -614,7 +983,7 @@ enum ReceiptReader {
                 guard let img = ciVariant(first, kind: variant)
                 else { continue }
                 if let run = runCandidate(step: step, images: [img],
-                                          engine: engine) {
+                                          engine: engine, core: req.core) {
                     runs.append(run)
                     anyE1Closed = anyE1Closed || run.evaluation.e1Closed
                 }
@@ -624,7 +993,7 @@ enum ReceiptReader {
                       let img = ciVariant(first, kind: "binarized")
                 else { continue }
                 if let run = runCandidate(step: step, images: [img],
-                                          engine: engine) {
+                                          engine: engine, core: req.core) {
                     runs.append(run)
                 }
             default:
@@ -705,7 +1074,8 @@ enum ReceiptReader {
         let outcome = ReadPipeline.run(lines: winLines,
                                        lineBoxes: winBoxes,
                                        qualityMap: qualityMap,
-                                       reReader: reReader)
+                                       reReader: reReader,
+                                       core: req.core)
 
         var diagCandidates: [DiagCandidate] = []
         for (i, run) in runs.enumerated() {
@@ -732,9 +1102,27 @@ enum ReceiptReader {
 
     /// Chạy MỘT ứng viên: engine trên từng trang -> ráp (đa
     /// trang qua assemblePages) -> parse -> dựng CandidateEvaluation.
+    /// Chọn hàm parse theo lõi của yêu cầu (mức mã, §8.2):
+    /// bản giao chỉ còn nhánh v4 trong nhị phân.
+    private static func parseWithCore(_ core: ReadCore,
+                                      lines: [OCRLine],
+                                      boxes: [CGRect?]?) -> ParseResult {
+#if GLKEEPER_V4_ONLY
+        return ReceiptParser.parseV4(lines: lines, boxes: boxes)
+#else
+        switch core {
+        case .v4:
+            return ReceiptParser.parseV4(lines: lines, boxes: boxes)
+        case .v3:
+            return ReceiptParser.parse(lines: lines, boxes: boxes)
+        }
+#endif
+    }
+
     private static func runCandidate(step: CandidateStep,
                                      images: [CGImage],
-                                     engine: ClassicTextEngine)
+                                     engine: ClassicTextEngine,
+                                     core: ReadCore)
         -> CandidateRun? {
         stageBreadcrumb?("ocr-\(step.kind)")
         var fragments: [Fragment] = []
@@ -774,7 +1162,7 @@ enum ReceiptReader {
             OCRLine(text: $0.text, confidence: $0.confidence)
         }
         let boxes: [CGRect?] = assembly.lines.map { $0.box }
-        let parsed = ReceiptParser.parse(lines: lines, boxes: boxes)
+        let parsed = parseWithCore(core, lines: lines, boxes: boxes)
         stageBreadcrumb?("candidate-parse-done")
         // V4-1 (quyết định D-V4-2; audit A2-04): QualityMap của
         // CHÍNH ứng viên này khi ứng viên là MỘT ảnh — trước đây

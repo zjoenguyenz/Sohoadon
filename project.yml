@@ -55,6 +55,15 @@ targets:
         INFOPLIST_FILE: Info.plist
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # V4-4 (D-V4-3 + DESIGN-V4 §8.2): đường đọc v3
+        # (parse/parseSams/parseGeneric + engine đối chiếu
+        # của F5) bị biên dịch LOẠI khỏi BẢN GIAO bằng điều
+        # kiện này — nguồn giữ nguyên một bản duy nhất (§0/§8.1).
+        # CHỈ target app khai; target bench ở dưới và project
+        # harness KHÔNG khai nên vẫn biên dịch đủ đường v3
+        # làm làn đối chứng đo. Kiểm chứng ở bản giao: soi
+        # symbol trong IPA (kế hoạch ở v4-4/BINARY-CHECK.md).
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: GLKEEPER_V4_ONLY
     info:
       path: Info.plist
       properties:

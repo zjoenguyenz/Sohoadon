@@ -264,7 +264,13 @@ struct QualitySignals {
 
 struct QualityThresholds {
     var warnEnabled = true
-    var blockEnabled = false    // MẶC ĐỊNH TẮT (§3.1(b) bản chốt)
+    // GÓI V4-4 (D-V4-2): MẶC ĐỊNH BẬT — §3.1(b) của DESIGN-FINAL
+    // cho .block là một quyết định THẬT của cổng; bản v3 để tắt
+    // nên .block không bao giờ xuất hiện. Từ gói này, ảnh có từ
+    // 2 vấn đề nặng trở lên (mờ/chói/tương phản thấp) bị CHẶN ở
+    // trạng thái giao diện riêng của ScanView — không đọc thầm,
+    // không biến mất — và anh có nút "Vẫn đọc tờ này" tường minh.
+    var blockEnabled = true
     var blurMin = 100.0         // mặc định CHỜ ĐO ở Pha 2b
     var glareMax = 0.05
     var contrastMin = 0.25
@@ -287,6 +293,11 @@ struct QualityOutcome {
 /// maxConsecutiveRejects lần từ chối liên tiếp của CÙNG một tờ
 /// (bộ đếm đặt lại khi có lượt qua sạch). Gương: QualityGate
 /// trong capture_mirror.py (kiểm QG-*).
+/// GÓI V4-4 (D-V4-2, sửa A2-05): mỗi lần đọc MỘT tờ dùng MỘT
+/// instance riêng do tầng gọi tạo mới — instance KHÔNG còn sống
+/// qua các tờ của cả phiên. Thuật toán evaluate không đổi; vai
+/// trò chống-khoá ở tầng app do hành động ghi đè tường minh
+/// "Vẫn đọc tờ này" ở trạng thái bị chặn của ScanView đảm nhận.
 final class QualityGate {
     static let policyID = "quality-gate-v3-p2"
     var thresholds: QualityThresholds
