@@ -521,9 +521,19 @@ enum CandidateScorer {
         if edges.isEmpty { return nil }
         var bins: [Int: [Double]] = [:]
         for e in edges {
-            bins[Int((e / 0.01).rounded(.toNearestOrEven)),
-                 default: []].append(e)
+            // TRAP-FIX (họ A, dạng hữu-hạn-khổng-lồ — site
+            // song sinh của columnModel ở Parser, cùng ca fuzz
+            // box-huge-maxx-moneyline): kiểm MIỀN khoá bin
+            // trước khi đổi Double->Int (|khoá| < 2^63).
+            let scaled = (e / 0.01).rounded(.toNearestOrEven)
+            guard scaled.isFinite,
+                  abs(scaled) < 9_223_372_036_854_775_808.0
+            else { continue }
+            bins[Int(scaled), default: []].append(e)
         }
+        // Mọi cạnh đều ngoài miền -> không có bin nào: trả
+        // nil thay vì ép mở max trên tập rỗng.
+        if bins.isEmpty { return nil }
         let mode = bins.values.max(by: { $0.count < $1.count })!
         let m = mode.reduce(0, +) / Double(mode.count)
         return (m - 0.12, m + 0.02)

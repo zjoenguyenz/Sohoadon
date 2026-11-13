@@ -2022,7 +2022,19 @@ enum ReceiptParser {
         var order: [Int] = []
         var buckets: [Int: [Double]] = [:]
         for e in edges {
-            let key = Int((e / 0.01).rounded())
+            // TRAP-FIX (họ A, dạng hữu-hạn-khổng-lồ — ca fuzz
+            // box-huge-maxx-moneyline chết ở run #20): chốt
+            // isFinite ở vòng nạp cạnh KHÔNG chặn được cạnh
+            // hữu hạn nhưng khổng lồ (maxX 1e17 -> khoá bin
+            // 1e19 > Int64.max -> Int() trap). Kiểm MIỀN khoá
+            // trước khi đổi: |khoá| < 2^63 mới vào bin; ngoài
+            // miền -> bỏ cạnh đó (mô hình cột suy từ các cạnh
+            // còn lại; rỗng hết thì bestKey nil -> nil ở dưới).
+            let scaled = (e / 0.01).rounded()
+            guard scaled.isFinite,
+                  abs(scaled) < 9_223_372_036_854_775_808.0
+            else { continue }
+            let key = Int(scaled)
             if buckets[key] == nil { order.append(key) }
             buckets[key, default: []].append(e)
         }

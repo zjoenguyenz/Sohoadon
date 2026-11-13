@@ -423,10 +423,31 @@ enum LineAssembly {
                 merged.append(contentsOf: cand)
                 continue
             }
+            // TRAP-FIX (họ A, dạng hữu-hạn-khổng-lồ — site
+            // song sinh: bin dy ở ghép trang): phiếu dy hữu
+            // hạn nhưng khổng lồ -> khoá bin tràn Int64 ->
+            // Int() trap. Lọc phiếu NGOÀI MIỀN KHOÁ (|khoá| <
+            // 2^63) trước; rỗng hết thì rơi về neo mặc định
+            // như nhánh votes.isEmpty ở trên.
+            let binnableVotes = votes.filter { v in
+                let s = (v.dy / 0.01).rounded(.toNearestOrEven)
+                return s.isFinite
+                    && abs(s) < 9_223_372_036_854_775_808.0
+            }
+            if binnableVotes.isEmpty {
+                transforms[p] = (1.0, -1.05 * Double(p))
+                status = "unanchored"
+                for i in cand.indices {
+                    cand[i].box = cand[i].box.offsetBy(
+                        dx: 0, dy: CGFloat(-1.05 * Double(p)))
+                }
+                merged.append(contentsOf: cand)
+                continue
+            }
             // Bỏ phiếu bin 0.01 (làm tròn nửa-chẵn như Python round).
             var binOrder: [Int] = []
             var bins: [Int: [(Double, Int)]] = [:]
-            for v in votes {
+            for v in binnableVotes {
                 let key = Int((v.dy / 0.01).rounded(.toNearestOrEven))
                 if bins[key] == nil { binOrder.append(key) }
                 bins[key, default: []].append(v)
