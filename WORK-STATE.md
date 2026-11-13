@@ -2733,3 +2733,260 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
   LỚN trên nền 30795b1c** (đây là loại patch phải trình anh
   duyệt theo luật GitHub 2026-11-12) → anh duyệt mới build
   bản giao cài đặt; trước lúc đó không giao bản nào.
+- ĐẨY CUỐI CA 22:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `5668bc8bce734ffc7b21e197e917e0ed4d23e169`; đọc lại từ xa
+  (list_commits) xác nhận đầu nhánh = commit này. (Dòng này
+  chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## ★ HARNESS RUN #21 XANH TRỌN 4 CỔNG (30795b1c) + ĐÃ NÂNG TEM core-v3-2 CHO BẢN GIAO (2026-11-12 22:4x-23:1x CST)
+- Ca 22:40 đọc trực tiếp Actions: run #21 (43356189848,
+  21:02-22:17 CST) XANH TRỌN: control PASS (sổ đóng tuyệt
+  đối) · Cổng 2 100 lượt PASS (SET 100 DONE 33/33) · ma
+  trận PASS 4/4 · fuzz PASS 40/40 (box-huge đã qua).
+  => Điều kiện Luật 3 "harness xanh trọn trên code cuối
+  thật" ĐÃ ĐẠT trên 30795b1c.
+- Leader chốt bản giao: nâng tem bộ đọc core-v3-1 ->
+  core-v3-2 (ReadPipeline.swift, chỉ đổi hằng tem + chú
+  thích) để bản giao tự khai trên máy anh (B2 Điều 3);
+  đẩy v3 = 3d530b5f. Lượt harness XÁC NHẬN trên đúng
+  commit giao + build-ipa của commit này là điều kiện
+  cuối trước khi trình anh patch lớn kèm IPA đã kiểm
+  gói tại bàn (kỳ vọng verdict ~00:35 CST).
+- Chưa kiểm được (ghi vào tin giao bản): chất lượng đọc
+  trên máy thật của anh + hành vi cài-đè/dữ liệu đã lưu —
+  thuộc lần test patch lớn của anh; phiên GATE100-v2
+  (115 lượt, hoá đơn niêm phong) vẫn ở phía trước.
+
+## LUẬT HẠN MỨC BUILD GITHUB (anh ban hành 2026-11-12 23:16 CST)
+- Anh: "Hạn chế build ipa khi không cần thiết... Chỉ build
+  khi thật sự cần thiết" (đã ghi MEMORY.md). Hạn mức
+  Actions của tài khoản đã cạn vì các đợt build dồn dập
+  (kho riêng tư -> phút macOS trừ quota miễn phí).
+- Áp dụng ngay cho bản giao core-v3-2: lượt harness xác
+  nhận trên 3d530b5f là THỪA (run #21 đã xanh trọn trên
+  logic byte-identical; delta duy nhất là hằng tem) —
+  Leader đã giao trình duyệt HUỶ lượt đó nếu còn queued/
+  running; build-ipa của commit giao thì giữ (đó là lượt
+  tạo IPA giao bản — thật sự cần). Kết quả huỷ + trạng
+  thái build-ipa (cả 30795b1c lẫn 3d530b5f) chờ báo cáo
+  trình duyệt xác nhận, sẽ ghi tiếp tại đây.
+- Kỷ luật từ nay: gom thay đổi, build ở mốc; không
+  dispatch vì thay đổi trang trí.
+
+## ★★ BẢN GIAO PATCH LỚN core-v3-1 ĐÃ TRÌNH ANH (2026-11-12 23:2x CST)
+- Hai lượt của commit tem 3d530b5f (harness #22 + build
+  #82) CHẾT 3-4s tại cổng thanh toán tài khoản GitHub
+  ("recent account payments have failed or your spending
+  limit needs to be increased") — hạn mức đã cạn hẳn theo
+  luật anh vừa ban hành 23:16; không build riêng tư nào
+  khởi động được tới khi anh xử lý Billing & plans.
+- BẢN GIAO = IPA của build-ipa run #81 trên commit
+  30795b1c — ĐÚNG commit harness run #21 xanh trọn 4
+  cổng (bằng chứng tải về đọc tại bàn: control SURVIVED
+  đóng sổ; images SET 100 DONE + SURVIVED x100; matrix
+  4/4 SURVIVED; fuzz 40 PASS / 0 DIED).
+- IPA đã kiểm gói tại bàn: sha256 3003acc733d18502f9…;
+  bundle có vendors.json + lexicon.json, KHÔNG có ảnh
+  bench; binary có "Bản bộ đọc của app" + "Lưu không
+  thành công" (chuỗi của gói sửa). Tem trong app =
+  core-v3-1 (bản nâng tem v3-2 không build được vì cổng
+  thanh toán — đã khai rõ trong tin giao).
+- File giao: downloads/SoHoaDon-V3-run81-2026-11-13.ipa
+  đính kèm trong chat. Chờ anh ký/cài/test theo nhịp của
+  anh (patch lớn — Luật 2/3). GATE100-v2 vẫn ở phía trước.
+
+## HARNESS CHUYỂN CHỈ-CHẠY-THỦ-CÔNG (lệnh anh qua chat chính 2026-11-12 23:48 CST)
+- Số liệu anh cung cấp: Actions tháng này đã cạn $18
+  miễn phí gói Pro; riêng Sohoadon tốn $17.57 — phần lớn
+  do harness tự chạy theo mỗi lần đẩy code. Anh đã nâng
+  budget tài khoản lên $40 (có trần dừng) và ra lệnh
+  Sohoadon không được xài hết budget.
+- ĐÃ SỬA trigger của .github/workflows/harness-ci.yml
+  trên CẢ main (d41e149) + v3 (6b03857) qua web editor:
+  bỏ hẳn khối push (branches v3 + paths), chỉ còn
+  workflow_dispatch. Leader tự đọc lại từ xa cả hai
+  nhánh xác nhận: không còn "push:" trong file.
+- Build unsigned IPA: GIỮ nguyên trigger theo push
+  (~1 phút/lượt, rẻ) theo đúng chỉ thị.
+- Luật vận hành từ nay: trước khi bấm chạy tay harness
+  toàn phần phải cân chi phí (macOS $0.08/phút, một
+  lượt ≈ 76 phút ≈ $6) — chỉ chạy ở cổng quyết định
+  trước patch lớn. Luật 100 lượt giữ nguyên 100%.
+- Bản nháp tại harness/workflow/harness-ci.yml đã khớp
+  (trigger + ghi chú chi phí ở đầu file).
+
+## ★★★ ANH TEST TRÊN MÁY THẬT: L-R01 ĐỌC ĐÚNG TUYỆT ĐỐI (2026-11-13 00:04 CST)
+- Anh cài bản run81 (core-v3-1), nhập lại ảnh L-R01
+  (Costco — tờ từng làm chết app) và gửi 4 ảnh chụp màn
+  Kiểm Lại. Leader đối chiếu từng dòng với chân lý đã
+  đóng băng:
+  * 20/20 dòng món ĐÚNG TỪNG XU: 12 dòng dương cộng
+    154.98; 8 dòng INST SV trừ đúng 29.50; hiệu =
+    125.48 = tiểu tổng in trên hoá đơn. Dòng chết cũ
+    "3006152 BOUNCE 400 $11.49" nay là món đầu tiên,
+    đọc đúng nguyên vẹn.
+  * Tiểu tổng 125.48 ✓ · thuế 9.38 ✓ (app tự ghi: khôi
+    phục nhờ đọc lại vùng ảnh vòng 1 — cơ chế ROI chạy
+    thật trên máy anh) · TỔNG 134.86 ✓ · độ tin cậy
+    tổng 100%.
+  * Tiệm Costco ✓ · ngày Sep 14, 2026 2:17 PM ✓ ·
+    địa chỉ 10220 S. Memorial Drive ✓ · thẻ 2586 ✓ ·
+    gợi ý phân loại BUSINESS theo thẻ đã đăng ký ✓.
+  * KHÔNG crash — toàn bộ luồng nhập ảnh -> đọc ->
+    Kiểm Lại chạy trọn trên iPhone của anh.
+- Ý nghĩa: bằng chứng Điều 1 trên máy thật cho bản giao
+  — cơ chế crash đã chết trên thiết bị thật, không chỉ
+  trên harness. Giới hạn trung thực: L-R01 là ca trong
+  bộ mẫu đã đóng băng (hồi quy), chưa phải hoá đơn niêm
+  phong; chất lượng trên hoá đơn CHƯA TỪNG THẤY vẫn chờ
+  phiên GATE100-v2 phán quyết.
+
+## LỆNH ĐÊM 2026-11-13 (anh, 00:09 CST) — KIỂM TOÀN APP+LÕI, HOÁ ĐƠN MẠNG, UI MỚI
+- Anh duyệt hướng: tiếp tục rà soát toàn app + lõi, thấy
+  lỗi thì sửa; tìm file hoá đơn TRÊN MẠNG làm mẫu thử
+  lạ (ngoài bộ đóng băng); THIẾT KẾ LẠI UI đẹp + chuyên
+  nghiệp như các app top cùng dịch vụ trên App Store.
+- GIAO SÁNG MAI: (1) bản IPA UI mới, (2) báo cáo việc
+  làm trong đêm.
+- RÀO CHI PHÍ (luật budget anh vừa ban hành): tối đa MỘT
+  lượt harness toàn phần trong đêm (chỉ khi có sửa lõi
+  cần cổng, hoặc chạy cổng kèm bộ hoá đơn lạ); build-ipa
+  chỉ cho commit giao sáng (1-2 lượt rẻ). Mọi chi phí CI
+  phải kê khai trong báo cáo sáng.
+- Hàng việc đêm (Leader điều phối + ca trực hỗ trợ):
+  Q1 Rà soát vòng 2 toàn app+lõi (gồm các điểm hoãn của
+     FULL-REVIEW: C13, CaptureIntake:348/364, L1/L2,
+     C1/C2) -> sửa những gì sửa an toàn tại bàn.
+  Q2 Săn hoá đơn mạng: 10-15 tờ Mỹ ngoài bộ mẫu (nhiều
+     ngành: siêu thị, nhà hàng, xăng, dược, điện máy —
+     ưu tiên có Best Buy), tải về + ghi nguồn + Leader
+     đọc tay lập chân lý từng tờ.
+  Q3 Thiết kế lại UI (CHỈ lớp hiển thị — cấm đổi logic;
+     diff rà soát từng hunk): hệ thống khoảng cách/màu/
+     chữ thống nhất, danh sách + chi tiết + kiểm lại +
+     thẻ theo chuẩn app top (Expensify/Veryfi/QuickBooks).
+  Q4 Đóng gói sáng: build-ipa 1 lượt trên commit cuối ->
+     kiểm gói -> trình anh kèm báo cáo đêm.
+
+## TIẾN ĐỘ ĐÊM 2026-11-13 (Leader, ~00:30 CST)
+- Đã cử 2 tuyến song song: (A) rà soát vòng 2 toàn app+lõi
+  (chỉ đọc+báo cáo), (B) săn 10-15 hoá đơn Mỹ trên mạng
+  ngoài bộ mẫu + lập chân lý đọc tay (web-receipts/).
+- UI PASS 1 ĐÃ LÀM Ở STAGING (chỉ lớp hiển thị):
+  DesignSystem.swift MỚI (token màu/khoảng cách/bo góc +
+  DSCard/StatusChip/VendorMonogram/PrimaryButtonStyle/
+  MoneyAmount) + project.yml nạp file mới vào target
+  chính; Theme nâng sáng cho nền tối (Cá nhân #0A84FF,
+  Business #FF9F0A); Home dựng lại (hero tổng năm + thanh
+  tỉ lệ + banner chờ duyệt dạng thẻ + thẻ Theo mục/Gần
+  đây); ReceiptRowView (thumbnail bo 10 + monogram +
+  chip CHỜ DUYỆT); Chi tiết thêm thẻ hero (monogram +
+  tổng lớn + chip trạng thái); Kiểm Lại (tổng nhuộm màu
+  thương hiệu, nút Lưu PrimaryButtonStyle, món semibold);
+  Thẻ (gradient + bóng + chip loại); Chụp (biểu tượng
+  thương hiệu + nút Quét chính); màn Khoá + tint tab.
+  Kiểm tĩnh sau sửa: P4 PASS toàn bộ (đã cập nhật S5b
+  tem core-v3-2 + tập file kỳ vọng thêm DesignSystem),
+  P5 PASS, S10 PASS, cân bằng ngoặc 7/7 file = 0.
+- CHƯA đẩy code: chờ báo cáo rà soát (sửa an toàn gộp
+  một lần) + rà soát diff UI từng hunk (cấm đổi logic)
+  rồi mới đẩy 1 commit + build-ipa 1 lượt cho bản sáng.
+
+### Đêm 2026-11-13 — tiến triển ~00:45 CST (bổ sung)
+- RÀ SOÁT VÒNG 2 XONG (audit2/AUDIT2-REPORT.md): 14 nhóm.
+  Điểm cân bằng: MỌI điểm chết đợt 1 kiểm lại ĐÃ ĐÓNG;
+  không crash mới nào tới được bằng dữ liệu OCR thật.
+  ĐÃ SỬA trong staging: A2-01 (CaptureIntake
+  LuminanceGrid: clampedCoord [-1,2] TRƯỚC khi đổi Int ở
+  cả 2 hàm + guard samples.count — đúng họ trap box-huge
+  còn sót 2 site), A2-06 (ScanView renderPageImage: trần
+  cạnh dài 4096px cho PDF), A2-08 (DiagParseSnapshot thêm
+  vendorDataVersion + finalize nạp từ parsedBeforeReconcile
+  — cộng trường Optional, tương thích ngược), A2-13-nhãn
+  (tilePolicyID "full-frame-v3-p4" -> "full-frame-v3").
+  TRÌ HOÃN có ghi lý do: A2-02 cache regex + A2-03 O(n^2)
+  (hiệu năng — gói lõi kế tiếp, không mổ Parser đêm trước
+  bản giao), A2-09 kỷ luật số học C13 (bị chặn thượng
+  nguồn, không tới được), A2-07/A2-10/A2-11/A2-12 (ghi
+  nhận), A2-04/A2-05 = L1/L2 CHỜ QUYẾT ĐỊNH sửa-code-hay-
+  sửa-đặc-tả của anh (báo cáo sáng nêu lại).
+- HOÁ ĐƠN WEB: tuyến săn trả 10 tờ; LEADER ĐÃ TỰ MỞ ĐỌC
+  LẠI TỪNG ẢNH và khoá chân lý ở web-receipts/FREEZE-WR.md
+  (Best Buy 397.94/27.86/425.80; Trader Joe's 75 món
+  173.95/12.11/186.06 VISA 1694 — ảnh XOAY 90°; Starbucks
+  40.80/2.27/43.07 + SBUX x3862; McDonald's 3.17/0.24/3.41;
+  Wendy's 9.58/0.84/10.42; Walgreens tổng 28.99 VISA Debit
+  9765; CVS 0.51*/0.29*/0.80* in-cent-mơ-hồ; Target gift
+  0.39/0.02/0.41 ảnh 100MP; Shell tổng 20.00; Dollar Tree
+  5.00/0.25/5.25 ba cột). Đã nạp vào staging BenchImages
+  (33 -> 43) + project.yml + cổng P4 S6c = 43; kiểm tĩnh
+  P4/P5/S10 PASS sau mọi sửa.
+- ĐẨY: ảnh WR đang tải lên repo qua trình duyệt (connector
+  không đẩy được binary); xong sẽ đẩy 1 commit connector
+  (11 file chữ: UI + DesignSystem + 3 file lõi sửa + 
+  project.yml) rồi KÍCH HARNESS TAY 1 LƯỢT trên corpus 43
+  (cổng Luật 3 cho lõi đã đổi; ~1h50m, ~$9 — kê khai sáng).
+- ĐÃ ĐẨY (00:2x CST): ảnh WR lên repo qua trình duyệt —
+  commit d8199d0 (BenchImages đủ 43, trình duyệt mở lại
+  thư mục xác nhận). Commit chữ qua connector: v3 HEAD =
+  1a0ff281 "Ban dem 2026-11-13: UI moi (DesignSystem) +
+  sua A2-01/A2-06/A2-08 + project.yml corpus 43 anh"
+  (11 file). Đang chờ: build-ipa tự chạy cho 1a0ff281 +
+  kích harness tay (qua trình duyệt) — verdict là cổng
+  giao bản sáng.
+- CI ĐÃ KÍCH (00:27 CST): build-ipa run #86 (id
+  43378815819, commit 1a0ff281) đang chạy; harness run
+  #23 (id 43378874694) đã kích TAY trên v3 @1a0ff281 —
+  cổng Luật 3 trên corpus 43 ảnh, dự ~1h50m (~02:30 CST
+  xong; chi phí dự ~$9-11 gồm cả build-ipa — kê khai
+  chính xác trong báo cáo sáng kèm số phút thật).
+  SÁNG: đọc verdict harness #23 + tải/kiểm gói IPA #86
+  -> trình anh bản UI mới + báo cáo đêm đầy đủ.
+- TÊN + ICON (lệnh anh 00:32 CST): app mang tên
+  GL-Keeper. Icon mẫu A (hoá đơn + tích + khiên hổ phách,
+  nền xanh ngọc) đã xử lý 1024x1024 tràn viền, kiểm đọc ở
+  60px rõ; mẫu B monogram GL giữ ở icon-work/ làm phương
+  án thay thế. Đã đẩy: commit 023be82d (project.yml:
+  CFBundleDisplayName GL-Keeper + ASSETCATALOG AppIcon +
+  sources Assets.xcassets; 2 Contents.json; tiêu đề
+  HomeView/ContentView đổi GL-Keeper). Kiểm tĩnh P4 đã
+  cập nhật kỳ vọng S6a (+Assets.xcassets) PASS toàn bộ.
+  Đang tải icon-1024.png qua trình duyệt vào
+  Assets.xcassets/AppIcon.appiconset/ — bản build-ipa
+  trên commit CUỐI (đủ icon) mới là bản giao sáng; lượt
+  trung gian (thiếu PNG) đỏ là dự kiến, bỏ qua.
+  LƯU Ý PHẠM VI CỔNG: harness #23 kiểm commit 1a0ff281;
+  các commit sau (023be82d + icon) CHỈ chạm tên/icon/tiêu
+  đề hiển thị — không file lõi nào đổi — verdict #23 áp
+  cho lõi của bản giao, khai rõ trong báo cáo sáng.
+
+## CA TRỰC 00:40 CST 2026-11-13 — KIỂM CHỨNG TỪ XA ICON ĐÃ LÊN v3: COMMIT CUỐI 8ddf280f, BYTE-TRÙNG BẢN TẠI BÀN
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước: kiểm chứng việc
+  "đang tải icon-1024.png" mà mục cuối trước ca này còn ghi dở.
+  Ca không sửa code, không đẩy code v3, không kích lượt CI nào.
+- KẾT QUẢ (đọc trực tiếp GitHub trong ca): đầu nhánh v3 =
+  `8ddf280f3e58bc70073247a60795f2dc14699009` "GL-Keeper: icon
+  1024" (06:35:21Z = 00:35 CST), ngay sau 023be82d. Thư mục
+  `Assets.xcassets/AppIcon.appiconset/` trên HEAD này đủ 2 file:
+  Contents.json (213 byte, blob `27a4f381…`) + icon-1024.png
+  (214.478 byte, blob `c936d63d167811cf67c14e3757a1959bc5465732`).
+- ĐỐI CHIẾU TẠI BÀN: `git hash-object` trên
+  v3-phase4/app/Assets.xcassets/AppIcon.appiconset/ cho ĐÚNG 2
+  blob trên; icon tại bàn sha256 `9d5a8dac…`, 1024×1024 RGB —
+  icon trên repo byte-trùng bản đã kiểm ở staging. Việc tải
+  icon của Leader vì vậy ĐÃ XONG; commit cuối đủ icon đúng như
+  mục trước dự kiến.
+- Tuyên bố trung thực — đã chứng minh: icon đã lên repo ở
+  commit cuối, đúng đường + byte-trùng, bằng đọc trực tiếp
+  GitHub + hash tại bàn; chưa chứng minh: build-ipa trên
+  commit cuối 8ddf280f đã xanh / IPA có icon trong gói — ca
+  này không đọc Actions (harness #23 trên 1a0ff281 còn chạy
+  theo kế hoạch, verdict dự ~02:30 CST thuộc nhịp sáng của
+  Leader); chưa làm: chưa kiểm gói IPA nào của đêm nay.
+- **Bước tiếp theo giữ nguyên: Leader (nhịp sáng) đọc verdict
+  harness #23 + build-ipa của commit cuối 8ddf280f → kiểm gói
+  IPA → trình anh bản UI mới + báo cáo đêm.** Ca này không kêu
+  anh cài/test gì.
