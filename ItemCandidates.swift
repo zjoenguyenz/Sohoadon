@@ -596,8 +596,8 @@ enum ItemCandidateFactory {
                                       fromItemLine: nil))
             case .weight:
                 links.append(ItemLink(kind: "weight", line: i,
-                                      weightLb: c.weightLb,
-                                      unitCents: c.weightUnitCents))
+                                      unitCents: c.weightUnitCents,
+                                      weightLb: c.weightLb))
             case .skip, .excluded:
                 break
             }
