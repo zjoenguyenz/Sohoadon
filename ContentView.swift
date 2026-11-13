@@ -58,7 +58,7 @@ struct ContentView: View {
                     .background(Circle().fill(DS.brand))
                     .offset(x: 32, y: 32)
             }
-            Text("Sổ Hóa Đơn đang khoá")
+            Text("GL-Keeper đang khoá")
                 .font(.title3.bold())
             if let lockNote {
                 Text(lockNote)
@@ -86,7 +86,7 @@ struct ContentView: View {
             return
         }
         context.evaluatePolicy(.deviceOwnerAuthentication,
-                               localizedReason: "Mở khoá Sổ Hóa Đơn") { success, _ in
+                               localizedReason: "Mở khoá GL-Keeper") { success, _ in
             DispatchQueue.main.async {
                 if success {
                     unlocked = true

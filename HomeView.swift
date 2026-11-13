@@ -145,7 +145,7 @@ struct HomeView: View {
                         .dsCard()
                     }
 
-                    Text("Đọc ngay trên máy — ảnh hoá đơn không rời khỏi iPhone. Ảnh gốc lưu trong thư mục của app (Files → Trên iPhone → Sổ Hóa Đơn).")
+                    Text("Đọc ngay trên máy — ảnh hoá đơn không rời khỏi iPhone. Ảnh gốc lưu trong thư mục của app (Files → Trên iPhone → GL-Keeper).")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -153,7 +153,7 @@ struct HomeView: View {
                 .padding(DS.spaceL)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Sổ Hóa Đơn")
+            .navigationTitle("GL-Keeper")
         }
     }
 
