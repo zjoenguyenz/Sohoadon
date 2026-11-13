@@ -538,7 +538,8 @@ case "streamone":
     let parsed = ReceiptParser.parse(lines: streamLines)
     let taxList = parsed.taxes.map { String($0.amountCents) }.joined(separator: ",")
     let qtySum = parsed.items.reduce(0) { $0 + $1.qty }
-    print("STREAM-RESULT file=\((args[1] as NSString).lastPathComponent) \(parseSummary(parsed)) taxes=[\(taxList)] qty=\(qtySum)")
+    let qtyPos = parsed.items.filter { ($0.amountCents ?? 0) > 0 }.reduce(0) { $0 + $1.qty }
+    print("STREAM-RESULT file=\((args[1] as NSString).lastPathComponent) \(parseSummary(parsed)) taxes=[\(taxList)] qty=\(qtySum) qtyPos=\(qtyPos)")
     print("SURVIVED streamone")
 
 case "streams":
