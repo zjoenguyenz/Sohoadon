@@ -15,6 +15,11 @@ import Foundation
 final class PlaylistStore: ObservableObject {
 
     static let playlistURL = URL(string: "https://thtt.pages.dev/tttt.m3u")!
+    /// Backup mirror (owner's own GitHub repo, auto-refreshed every 2
+    /// hours by a scheduled workflow). Used automatically whenever the
+    /// primary source fails or returns something that is not a usable
+    /// playlist — insurance against the primary link dying.
+    static let backupPlaylistURL = URL(string: "https://raw.githubusercontent.com/zjoenguyenz/dabanh-playlist/main/tttt.m3u")!
     private static let autoRefreshInterval: TimeInterval = 15 * 60
 
     @Published private(set) var channels: [Channel] = []
@@ -83,25 +88,42 @@ final class PlaylistStore: ObservableObject {
             isLoading = false
         }
         do {
-            var request = URLRequest(url: Self.playlistURL)
-            request.timeoutInterval = 20
-            // Same user agent the Android app sends; some CDNs expect it.
-            request.setValue("Mozilla/5.0 (Linux; Android 14; TV)", forHTTPHeaderField: "User-Agent")
-            let (data, _) = try await URLSession.shared.data(for: request)
-            guard let text = String(data: data, encoding: .utf8) else {
-                throw URLError(.cannotDecodeContentData)
-            }
-            let parsed = M3UParser.parse(text)
-            if parsed.isEmpty { throw URLError(.zeroByteResource) }
+            let (data, parsed) = try await fetchPlaylist(from: Self.playlistURL)
             try? data.write(to: cacheFileURL, options: .atomic)
             setData(parsed)
         } catch {
-            if !loadedOnce {
-                statusMessage = "Không tải được danh sách kênh. Kiểm tra mạng rồi thử lại."
-            } else {
-                statusMessage = "Chưa làm mới được — đang dùng danh sách cũ."
+            // Primary source failed: fall back to the mirror before
+            // giving up, and say so on screen when the mirror saves us.
+            do {
+                let (data, parsed) = try await fetchPlaylist(from: Self.backupPlaylistURL)
+                try? data.write(to: cacheFileURL, options: .atomic)
+                setData(parsed)
+                statusMessage = "Nguồn chính lỗi — đang dùng nguồn dự phòng."
+            } catch {
+                if !loadedOnce {
+                    statusMessage = "Không tải được danh sách kênh. Kiểm tra mạng rồi thử lại."
+                } else {
+                    statusMessage = "Chưa làm mới được — đang dùng danh sách cũ."
+                }
             }
         }
+    }
+
+    /// One playlist fetch + validation: the text must decode and parse
+    /// to at least one channel, otherwise the source counts as failed
+    /// (an error page or an empty file must never replace a good list).
+    private func fetchPlaylist(from url: URL) async throws -> (Data, [Channel]) {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        // Same user agent the Android app sends; some CDNs expect it.
+        request.setValue("Mozilla/5.0 (Linux; Android 14; TV)", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await URLSession.shared.data(for: request)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw URLError(.cannotDecodeContentData)
+        }
+        let parsed = M3UParser.parse(text)
+        if parsed.isEmpty { throw URLError(.zeroByteResource) }
+        return (data, parsed)
     }
 
     private func setData(_ parsed: [Channel]) {
