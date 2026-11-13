@@ -19,11 +19,6 @@ name: Harness — cổng tự chạy 100 lượt
 
 on:
   workflow_dispatch:
-  push:
-    branches: [v3]
-    paths:
-      - "*.swift"
-      - "harness/**"
 
 jobs:
   law-and-control:
