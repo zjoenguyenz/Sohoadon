@@ -305,7 +305,14 @@ enum ReadPipeline {
 /// đoán ghi đúng giá trị này ở identity.parserVersion, nên tem
 /// trong app và tem trong hồ sơ không thể lệch nhau.
 enum ReadCoreVersion {
-    static let parserVersion = "core-v3-1"
+    /// core-v3-2 (2026-11-12): bản giao patch lớn đầu tiên của
+    /// thế hệ v3 — crash-fix matchGroups (L-2026-11-12-13) +
+    /// gói FULL-REVIEW (T1/T2/N1-N5/C8/C9) + trap-fix họ A
+    /// dạng hữu-hạn-khổng-lồ ở 3 site binning. Harness run
+    /// #21 xanh trọn 4 cổng trên core-v3-1 + trap-fix; bản
+    /// này chỉ đổi tem so với commit đó, và lượt harness xác
+    /// nhận trên đúng commit giao là điều kiện giao bản.
+    static let parserVersion = "core-v3-2"
 }
 
 /// Yêu cầu đọc (DESIGN-DETAIL §1.3, cụ thể hoá cho các đường
