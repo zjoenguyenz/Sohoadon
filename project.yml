@@ -21,6 +21,9 @@ targets:
       - ContentView.swift
       - HomeView.swift
       - ScanView.swift
+      # P-DRAFT (L-2026-11-13-14): DTO + kho lưu bản chụp nháp —
+      # chỉ target app (tầng UI dùng); bench không nạp file này.
+      - PendingDraft.swift
       - ReceiptViews.swift
       - CardsView.swift
       - DesignSystem.swift

@@ -229,7 +229,17 @@ struct ScanView: View {
                 }
             }
             .sheet(item: $draft, onDismiss: { processNextImportedFile() }) { d in
-                ReviewView(draft: d) { draft = nil }
+                // P-DRAFT (L-2026-11-13-14): onDone của ReviewView
+                // CHỈ cháy ở đúng hai điểm — lưu thành công (cuối
+                // save()) và nút "Huỷ, không lưu" tường minh — nên
+                // xoá bản chụp nháp tại đây là khớp cả hai trường
+                // hợp kết thúc. Vuốt đóng sheet KHÔNG qua onDone:
+                // bản chụp còn nguyên trên đĩa để lần mở app/tab
+                // sau khôi phục lại đúng bản nháp này.
+                ReviewView(draft: d) {
+                    PendingDraftStore.clear()
+                    draft = nil
+                }
             }
             // WP3 bước 2: file tới qua onOpenURL trong lúc màn Chụp đã
             // hiện -> hút ngay vào hàng chờ chung.
@@ -239,10 +249,34 @@ struct ScanView: View {
             // Inbox phòng trường hợp hệ thống chép file vào trước khi
             // onOpenURL kịp chạy (khởi động lạnh).
             .onAppear {
+                // P-DRAFT (L-2026-11-13-14): khôi phục bản nháp chờ
+                // TRƯỚC — khi có draft, processNextImportedFile tự
+                // giữ hàng chờ nạp đứng chờ theo luật cũ, không có
+                // đường nạp nào chen vào bản nháp vừa khôi phục.
+                restorePendingDraftIfNeeded()
                 consumeExternalImports()
                 sweepInbox()
             }
         }
+    }
+
+    /// P-DRAFT (L-2026-11-13-14): mở lại màn Kiểm Lại với bản nháp
+    /// đã chụp xuống đĩa ở lượt trước (app bị hệ thống giết trong
+    /// lúc anh đang kiểm dở). Chỉ khôi phục khi đang rảnh tay:
+    /// đang có draft khác hoặc đang đọc dở thì bỏ qua — lượt tạo
+    /// draft mới sẽ tự chụp snapshot mới đè lên. Snapshot hỏng:
+    /// PendingDraftStore.load/discardCorrupt tự xoá + ghi log,
+    /// hàm này trả về lặng, app mở bình thường.
+    private func restorePendingDraftIfNeeded() {
+        guard draft == nil, !isProcessing else { return }
+        guard let snapshot = PendingDraftStore.load() else { return }
+        guard let restored = snapshot.makeDraft() else {
+            PendingDraftStore.discardCorrupt(
+                reason: "snapshot không ánh xạ lại được thành ScanDraft")
+            return
+        }
+        draft = restored
+        statusText = "Đã khôi phục bản nháp chưa lưu từ lần mở trước — anh kiểm lại rồi bấm Lưu giúp."
     }
 
     /// Đổ URL từ onOpenURL vào hàng chờ nạp chung rồi xoá danh sách chờ —
@@ -377,7 +411,7 @@ struct ScanView: View {
                     return
                 }
                 statusText = qualityNote(outcome.qualityOutcome)
-                draft = ScanDraft(
+                let newDraft = ScanDraft(
                     result: outcome.result,
                     imageFileName: request.imageFileName,
                     sourceType: sourceType,
@@ -388,6 +422,18 @@ struct ScanView: View {
                     reconcileReport: outcome.report,
                     diagnosticsID: outcome.diagnosticsID,
                     diagnosticsWriteFailed: outcome.diagnosticsWriteFailed)
+                draft = newDraft
+                // P-DRAFT (L-2026-11-13-14): chụp bản nháp xuống
+                // đĩa NGAY khi nó ra đời, TRƯỚC khi sheet Kiểm Lại
+                // hiện — từ khoảnh khắc này, việc dở của anh sống
+                // trên đĩa chứ không chỉ trong @State. Ghi hỏng
+                // (hết dung lượng...) thì nói thật bằng dòng trạng
+                // thái để anh biết mà lưu sớm, không lặng im quay
+                // về chế độ dễ mất như trước.
+                if !PendingDraftStore.save(PendingDraftSnapshot(draft: newDraft)) {
+                    let note = "Chưa ghi được bản nháp phòng hờ xuống máy — anh lưu sớm giúp, đừng rời app lâu kẻo mất bản đang kiểm."
+                    statusText = statusText.map { $0 + " " + note } ?? note
+                }
             }
         }
     }
@@ -560,6 +606,54 @@ struct ScanView: View {
             cg.scaleBy(x: size.width / bounds.width, y: -size.height / bounds.height)
             page.draw(with: .cropBox, to: cg)
         }
+    }
+}
+
+
+// MARK: - P-DRAFT: ánh xạ ScanDraft <-> PendingDraftSnapshot
+//
+// Ánh xạ sống ở file này vì ScanDraft khai ở đây; các DTO + kho
+// lưu (PendingDraft.swift) không phụ thuộc tầng UI. Trường `id`
+// của ScanDraft là định danh phiên hiển thị (Identifiable) —
+// KHÔNG chụp: bản nháp khôi phục nhận id mới, đúng nghĩa của nó.
+
+extension PendingDraftSnapshot {
+    /// Chụp từ bản nháp đang sống trong bộ nhớ (gọi ngay khi
+    /// draft ra đời ở runRead).
+    init(draft: ScanDraft) {
+        self.init(result: draft.result,
+                  imageFileName: draft.imageFileName,
+                  sourceTypeRaw: draft.sourceType.rawValue,
+                  sourceFileName: draft.sourceFileName,
+                  originalFileNames: draft.originalFileNames,
+                  rawTextIsPDFTextLayer: draft.rawTextIsPDFTextLayer,
+                  provenance: draft.provenance,
+                  reconcileReport: draft.reconcileReport,
+                  diagnosticsID: draft.diagnosticsID,
+                  diagnosticsWriteFailed: draft.diagnosticsWriteFailed)
+    }
+
+    /// Dựng lại bản nháp để mở Kiểm Lại. Trả nil khi báo cáo đối
+    /// chiếu chứa mã enum lạ (bản chụp của phiên bản khác) — nơi
+    /// gọi xử như snapshot hỏng (xoá + log). Riêng sourceType lạ
+    /// thì hạ về .unknown: đó là nhãn nguồn nạp (F3), không đáng
+    /// đánh đổi cả bản nháp vì một nhãn.
+    func makeDraft() -> ScanDraft? {
+        var restoredReport: ReconcileReport? = nil
+        if let reportDTO = reconcileReport {
+            guard let report = reportDTO.toOriginal() else { return nil }
+            restoredReport = report
+        }
+        return ScanDraft(result: result.toOriginal(),
+                         imageFileName: imageFileName,
+                         sourceType: SourceType(rawValue: sourceTypeRaw) ?? .unknown,
+                         sourceFileName: sourceFileName,
+                         originalFileNames: originalFileNames,
+                         rawTextIsPDFTextLayer: rawTextIsPDFTextLayer,
+                         provenance: provenance,
+                         reconcileReport: restoredReport,
+                         diagnosticsID: diagnosticsID,
+                         diagnosticsWriteFailed: diagnosticsWriteFailed)
     }
 }
 
