@@ -162,6 +162,7 @@ struct ContentView: View {
     private var leagueChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                hotChip
                 ForEach(League.allCases) { league in
                     let selected = store.selectedLeague == league.rawValue
                     Button {
@@ -184,11 +185,46 @@ struct ContentView: View {
         }
     }
 
+    /// The 🔥 Hot chip: matches the source sites themselves flag hot,
+    /// fed by the backup mirror's "🔥 Hot" group (see PlaylistStore).
+    private var hotChip: some View {
+        let selected = store.selectedLeague == PlaylistStore.hotTabValue
+        return Button {
+            store.selectedLeague = PlaylistStore.hotTabValue
+        } label: {
+            Text("🔥 Hot")
+                .font(.subheadline.weight(selected ? .bold : .regular))
+                .foregroundStyle(selected ? .white : .white.opacity(0.7))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(selected ? Color.orange : Color.white.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - League list (bucket sections)
 
     private var leagueList: some View {
+        if store.selectedLeague == PlaylistStore.hotTabValue {
+            return AnyView(hotList)
+        }
+        return AnyView(leagueBucketList)
+    }
+
+    private var hotList: some View {
+        bucketList(channels: store.hotChannels,
+                   emptyText: "Chưa có trận hot nào. Trang nguồn gắn cờ hot cho trận nào thì trận đó hiện ở đây.")
+    }
+
+    private var leagueBucketList: some View {
         let league = League(rawValue: store.selectedLeague) ?? .england
-        let channels = store.channels(in: league)
+        return bucketList(channels: store.channels(in: league),
+                          emptyText: "Chưa có kênh nào trong mục này.")
+    }
+
+    private func bucketList(channels: [Channel], emptyText: String) -> some View {
         let now = Date()
         let live = channels.filter { LeagueClassifier.bucket(of: $0, now: now) == 0 }
         let upcoming = channels.filter {
@@ -199,7 +235,7 @@ struct ContentView: View {
 
         return List {
             if channels.isEmpty {
-                Text("Chưa có kênh nào trong mục này.")
+                Text(emptyText)
                     .foregroundStyle(.white.opacity(0.6))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -236,7 +272,9 @@ struct ContentView: View {
 
     private var searchList: some View {
         let query = searchText.lowercased()
-        let matches = store.channels.filter { $0.title.lowercased().contains(query) }
+        let mainURLs = Set(store.channels.map(\.url))
+        let pool = store.channels + store.hotChannels.filter { !mainURLs.contains($0.url) }
+        let matches = pool.filter { $0.title.lowercased().contains(query) }
         return List {
             if matches.isEmpty {
                 Text("Không tìm thấy trận nào.")
@@ -287,7 +325,7 @@ struct ContentView: View {
     }
 
     private var footerRow: some View {
-        Text("Đá Banh v1.4 • \(store.channels.count) trận")
+        Text("Đá Banh v1.5 • \(store.channels.count) trận")
             .font(.caption)
             .foregroundStyle(.white.opacity(0.35))
             .frame(maxWidth: .infinity, alignment: .center)
