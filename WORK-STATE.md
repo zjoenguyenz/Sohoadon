@@ -3403,3 +3403,27 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
   (2) tự kiểm bằng 3 ca chế tay theo chân lý `gt.json`: SAMS-20260930 (v3 mở thuế [] → v4 CLOSE thuế [630,382], prov=3) ra **TIEN** đúng; S-0 (v3 CLOSE → v4 thiếu thuế 390) ra **THUT** và bị liệt kê đích danh ở dòng THUT cases; C-003 (cả hai CLOSE, v4 prov=2) ra `=` với prov=2 hiện rõ — provenance thiếu sẽ lộ, không bị nuốt. Tổng làn cổng chế tay: v4 2/3 CLOSE vs v3 2/3, khớp tay đếm.
 - Tuyên bố trung thực — đã chứng minh: logic TIEN/THUT/CLOSE + cột prov của bộ chấm V4-1 đúng trên log thật 169 luồng và 3 ca chế tay có đáp án; chưa chứng minh: chưa có dòng STREAM4 thật nào để chấm (lõi v4 chưa xây — số V4-1 vẫn là 0 ca thật); chưa làm: không viết/sửa code lõi, không build, không đụng Swift trong ca này.
 - **Bước tiếp theo giữ nguyên của gói V4-1: xây module v4 phần khối tổng (sinh ứng viên tạm tính/thuế/tổng + trọng tài E1/E2/E3 + provenance, kèm QualityMap theo D-V4-2) trong harness, chạy cổng luồng ra dòng STREAM4 rồi chấm bằng score_v4.py này — đích danh ca SAMS-20260930 thuế [630,382] và S-0 thuế [960,390], 0 ca thụt, prov đủ 100% làn L1. Ca này không kêu anh cài/test gì.**
+- ĐẨY CUỐI CA 12:40: **THÀNH CÔNG** — đúng 1 lần, 1 file (WORK-STATE.md), commit mới trên docs/planning: `a4da99b78bee4b566a2dc9e5a8ccf0ead4bb211e`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- V4-1 TÍCH HỢP + ĐẨY (2026-11-13 13:05 CST): commit v3
+  2952edad (Candidates.swift + Arbiter.swift mới,
+  Parser.parseV4, ReadPipeline nối QualityMap D-V4-2,
+  harness streamone --core v4 + STREAM4-RESULT).
+  PHÁN QUYẾT LEADER khi rà (ghi ở v4-1/CHECKS.md phụ
+  lục): vô hiệu bậc 4/5 của thang nghiệm (heuristic
+  không bằng chứng — phạm §3.4), thay bằng LUẬT BẰNG
+  CHỨNG THUẾ (bể có bằng chứng thì tập rỗng không thể
+  chấp nhận, §3.6) — nghiệm đối thủ của L-R05/L-R06 là
+  nghiệm suy biến S==T bỏ thuế. Mô phỏng Leader tự chạy
+  lại: 30/34 khối tổng khớp GT, 4 ca mở = đúng lớp mất
+  vật lý; kiểm tĩnh P4 PASS TOÀN BỘ/P5/S10 PASS.
+  Treo trình anh: AMD-V4-01 (nhánh mơ hồ: để trống
+  trường tranh chấp vs chữ §3.4 trình bày tạm — 0 ca
+  corpus chạm nhánh này). Chờ cổng luồng Swift thật.
+
+## CA TRỰC 14:40 CST 2026-11-13 — KIỂM CHỨNG TỪ XA GÓI ĐẨY V4-1: 8/8 FILE TRÊN v3 KHỚP BYTE BẢN TẠI BÀN
+- Cổng đóng băng nghiên cứu cũ (11/11): ĐÃ HẾT HIỆU LỰC từ lâu (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; Phương án A 10:46, DESIGN-V4 + D-V4-1..4 10:52, mức chốt V4-4 12:36 hôm nay) — ca quay lại luật chung, làm đúng MỘT bước tiếp theo của gói V4-1: kiểm chứng độc lập gói đã đẩy ở nhịp 13:05 TRƯỚC khi dispatch cổng luồng (luật đầy đủ gói đẩy: kiểm gói bằng bằng chứng, không tin lời ghi).
+- KẾT QUẢ (đọc trực tiếp GitHub trong ca): đầu nhánh v3 = commit `2952edadff7fc62afb3bcc99c2de49da454da862` ("V4-1: candidate generation + totals arbiter (DESIGN-V4) — dormant in app, harness --core v4", 2026-11-13T19:04:23Z). Git blob hash của cả 8 file gói đẩy tại bàn (`v4-1/push/`) KHỚP TỪNG FILE với blob trên v3 ở commit đó:
+  Arbiter.swift `49fdc64d…` (27.506 byte) · Candidates.swift `fa12b469…` (13.756) · Parser.swift `407f3354…` (123.368) · ReadPipeline.swift `079a9dcb…` (59.152) · project.yml `7a86a4a3…` (5.693) · harness/project-harness.yml `e2e79f99…` (2.990) · harness/HarnessApp/main.swift `bf1a9c91…` (35.962) · harness/fixtures/L-R09-ANCHOR-TRAP.json `b63d0103…` (4.679).
+  → Gói trên kho là ĐÚNG gói Leader đã rà ở `v4-1/CHECKS.md` phụ lục (kèm INT-V4-01 vô hiệu bậc 4/5 + luật bằng chứng thuế, ghi ở `core-v4-design/AMENDMENTS-V4.md`); không thiếu file, không lẫn bản cũ.
+- Tuyên bố trung thực — đã chứng minh: tính nguyên vẹn byte của gói V4-1 trên v3 bằng blob hash đọc trực tiếp trong ca này; chưa chứng minh: Swift thật vẫn CHƯA chạy (số V4-1 tới nay vẫn là mô phỏng Python 30/34, 0 thụt — chưa phải bằng chứng Swift); chưa làm: chưa dispatch lượt harness nào trong ca này (chi phí CI + đúng nhịp cổng của Leader/chat chính), AMD-V4-01 vẫn chờ anh phán kèm báo cáo V4-1.
+- **Bước tiếp theo giữ nguyên, nay đã sẵn sàng thi hành: Leader/chat chính dispatch harness-ci job=streams trên v3 @2952edad ĐÚNG MỘT lượt → lấy artifact streams.log có dòng STREAM4-RESULT → chấm bằng `core-v4-design/score_v4.py` (bộ chấm đã kiểm chứng ở ca 12:40): kỳ vọng SAMS-20260930 thuế [630,382], S-0 thuế [960,390], L-R01 [822,116], 0 ca thụt so với cơ sở v3, STREAM4-DIED = 0, prov đủ làn cổng. Ca này không kêu anh cài/test gì.**
