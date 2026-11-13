@@ -1,0 +1,35 @@
+T-JOHNNYS SEAFOOD CO.
+309 EAST OAK ST
+COWETA, OK 74429
+918 406 4870
+ORDER: 099
+Cashier: Chance
+20-May-2026 1:11:30P
+Transaction 093507
+1 Live Crawfish $150.50
+43 lb @ $3.50/lb
+2 Down Home Sausage $13.98
+Subtotal $164.48
+Coweta sales tax 10.05% $16.53
+Total $181.01
+DEBIT CARD SALE $181.01
+MASTERCARD 2586
+Retain this copy for statement validation
+20-May-2026 1:12:02P
+$181.01 | Method. CONTACTLESS
+US Debit XXXXXXXXXXXX2586
+Reference ID: 614000741140
+Auth ID: 002227
+MID: ********2882
+AID: A0000000042203
+AthNtwkNm: MAESTRO
+RtInd:DEBIT
+PIN VERIFIED
+Thank you for your business! We greatly
+appreciate it
+Online: https://clover.com/p
+/FNC7DA0778DG4
+Clover ID: VQEVYBG5BCBA2
+Payment FNC7DA0778DG4
+Clover Privacy Policy
+https://clover.com/privacy

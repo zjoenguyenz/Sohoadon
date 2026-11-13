@@ -522,6 +522,69 @@ case "parseonly":
     _ = ReceiptParser.parse(lines: lines, boxes: boxes)
     print("SURVIVED parseonly")
 
+case "streamone":
+    // Process con của "streams": parse đúng một file luồng (mỗi
+    // dòng = một OCRLine, confidence = recoveredLineConfidence
+    // như đường reparse) rồi in STREAM-RESULT. Chết vì signal =
+    // ca đó gây chết — cha ghi STREAM-DIED thay cho kết quả.
+    // Thuế in TỪNG DÒNG để bàn chấm Ledger Gate theo SCORECARD.
+    guard args.count >= 2 else { fail("streamone cần đường dẫn file") }
+    requireDataLoaded()
+    guard let raw = try? String(contentsOfFile: args[1], encoding: .utf8) else {
+        fail("streamone: không đọc được \(args[1])")
+    }
+    let streamLines = raw.split(separator: "\n")
+        .map { OCRLine(text: String($0), confidence: ReceiptParser.recoveredLineConfidence) }
+    let parsed = ReceiptParser.parse(lines: streamLines)
+    let taxList = parsed.taxes.map { String($0.amountCents) }.joined(separator: ",")
+    let qtySum = parsed.items.reduce(0) { $0 + $1.qty }
+    print("STREAM-RESULT file=\((args[1] as NSString).lastPathComponent) \(parseSummary(parsed)) taxes=[\(taxList)] qty=\(qtySum)")
+    print("SURVIVED streamone")
+
+case "streams":
+    // CỔNG LUỒNG (V4-0, DESIGN-V4 §7): chạy parser HIỆN HÀNH
+    // trên mọi luồng .txt trong --dir. Mỗi ca ở process con
+    // riêng (mẫu của bisect): một ca chết không kéo cả cổng,
+    // và cái chết được ghi đích danh. Cổng hoàn thành khi in
+    // STREAMS-DONE — ca chết/tệ là DỮ LIỆU ĐO của đường cơ
+    // sở, không phải lỗi vận hành của cổng.
+    guard let dir = argValue("--dir") else { fail("streams cần --dir") }
+    requireDataLoaded()
+    guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir) else {
+        fail("streams: không đọc được thư mục \(dir)")
+    }
+    let files = names.filter { $0.hasSuffix(".txt") }.sorted()
+    print("[streams] dir=\(dir) files=\(files.count)")
+    let selfPath = CommandLine.arguments[0]
+    var died = 0
+    for name in files {
+        let path = (dir as NSString).appendingPathComponent(name)
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: selfPath)
+        p.arguments = ["streamone", path]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        var out = ""
+        var spawnOK = true
+        do { try p.run() } catch { spawnOK = false }
+        if spawnOK {
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            p.waitUntilExit()
+            out = String(data: data, encoding: .utf8) ?? ""
+        }
+        let ok = spawnOK && p.terminationReason == .exit && p.terminationStatus == 0
+        if ok, let line = out.split(separator: "\n").first(where: { $0.hasPrefix("STREAM-RESULT") }) {
+            print(line)
+        } else {
+            died += 1
+            let note = !spawnOK ? "spawn-failed"
+                : (p.terminationReason == .exit ? "exit \(p.terminationStatus)" : "signal \(p.terminationStatus)")
+            print("STREAM-DIED file=\(name) (\(note))")
+        }
+    }
+    print("STREAMS-DONE total=\(files.count) died=\(died)")
+
 case "bisect":
     // Truy vết cái chết trong parse TRÊN CHÍNH luồng fixture:
     // mỗi lựa chọn dòng chạy trong process con riêng (chết vì
@@ -689,5 +752,5 @@ case "images":
     print("SURVIVED images x\(sets)")
 
 default:
-    fail("chế độ không rõ: \(mode) — probe|images|fixture|fuzz")
+    fail("chế độ không rõ: \(mode) — probe|images|fixture|fuzz|streams")
 }
