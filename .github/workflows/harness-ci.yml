@@ -1,4 +1,14 @@
-# HARNESS CI — cổng tự chạy của LUẬT 2026-11-12.
+# HARNESS CI — cổng kiểm chứng của LUẬT 2026-11-12.
+#
+# CHỈ CHẠY THỦ CÔNG (workflow_dispatch) — lệnh chủ tài
+# khoản 2026-11-12 23:48 CST: chế độ tự kích hoạt theo
+# push đã bị BỎ vì đốt hạn mức Actions (tháng 11/2026
+# Sohoadon tốn $17.57 trong $18 miễn phí gói Pro, phần
+# lớn do workflow này tự chạy theo mỗi lần đẩy code).
+# Runner macOS $0.08/phút; một lượt toàn phần ≈ 76 phút
+# ≈ $6 — chỉ bấm chạy khi thật sự tới CỔNG QUYẾT ĐỊNH
+# (trước patch lớn). Luật 100 lượt KHÔNG đổi: cổng vẫn
+# phải chạy và xanh hẳn trước khi giao bản.
 #
 # FILE NHÁP: muốn hiệu lực phải nằm ở .github/workflows/
 # harness-ci.yml trong repo. Connector GitHub KHÔNG đẩy được
@@ -19,6 +29,14 @@ name: Harness — cổng tự chạy 100 lượt
 
 on:
   workflow_dispatch:
+    inputs:
+      job:
+        description: "full = ca 3 cong (mac dinh) | streams = chi cong luong V4-0"
+        type: choice
+        options:
+          - full
+          - streams
+        default: full
 
 jobs:
   law-and-control:
@@ -56,12 +74,6 @@ jobs:
           set -o pipefail
           "$BIN" fixture harness/fixtures/L-R01-raw-a-original.json 2>&1 | tee control.log
           grep -q "SURVIVED fixture" control.log
-      - name: Thu báo cáo crash macOS (khi đỏ)
-        if: failure()
-        run: |
-          mkdir -p crashreports
-          cp ~/Library/Logs/DiagnosticReports/SoHoaDonHarness* crashreports/ 2>/dev/null || true
-          ls -la crashreports/ || true
       - name: Truy vết bisect (chỉ khi cổng control đỏ)
         if: failure()
         run: |
@@ -78,12 +90,13 @@ jobs:
           else
             echo "BIN không chạy được — bỏ qua variants" | tee variants.log
           fi
-
       - name: Cổng 2 — LUẬT 100 lượt (33 ảnh x 100 set)
+        if: inputs.job == 'full'
         run: |
           "$BIN" images --dir BenchImages --sets 100 --dump streams 2>&1 | tee images.log
           grep -q "SURVIVED images x100" images.log
       - name: Ma trận cấu hình phụ (3 set mỗi tổ hợp còn lại)
+        if: inputs.job == 'full'
         run: |
           for cfg in "current 1" "current 3" "old 3" "enus 1"; do
             set -- $cfg
@@ -92,6 +105,7 @@ jobs:
             grep -q "SURVIVED images x3" "matrix-$1-$2.log"
           done
       - name: Cổng 3 — bẫy đột biến (mỗi ca một process)
+        if: inputs.job == 'full'
         run: |
           : > fuzz-results.txt
           "$BIN" fuzz harness/fixtures/L-R01-raw-a-original.json --list > fuzz-ids.txt
@@ -106,6 +120,12 @@ jobs:
           done < fuzz-ids.txt
           cat fuzz-results.txt
           ! grep -q "^DIED" fuzz-results.txt
+      - name: Cổng luồng — V4-0 (chỉ khi job=streams)
+        if: inputs.job == 'streams'
+        run: |
+          set -o pipefail
+          "$BIN" streams --dir harness/streams 2>&1 | tee streams.log
+          grep -q "STREAMS-DONE" streams.log
       - name: Lưu bằng chứng (luồng thật + log)
         if: always()
         uses: actions/upload-artifact@v4
@@ -118,8 +138,8 @@ jobs:
             control.log
             bisect.log
             variants.log
-            crashreports/
             images.log
             matrix-*.log
             fuzz-results.txt
+            streams.log
             fuzz-*.log
