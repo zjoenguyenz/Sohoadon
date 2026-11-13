@@ -2663,3 +2663,73 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
   đẩy v3 → lượt harness kế tiếp phải XANH TRỌN cả 4 cổng
   (control + 100 lượt + ma trận + fuzz 40/40) mới tính
   chuẩn bị patch lớn giao anh.
+- ĐẨY CUỐI CA 20:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `08527ad5135a7babd9ffacb429ce0bdabf712fb6`; đọc lại từ xa
+  xác nhận đầu nhánh = commit này. (Dòng này chỉ có tại
+  bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## TRAP-FIX HỌ A DẠNG HỮU-HẠN-KHỔNG-LỒ ĐÃ ĐẨY v3 30795b1c (2026-11-12 20:5x CST)
+- Leader thi hành bước ca 20:40 khoanh: kiểm miền khoá bin
+  |khoá| < 2^63 TRƯỚC Int() ở cả 3 site binning:
+  Parser.columnModel (điểm chết của box-huge-maxx-moneyline),
+  CaptureIntake.moneyColumnBand (thêm nil khi rỗng bin —
+  chống ép mở max trên tập rỗng), LineAssembly stitch
+  (lọc phiếu ngoài miền; rỗng hết -> neo mặc định như
+  nhánh votes.isEmpty).
+- Kiểm tĩnh trên nguồn đã sửa: P4 PASS toàn bộ, P5 PASS,
+  S10 PASS.
+- Lượt harness tự kích hoạt trên 30795b1c = ứng viên cổng
+  Luật 3 trên code cuối thật: phải XANH TRỌN 4 cổng
+  (control + 100 lượt + ma trận + fuzz 40/40) mới trình
+  anh patch lớn. Thời lượng kỳ vọng ~1h20m theo nhịp run
+  #20. Site tiềm ẩn cùng họ đã ghi nhận nhưng NGOÀI gói
+  này: CaptureIntake:348/364 Int(CGFloat) kẹp sau đổi
+  (đầu vào bị chặn bởi producer — FULL-REVIEW mức tiềm ẩn).
+
+## CA TRỰC 22:40 CST 2026-11-12 — PHÁN QUYẾT RUN #21 TRÊN 30795b1c: XANH TRỌN CẢ 4 CỔNG — ĐIỀU KIỆN CHUẨN BỊ PATCH LỚN ĐÃ ĐẠT
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước: đọc phán quyết
+  lượt harness trên commit trap-fix 30795b1c (mục cuối file
+  giao: "lượt harness kế tiếp phải XANH TRỌN cả 4 cổng mới
+  tính chuẩn bị patch lớn giao anh"). Ca không sửa code,
+  không đẩy code, không kích lượt chạy nào.
+- KẾT QUẢ (đọc trực tiếp GitHub Actions trong ca, qua trình
+  duyệt đã đăng nhập — MCP GitHub không có công cụ Actions):
+  run #21 "Harness — cổng tự chạy 100 lượt" trên 30795b1c
+  (đẩy 03:02:01Z = 21:02 CST), SUCCESS, tổng 1h15m45s, kết
+  thúc 22:17 CST; commit page: "Status checks: success, 2/2";
+  artifact bằng chứng harness-evidence-21 (171 KB,
+  sha256 b4e5ed2b…).
+  · Control: PASS — "SURVIVED fixture" (costco · subtotal
+    12548 · tax 938 · total 13486 · 20 món · sumItems 12548
+    · warnings 1).
+  · 100 lượt: PASS — "SET 100 DONE 33/33" + "SURVIVED
+    images x100" (100/100 bộ × 33 ảnh = 3.300 lượt ảnh).
+  · Ma trận phụ: PASS — 4/4 cấu hình (current topk=1 ·
+    current topk=3 · old vi-VN topk=3 · en-US topk=1) đều
+    "SET 3 DONE 33/33" + "SURVIVED images x3".
+  · Fuzz: PASS 40/40 — ca chết duy nhất của run #20,
+    box-huge-maxx-moneyline, nay PASS. (Ghi chú nhãn: trong
+    workflow, bước fuzz mang nhãn "Cổng 3 — bẫy đột biến",
+    bước ma trận không mang số cổng; bốn phần trên khớp
+    đúng danh sách 4 cổng của mục 18:40.)
+- Hệ quả theo luật đã chốt: điều kiện "harness XANH TRỌN
+  trên code cuối thật" của Luật 3 NAY ĐÃ ĐẠT trên commit
+  30795b1c. Đóng băng giao bản vẫn nguyên cho tới khi patch
+  lớn được chuẩn bị + trình anh ở chat chính — ca trực
+  không tự chuẩn bị bản giao, không kêu anh cài/test gì
+  trong ca này.
+- Tuyên bố trung thực — đã chứng minh: phán quyết run #21
+  từng cổng bằng log job đọc trực tiếp trên GitHub Actions
+  (job 131658680956, run 43356189848); chưa chứng minh:
+  chất lượng ĐỌC (đúng số/món) trên máy thật của anh — cổng
+  harness chỉ phán sống/chết + đối soát control, việc đọc
+  đúng ở thiết bị vẫn thuộc lần test patch lớn của anh;
+  chưa làm: chưa chuẩn bị patch lớn (thuộc Leader/chat
+  chính), chưa hợp v3 vào bản giao.
+- **Bước tiếp theo: Leader (nhịp chat chính) chuẩn bị PATCH
+  LỚN trên nền 30795b1c** (đây là loại patch phải trình anh
+  duyệt theo luật GitHub 2026-11-12) → anh duyệt mới build
+  bản giao cài đặt; trước lúc đó không giao bản nào.
