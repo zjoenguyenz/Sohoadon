@@ -3332,3 +3332,74 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
   nếu WORK-STATE chưa ghi anh đã duyệt A thì không thiết
   kế chi tiết, không sửa code lõi — chỉ xác nhận lại
   trạng thái chờ này.**
+- ĐẨY CUỐI CA 10:40: **THÀNH CÔNG** — kiểm từ xa trước
+  khi đẩy (theo dặn của ca 08:40): bản WORK-STATE trên
+  docs/planning vẫn dừng ở ca ~02:40 (173.518 ký tự, 0 mục
+  06:40/08:40) → lần đẩy mơ hồ 08:40 KHÔNG lên được chút
+  nào, đẩy lại không trùng. Đẩy đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `bcf3538a7b8c9651afaccdd72eb6f4de22e3ae93`. (Dòng này chỉ
+  có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- ★ ANH DUYỆT PHƯƠNG ÁN A (2026-11-13 10:46 CST): "Duyệt
+  Phương án A — lập thiết kế chi tiết lõi mới". Pha soạn
+  DESIGN-V4 mở tại ~/workspace/receipt-app/core-v4-design/.
+  Kỷ luật cổng giữ nguyên: thiết kế xong trình anh duyệt ở
+  CỔNG THIẾT KẾ mới được xây; chưa dòng code lõi nào được
+  đụng trong pha soạn thảo. Hai quyết định treo L1/L2
+  (A2-04 qualityMap / A2-05 cổng chất lượng theo-tờ) được
+  gập vào bản thiết kế thành ĐỀ XUẤT để anh quyết một lần
+  ở cổng thiết kế.
+- DESIGN-V4 ĐÃ HỢP NHẤT (2026-11-13 ~10:55 CST):
+  core-v4-design/DESIGN-V4.md (~71 KB, §0–§11). Leader đã
+  kiểm chứng chéo: trích dẫn ReadDiagnostics :69/:241/
+  :296/:229 đúng từng dòng (kết luận schema v2 cộng thêm
+  thuần đứng vững); phép duy nhất {630,382}=1012 trên ca
+  Sam's tự liệt kê lại khớp; thâm hụt L-R08 -1200 khớp
+  chữ số mất. 3 điểm mở của tuyến thuật toán đã chốt khi
+  hợp nhất (trọng số = khởi điểm + hiệu chuẩn ở V4-1;
+  trần tìm kiếm chốt lại bằng số đo A0; luật đổi neo bắt
+  buộc fixture L-R09-ANCHOR-TRAP). Đang TRÌNH ANH Ở CỔNG
+  THIẾT KẾ với 4 quyết định D-V4-1..4. Chưa xây gì.
+- ★★ ANH DUYỆT DESIGN-V4 + CẢ 4 QUYẾT ĐỊNH D-V4-1..4
+  (2026-11-13 10:52 CST) — "bắt đầu gói V4-0". DESIGN-V4
+  từ đây là CHUẨN THI HÀNH (lệch phải qua sửa đổi có ghi
+  chép). GÓI V4-0 MỞ: dựng cổng luồng + đo đường cơ sở
+  core-v3-2 trên 169 luồng corpus trước khi viết v4.
+- V4-0 ĐANG CHẠY (2026-11-13 10:57 CST): workflow
+  harness-ci.yml đã cài bản có input job (full|streams)
+  lên main (2dfe033) + v3 (4547c43) — Leader đã đọc lại
+  bản trên v3: khớp byte-đối-byte bản dự định (145 dòng,
+  bước fuzz nguyên văn + dòng if). Dispatch harness run
+  #24 (id 43467989317, v3, job=streams). Chờ artifact
+  harness-evidence-24 (streams.log) để chấm đường cơ sở
+  bằng gt.json (34 ca) + score_streams.py đã sẵn ở
+  core-v4-design/.
+- ★ V4-0 XONG (2026-11-13 11:22 CST): cổng luồng chạy
+  thật trên CI — run #24 (1m11s) + #25 (6m33s, có
+  qtyPos), STREAMS-DONE 169/169 died=0, control SURVIVED.
+  ĐƯỜNG CƠ SỞ (làn cổng 34 luồng có chân lý, parser
+  core-v3-2): FULL-LEDGER 8/34, FLAGGED-LOSS 26,
+  SILENT-* = 0, DIED = 0. Phân loại 26 ca chưa trọn:
+  22 ca giá trị đều có trong luồng (lỗi thuần parser —
+  gồm SAMS-20260930, N-001, S-0, C-003, D-01..16/18);
+  5 ca mất vật lý/xung đột in (L-R03, L-R05, L-R08,
+  L-R09, D-17) kết cục đúng = cờ + khoanh đúng khối.
+  Báo cáo: core-v4-design/BASELINE-V4-0.md kèm ĐỀ XUẤT
+  mức chốt V4-4 (FULL >= 30/34; 5 ca lớp (b) cờ đúng
+  khối; SILENT/DIED = 0 tuyệt đối) — đang trình anh
+  phán theo D-V4-4. CI V4-0 tốn ~$0.62 tổng.
+- ★ ANH DUYỆT MỨC CHỐT V4-4 (2026-11-13 12:36 CST):
+  FULL-LEDGER >= 30/34 trên làn cổng luồng; 5 ca lớp (b)
+  (L-R03, L-R05, L-R08, L-R09, D-17) bắt buộc CÓ CỜ +
+  khoanh đúng khối thâm hụt; SILENT-* = 0 và DIED = 0
+  tuyệt đối; quy tắc chuyển lớp phải có rà chuỗi bằng
+  chứng. GÓI V4-1 MỞ: sinh ứng viên khối tổng/thuế +
+  trọng tài (kèm nối QualityMap theo D-V4-2).
+
+## CA TRỰC 12:40 CST 2026-11-13 — KIỂM CHỨNG BỘ CHẤM V4-1 (score_v4.py) TRÊN LOG CƠ SỞ + CA CHẾ TAY: ĐẠT
+- Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + duyệt thiết kế D1–D7 21:44 ngày 2026-11-11; Phương án A duyệt 10:46, DESIGN-V4 + D-V4-1..4 duyệt 10:52, mức chốt V4-4 duyệt 12:36 hôm nay — đều đã ghi ở các mục trên). Ca này quay lại luật chung, làm đúng MỘT bước của gói V4-1 vừa mở.
+- Việc của ca: `core-v4-design/score_v4.py` (bộ chấm khối tổng/thuế cho nghiệm thu V4-1, có sẵn tại bàn từ nhịp chat chính — ca này KHÔNG tạo, chỉ kiểm chứng độc lập trước khi lõi v4 dựa vào nó):
+  (1) chạy trên log cơ sở thật `run25/streams.log` (169 dòng STREAM-RESULT, 0 dòng STREAM4): ra đúng `v4 results: 0 | STREAM4-DIED: 0`, làn cổng 0/0 — đúng kỳ vọng khi chưa có lõi v4, không báo nhầm số v3 thành số v4;
+  (2) tự kiểm bằng 3 ca chế tay theo chân lý `gt.json`: SAMS-20260930 (v3 mở thuế [] → v4 CLOSE thuế [630,382], prov=3) ra **TIEN** đúng; S-0 (v3 CLOSE → v4 thiếu thuế 390) ra **THUT** và bị liệt kê đích danh ở dòng THUT cases; C-003 (cả hai CLOSE, v4 prov=2) ra `=` với prov=2 hiện rõ — provenance thiếu sẽ lộ, không bị nuốt. Tổng làn cổng chế tay: v4 2/3 CLOSE vs v3 2/3, khớp tay đếm.
+- Tuyên bố trung thực — đã chứng minh: logic TIEN/THUT/CLOSE + cột prov của bộ chấm V4-1 đúng trên log thật 169 luồng và 3 ca chế tay có đáp án; chưa chứng minh: chưa có dòng STREAM4 thật nào để chấm (lõi v4 chưa xây — số V4-1 vẫn là 0 ca thật); chưa làm: không viết/sửa code lõi, không build, không đụng Swift trong ca này.
+- **Bước tiếp theo giữ nguyên của gói V4-1: xây module v4 phần khối tổng (sinh ứng viên tạm tính/thuế/tổng + trọng tài E1/E2/E3 + provenance, kèm QualityMap theo D-V4-2) trong harness, chạy cổng luồng ra dòng STREAM4 rồi chấm bằng score_v4.py này — đích danh ca SAMS-20260930 thuế [630,382] và S-0 thuế [960,390], 0 ca thụt, prov đủ 100% làn L1. Ca này không kêu anh cài/test gì.**
