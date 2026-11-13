@@ -2592,3 +2592,74 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
   đẩy v3 → lượt harness kế tiếp phải XANH TRỌN cả 4 cổng
   (control + 100 lượt + ma trận + fuzz 40/40) mới tính
   chuẩn bị patch lớn giao anh.
+- ĐẨY CUỐI CA 18:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `c85c9d22d9204d0f8a33c7f5cceaad11955a4bd2`. (Dòng này chỉ
+  có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## CA TRỰC 20:40 CST 2026-11-12 — KHOANH BÀN GIẤY ĐIỂM TRAP CỦA box-huge-maxx-moneyline: Parser.swift:2025 (columnModel) — HỌ A, DẠNG HỮU-HẠN-KHỔNG-LỒ
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước: khoanh điểm trap
+  của ca fuzz chết duy nhất trên code cuối (mục 18:40 giao:
+  "Leader khoanh bằng census/bisect của harness trước khi
+  sửa") — ca này làm nửa bàn giấy của việc khoanh (census code
+  + số học, đọc trực tiếp); bisect/stack trên harness vẫn là
+  bằng chứng quyết định thuộc Leader. Ca không sửa code,
+  không đẩy code v3, không kích lượt chạy nào.
+- TRẠNG THÁI TỪ XA (đọc trực tiếp trong ca): đầu v3 VẪN là
+  `6781e582` (gói sửa lớn) · đầu docs/planning VẪN là
+  `c85c9d22` (commit ca 18:40) — chưa có sửa/run nào mới cho
+  ca fuzz này kể từ mục 18:40.
+- CHUỖI BẰNG CHỨNG KHOANH (mọi mắt xích đọc trực tiếp trong ca):
+  (1) Định nghĩa ca fuzz — harness/HarnessApp/main.swift:
+  401-403: `boxes[28] = CGRect(x: 0, y: 0.47, width: 1e17,
+  height: 0.013)` → maxX = 1e17, HỮU HẠN. Fixture kiểm tận
+  nơi: dòng 28 (0-based) của L-R01-raw-a-original.json đúng
+  là "125.48" (tiền trần, y gốc 0.469 ≈ 0.47 của đột biến) —
+  khớp chú thích tại main.swift:393-394.
+  (2) Cổng vào fuzz — main.swift:642: chỉ gọi
+  `ReceiptParser.parse(lines:boxes:)`, KHÔNG qua ráp dòng /
+  bộ chấm. Trong Parser.swift, `boxes` chỉ được tiêu thụ ở
+  đúng 1 chỗ: dòng 839-840 → geometricItems:2057 →
+  columnModel:2010. Hai site bin Int((e/0.01)) còn lại KHÔNG
+  tới được từ cổng fuzz này: CaptureIntake.moneyColumnBand
+  (chỉ qua CandidateScorer ở chế độ images) và bin dy của
+  LineAssembly stitch (chỉ ráp đa trang; bề rộng hộp không
+  đụng centerY).
+  (3) Chốt chặn hiện tại — Parser.swift:2015-2019: chỉ loại
+  cạnh KHÔNG hữu hạn (`guard e.isFinite`). 1e17 hữu hạn →
+  QUA chốt. Dòng 2025: `Int((e / 0.01).rounded())` =
+  Int(1e19) > Int64.max 9.223e18 → Swift TRAP (khớp exit 133
+  của ca chết). Số học kiểm bằng Python/IEEE-double trong
+  ca: 1e17/0.01 = 1e19; ngưỡng trap: maxX ≳ 9.22e16.
+  (4) Giải thích trọn vẹn mẫu run #20: hai ca anh em
+  box-nan/box-inf bị chốt isFinite diệt → PASS; box-huge là
+  ca HỮU-HẠN-tràn DUY NHẤT còn lại → DIED duy nhất. Khớp ứng
+  viên A của HARNESS-REPRO §4 (columnModel, số dòng cũ
+  :1999): gói sửa lớn đã diệt dạng không-hữu-hạn của A,
+  chừa lại dạng hữu-hạn-khổng-lồ.
+  (5) Site tiềm ẩn song sinh (ghi cho gói sửa, KHÔNG phải
+  điểm chết của ca fuzz này): CaptureIntake.swift:524
+  `bins[Int((e / 0.01)…)]` với chốt hữu-hạn tương tự ở
+  :516-520 — tới được qua đường app/images (CandidateScorer),
+  cùng họ lỗi; Leader quyết sửa chặn độ lớn ở CẢ hai site
+  (và rà bin dy ở LineAssembly:430 cho trọn họ) hay chỉ site
+  đã chết — ca này chỉ ghi nhận, không tự quyết thay.
+- Tuyên bố trung thực — đã chứng minh: trạng thái từ xa +
+  định nghĩa fuzz + nội dung fixture dòng 28 + chuỗi gọi
+  parse→geometricItems→columnModel + văn bản chốt chặn +
+  số học tràn Int, toàn bộ bằng đọc trực tiếp/chạy tính
+  trong ca; chưa chứng minh: CHƯA có stack/bisect của riêng
+  ca box-huge này được đọc — khoanh ở đây là mức bàn giấy
+  (code + số học, mọi mắt xích đều sơ cấp) chứ không phải
+  ngăn xếp CI; phán quyết cuối vẫn là lượt harness sau sửa
+  XANH TRỌN 4 cổng. Chưa làm: chưa sửa dòng code nào, chưa
+  chuẩn bị bản giao — đóng băng giao bản + luật 100 lượt
+  vẫn nguyên, không kêu anh cài/test gì.
+- **Bước tiếp theo (đã thu hẹp): Leader sửa chặn độ lớn tại
+  Parser.swift:2025** (kèm quyết về site song sinh
+  CaptureIntake:524) ở staging → kiểm tĩnh S10/P4/P5 ≡ →
+  đẩy v3 → lượt harness kế tiếp phải XANH TRỌN cả 4 cổng
+  (control + 100 lượt + ma trận + fuzz 40/40) mới tính
+  chuẩn bị patch lớn giao anh.
