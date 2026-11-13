@@ -2434,5 +2434,161 @@ WP5-GATE.md, SCORECARD.md); nếu không hoàn tất thì ghi CHỜ DUYỆT
   variants trong artifact/log: biến thể V1–V10 nào
   ok/DIED sẽ chỉ đặc điểm kích hoạt của dòng chết → mới
   định điểm trap cụ thể trong extractSameLineItems.
-- ĐẨY CUỐI CA 16:40: (đang thử — kết quả ghi ở dòng này
-  sau lần đẩy, sẽ đi theo lần đẩy của ca sau.)
+- ĐẨY CUỐI CA 16:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `d5a9ab9cc999e985fce951e688fc9848719fd9d3`. (Dòng này chỉ
+  có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+
+## ★ CƠ CHẾ CRASH ĐÃ KHOÁ + ĐÃ SỬA (2026-11-12 17:0x CST)
+- Run #18 (2a927fa) — chẻ biến thể: CHẾT = V1,V3,V4,V8,V10;
+  SỐNG = V2,V5,V6,V7,V9. Mẫu số chung của nhóm chết: dòng có
+  MÃ >= 7 CHỮ SỐ đứng độc + TIỀN SẠCH -> tạo được món.
+  "400" và cờ đuôi không liên quan.
+- CƠ CHẾ (đọc code đối chiếu, khớp mọi bằng chứng):
+  Parser.swift:1320 — matchGroups CHỈ trả các nhóm bắt
+  (capture groups), không gồm toàn khớp. Pattern trích
+  itemCode "(?<!\d)\d{7,}(?!\d)" KHÔNG có nhóm bắt nào ->
+  khớp thành công trả MẢNG RỖNG [] (không phải nil) ->
+  `if let cm` qua -> `cm[0]` subscript mảng rỗng -> SIGTRAP.
+  Dòng Costco điển hình (mã 7 số + tiền) luôn kích hoạt.
+- Điều tra diện (census): site 1320 là DUY NHẤT trong toàn
+  code mắc lớp lỗi này — mọi site subscript khác đều có
+  pattern có nhóm + chốt count (1161-64, 1178-81, 1252,
+  470, 1131-37, im/sm). 21 chỗ dùng != nil dạng boolean an
+  toàn. Quét [0]/[1] ngoài matchGroups: đều mảng cố định/
+  API hệ thống, an toàn theo cấu trúc.
+- Vì sao gương Python mù: port dùng tuple rỗng = FALSY nên
+  nhánh tương đương bị bỏ qua lặng lẽ; Swift mảng rỗng
+  KHÁC nil. Đây là cơ chế mù gương thứ ba, đã vào TEAM.md
+  L-2026-11-12-13.
+- SỬA (đẩy v3 43cf53d6, patch nhỏ theo Luật 2): pattern thêm
+  nhóm bắt "(\d{7,})" + chốt cm.count == 1 + comment ghi cơ
+  chế. Hành vi giữ nguyên (itemCode = dãy số dài trong tên).
+- Đang chờ: lượt harness tự kích hoạt trên 43cf53d6 —
+  control phải SURVIVED, sau đó Cổng 2 (33 ảnh x 100 set),
+  ma trận, Cổng 3 fuzz.
+
+## CONTROL XANH TRÊN CODE ĐÃ SỬA (run #19, 2026-11-12 17:04 CST)
+- Lượt tự kích hoạt trên 43cf53d6: Cổng 1 control PASS —
+  "[fixture] parsing -> [fixture] parsed -> SURVIVED
+  fixture", không còn HARNESS-SIGNAL. Luồng L-R01 từng giết
+  mọi bản trước nay parse trọn vẹn bằng Swift thật.
+- Cổng 2 (33 ảnh x 100 set) đang chạy tại thời điểm ghi;
+  kết quả toàn lượt (kèm ma trận + fuzz) sẽ đọc từ artifact
+  harness-evidence-19 khi lượt kết thúc.
+
+## GÓI SỬA LỚN — PHẦN FULL-REVIEW ĐÃ THI HÀNH Ở STAGING (2026-11-12 chiều)
+Vị trí: v3-phase4/app/ (chưa đẩy — chờ census run #19 xong
+rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
+- T1 Parser: weightLine chặn lb (finite, <=1e6) + điểm
+  Int(Double) ở :1223 qua kiểm miền [0, 2^63).
+- Khoá bin NaN (3 site): Parser.columnModel + CaptureIntake
+  moneyColumnRange chỉ nạp cạnh hữu hạn; LineAssembly loại
+  phiếu dy không hữu hạn tại nguồn.
+- T2+N1 Models.dollarsTextToCents viết lại: dấu trừ áp toàn
+  giá trị (-216.80 -> -21680; -0.50 -> -50), phần đô-la
+  chặn 12 chữ số (hết trap dán chuỗi dài); giữ nguyên các
+  ngữ nghĩa cũ còn lại (cắt xu ở chữ số 3, frac 1 chữ số
+  đệm 0...).
+- N2 toàn diện: helper saveContextOrFalse (ReceiptViews);
+  ReviewView.save hỏng -> rollback + alert + Ở LẠI màn
+  (hết đóng màn giả); saveChanges/Duyệt/gắn ảnh/quét lại/
+  đọc lại ở Chi Tiết đều báo lỗi đỏ thật; CardsView 4 điểm
+  (hoàn tác + alert); ContentView seed 2586 (fetch lỗi
+  không nạp trùng, chỉ đặt cờ sau khi lưu chắc).
+- C8: ReviewView — ngày tạm (bộ đọc trượt ngày) hiện cảnh
+  báo cam ngay tại ô ngày; lưu mà không sửa -> ép chờ
+  duyệt (dateIsUntouchedDefault vào stillNeedsReview).
+- C9: xoá tờ — chụp tên file trước, xoá bản ghi + lưu
+  TRƯỚC, thành công mới xoá file (kèm mọi ảnh gốc phụ);
+  hỏng -> rollback, mọi thứ còn nguyên.
+- N4 ReadPipeline: diagnosticsDirectory == nil -> ép
+  diagnosticsWriteFailed = true (hết né cổng §1.5).
+- N3 ReadPipeline: sau pickWinner, ảnh toàn phân giải của
+  ứng viên thua bị thay bằng ảnh 1x1 (metadata/fragments
+  giữ cho hồ sơ); hết giữ ~6 CGImage 12-24MP tới cuối đọc.
+- N5 BenchView: mặc định = cấu hình app giao (top3On=true,
+  langMode=0 = chính sách runtime vi-VT).
+- S10 (checks/static_check_s10.py, MỚI): cổng tĩnh lớp
+  matchGroups/subscript — PASS trên code đã sửa, FAIL
+  đúng điểm cũ khi kiểm ngược. P4 + P5 vẫn PASS toàn bộ
+  trên nguồn đã sửa.
+- NGOÀI phạm vi gói này (đã khai): C13 cụm phép toán trần
+  còn lại (tiềm ẩn, bị chặn thượng nguồn), L1/L2 QualityMap
+  (lệch thiết kế — cần quyết định sửa code hay sửa đặc tả),
+  C1/C2 hiệu năng regex/O(n^2).
+
+## GÓI SỬA LỚN ĐÃ ĐẨY v3 6781e582 (2026-11-12 ~17:24 CST)
+- 9 file Swift (Parser, CaptureIntake, LineAssembly,
+  Models, ReceiptViews, CardsView, ContentView,
+  ReadPipeline, BenchView) — diff đối chiếu repo trước khi
+  đẩy: đúng và chỉ đúng các hunk đã định (Leader tự kiểm).
+- Hai lượt CI tự kích hoạt trên 6781e582 cần đọc kết quả:
+  (1) build-ipa — biên dịch THẬT cả hai app, là cổng biên
+  dịch đầu tiên cho các sửa tầng UI (harness không biên
+  dịch tầng UI); (2) harness — cổng Luật 3 trên code cuối:
+  control -> 33x100 -> ma trận -> fuzz.
+- Run #19 (chỉ crash-fix 43cf53d6) vẫn đang ở Cổng 2 tại
+  17:10 CST — census độc lập, kết quả đọc từ artifact sau.
+
+## BUILD XANH + CONTROL ĐÓNG SỔ TRÊN CODE CUỐI (2026-11-12 17:25 CST)
+- build-ipa run #80 (6781e582): SUCCESS — cả hai app biên
+  dịch sạch với toàn bộ gói sửa (kể cả tầng UI ReceiptViews/
+  CardsView/ContentView/ReadPipeline mà harness không biên
+  dịch). 2 artifact IPA đã sinh.
+- Harness run #20 (6781e582): control PASS — SURVIVED
+  fixture kèm tóm tắt parse: vendor=Costco subtotal=12548
+  tax=938 total=13486 items=20 sumItems=12548 sold=12
+  card=2586 warnings=1. Tức luồng L-R01 đóng sổ TUYỆT ĐỐI
+  bằng Swift thật (Σ món = subtotal; subtotal + thuế =
+  total; 20 món gồm 8 dòng INST SV âm; đúng 12 món bán).
+- Nhịp Cổng 2 đo từ run #19: ~35 set / 22 phút (~38s/set)
+  -> 100 set ~64 phút. Run #19 dự kiến xong ~18:20 CST,
+  run #20 (code cuối) ~18:45 CST (cộng ma trận + fuzz).
+
+## CA TRỰC 18:40 CST 2026-11-12 — PHÁN QUYẾT HARNESS RUN #19 + #20: CỔNG 2 (LUẬT 100 LƯỢT) QUA TRÊN CẢ HAI, CỔNG 3 FUZZ CÒN ĐÚNG 1 CA CHẾT TRÊN CODE CUỐI
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước: lấy phán quyết
+  2 lượt harness đang chờ ở mục 17:25 (run #19 chỉ crash-fix
+  43cf53d6 + run #20 code cuối 6781e582). Ca không sửa code,
+  không đẩy code v3, không kích lượt chạy nào (đọc Actions
+  qua trình duyệt, chỉ đọc).
+- RUN #19 (43cf53d, run id 43325453133, 17:03–18:16 CST,
+  completed/failure): Cổng 1 control PASS · **Cổng 2 LUẬT
+  100 LƯỢT PASS** (1h05m28s; log "SET 100 DONE 33/33" +
+  "SURVIVED images x100") · ma trận phụ PASS (7m20s) ·
+  **Cổng 3 fuzz RỚT**: 40 ca — 32 PASS, **8 DIED (exit 133)**:
+  weight-huge-mid · weight-huge-start · weight-barcode-lb-mid ·
+  weight-inf-mid · box-nan-maxx-moneyline ·
+  box-inf-maxx-moneyline · box-huge-maxx-moneyline ·
+  box-nan-everywhere. Artifact harness-evidence-19 (174 KB).
+- RUN #20 — CODE CUỐI (6781e582, run id 43328593696,
+  17:24–18:39 CST, completed/failure): Cổng 1 control PASS ·
+  **Cổng 2 LUẬT 100 LƯỢT PASS** (1h06m14s; "SET 100 DONE
+  33/33" + "SURVIVED images x100") · ma trận phụ PASS
+  (7m38s) · **Cổng 3 fuzz RỚT đúng 1 ca**: 40 ca — **39 PASS,
+  1 DIED (exit 133): box-huge-maxx-moneyline**. Gói sửa lớn
+  vì vậy đã diệt 7/8 ca fuzz chết của run #19 (toàn bộ họ
+  weight-huge/inf + box-nan/inf/everywhere nay PASS); ca
+  sống sót duy nhất là hộp có maxX KHỔNG LỒ trên dòng tiền —
+  cùng họ trap A đã ghi ở mục ~12:55 (Int(Double) từ toạ độ
+  hộp không qua cổng hữu hạn/biên trên đường dòng tiền),
+  nhưng ca này KHÔNG tự kết luận điểm code — Leader khoanh
+  bằng census/bisect của harness trước khi sửa.
+- Tuyên bố trung thực — đã chứng minh: phán quyết từng
+  cổng của run #19 + #20 kể trên, bằng đọc trực tiếp
+  GitHub Actions (từng bước + log Cổng 2/Cổng 3) trong ca;
+  chưa chứng minh: điểm trap cụ thể của box-huge-maxx-
+  moneyline trong code cuối (chưa bisect, chưa đọc stack
+  của ca này); chưa làm: chưa sửa trap còn lại, chưa có
+  lượt harness XANH TRỌN nào — luật của anh (≥100 lượt sạch
+  MỚI giao) đã đạt ở Cổng 2 trên ảnh thật nhưng Cổng 3 chưa
+  qua nên CHƯA có bản giao, đóng băng giao bản vẫn nguyên,
+  không kêu anh cài/test gì.
+- **Bước tiếp theo: Leader (nhịp chat chính) sửa đúng ca
+  fuzz box-huge-maxx-moneyline** (khoanh điểm trap bằng
+  harness trước, sửa ở staging, kiểm tĩnh S10/P4/P5 ≡) →
+  đẩy v3 → lượt harness kế tiếp phải XANH TRỌN cả 4 cổng
+  (control + 100 lượt + ma trận + fuzz 40/40) mới tính
+  chuẩn bị patch lớn giao anh.
