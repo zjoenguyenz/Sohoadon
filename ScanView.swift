@@ -94,11 +94,12 @@ struct ScanView: View {
                 // lớn ở tab Chụp (điểm vào chính của app).
                 ZStack {
                     Circle()
-                        .fill(DS.brand.opacity(0.15))
+                        .fill(DS.heroGradient)
                         .frame(width: 104, height: 104)
+                        .shadow(color: Color(red: 0.016, green: 0.235, blue: 0.157).opacity(0.45), radius: 14, x: 0, y: 7)
                     Image(systemName: "doc.viewfinder")
                         .font(.system(size: 46))
-                        .foregroundStyle(DS.brand)
+                        .foregroundStyle(.white)
                 }
                 Text("Chụp hoá đơn giấy, app tự đọc: tiệm, ngày, từng món, tổng tiền và đuôi thẻ — rồi gợi ý Cá nhân / Business theo thẻ đã đăng ký.")
                     .font(.callout)
@@ -175,6 +176,7 @@ struct ScanView: View {
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 8)
             }
+            .dsScreenBackground()
             .navigationTitle("Chụp Hoá Đơn")
             .fullScreenCover(isPresented: $showCamera) {
                 DocumentCameraView(

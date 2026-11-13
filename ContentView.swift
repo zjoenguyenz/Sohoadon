@@ -111,7 +111,7 @@ struct TabShellView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeView()
+            HomeView(selectedTab: $selectedTab)
                 .tabItem { Label("Trang Chủ", systemImage: "house.fill") }
                 .tag(0)
 

@@ -197,7 +197,8 @@ struct ReceiptRowView: View {
         // 10 + viền tóc; không có ảnh thì monogram tiệm (màu ổn
         // định theo tên); "Chờ duyệt" thành chip trạng thái.
         HStack(spacing: DS.spaceM) {
-            if let image = ImageStore.load(fileName: receipt.imageFileName) {
+            if let firstOriginal = receipt.allOriginalImageFileNames.first,
+               let image = ImageStore.load(fileName: firstOriginal) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -342,6 +343,7 @@ struct ReceiptListView: View {
                 }
             }
             .navigationTitle(onlyNeedsReview ? "Hộp Chờ Duyệt" : "Hoá Đơn")
+            .dsListBackground()
             .searchable(text: $searchText, prompt: "Tìm tiệm, món, mục…")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -445,19 +447,60 @@ struct ReceiptDetailView: View {
             // trạng thái). Thuần hiển thị, cộng thêm — không đụng
             // bất kỳ mục chức năng nào bên dưới.
             Section {
-                VStack(spacing: DS.spaceS) {
-                    VendorMonogram(vendor: receipt.vendor.isEmpty ? "?" : receipt.vendor, size: 56)
-                    Text(receipt.vendor.isEmpty ? "(Chưa rõ tiệm)" : receipt.vendor)
-                        .font(.title3.weight(.bold))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                    Text(receipt.date, format: .dateTime.weekday().day().month().year().hour().minute())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(formatMoney(optionalCents: receipt.totalCents))
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .padding(.top, 2)
+                VStack(spacing: DS.spaceM) {
+                    // PASS 2 (mẫu anh duyệt 2026-11-13): có ảnh gốc
+                    // thì dải ảnh phủ đầu trang — tên tiệm + ngày +
+                    // TỔNG đặt trên dải tối cuối ảnh (đúng mẫu);
+                    // chạm vào ảnh ở mục "Ảnh gốc" bên dưới để xem
+                    // toàn màn hình. Không tải được ảnh nào thì
+                    // quay về khối monogram của pass 1.
+                    if let firstOriginal = receipt.allOriginalImageFileNames.first,
+                       let image = ImageStore.load(fileName: firstOriginal) {
+                        ZStack(alignment: .bottomLeading) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 190)
+                                .frame(maxWidth: .infinity)
+                                .clipped()
+                            LinearGradient(colors: [Color.clear, Color.black.opacity(0.85)],
+                                           startPoint: .center, endPoint: .bottom)
+                            HStack(alignment: .bottom, spacing: DS.spaceM) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(receipt.vendor.isEmpty ? "(Chưa rõ tiệm)" : receipt.vendor)
+                                        .font(.title3.weight(.bold))
+                                        .foregroundStyle(.white)
+                                        .lineLimit(2)
+                                    Text(receipt.date, format: .dateTime.weekday().day().month().year().hour().minute())
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.85))
+                                }
+                                Spacer()
+                                Text(formatMoney(optionalCents: receipt.totalCents))
+                                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+                                    .monospacedDigit()
+                            }
+                            .padding(DS.spaceL)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 20))
+                    } else {
+                        VStack(spacing: DS.spaceS) {
+                            VendorMonogram(vendor: receipt.vendor.isEmpty ? "?" : receipt.vendor, size: 56)
+                            Text(receipt.vendor.isEmpty ? "(Chưa rõ tiệm)" : receipt.vendor)
+                                .font(.title3.weight(.bold))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                            Text(receipt.date, format: .dateTime.weekday().day().month().year().hour().minute())
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(formatMoney(optionalCents: receipt.totalCents))
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .monospacedDigit()
+                                .padding(.top, 2)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
                     HStack(spacing: 6) {
                         ClassificationBadge(kind: receipt.classification, cardLast4: receipt.cardLast4)
                         if receipt.status == .needsReview {
@@ -465,15 +508,18 @@ struct ReceiptDetailView: View {
                         } else {
                             StatusChip(text: "ĐÃ DUYỆT", color: DS.brand)
                         }
+                        if receipt.totalConfidence > 0 {
+                            StatusChip(text: "ĐỘ TIN CẬY \(Int((receipt.totalConfidence * 100).rounded()))%", color: DS.brand)
+                        }
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.spaceM)
+                .padding(.vertical, DS.spaceS)
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
             }
             .listRowBackground(Color.clear)
 
-            if let image = ImageStore.load(fileName: receipt.imageFileName) {
+            if let firstOriginal = receipt.allOriginalImageFileNames.first,
+               let image = ImageStore.load(fileName: firstOriginal) {
                 Section("Ảnh gốc (bằng chứng)") {
                     Image(uiImage: image)
                         .resizable()
@@ -765,6 +811,7 @@ struct ReceiptDetailView: View {
                 }
             }
         }
+        .dsListBackground()
         .navigationTitle("Chi Tiết Hoá Đơn")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Xoá hẳn hoá đơn này và ảnh gốc?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
@@ -1225,9 +1272,71 @@ struct ReviewView: View {
         return options
     }
 
+    /// PASS 2: cổng sổ cái dạng HIỂN THỊ ở đầu màn Kiểm Lại
+    /// (đúng mẫu anh duyệt) — cùng luật SCORECARD Ledger Gate:
+    /// Σ dòng món (kể cả dòng giảm giá âm) == tạm tính ±2¢ và
+    /// tạm tính + thuế == tổng ±2¢. Chỉ ĐỌC draft.result của
+    /// bộ đọc, không sửa bất kỳ số nào.
+    private var ledgerVerdict: (closed: Bool, text: String) {
+        let r = draft.result
+        guard let subtotal = r.subtotalCents, let total = r.totalCents else {
+            return (false, "Chưa đủ số để khớp sổ — thiếu tạm tính hoặc tổng, anh kiểm tra giúp.")
+        }
+        let itemsSum = r.items.reduce(0) { $0 + ($1.amountCents ?? 0) }
+        let itemsOK = abs(itemsSum - subtotal) <= 2
+        let totalOK = abs(subtotal + r.taxTotalCents - total) <= 2
+        if itemsOK && totalOK {
+            return (true, "Sổ khớp — \(r.items.count) dòng món cộng đúng tạm tính; tạm tính + thuế = tổng.")
+        }
+        var reasons: [String] = []
+        if !itemsOK { reasons.append("tổng các món lệch tạm tính \(formatMoney(cents: abs(itemsSum - subtotal)))") }
+        if !totalOK { reasons.append("tạm tính + thuế lệch tổng \(formatMoney(cents: abs(subtotal + r.taxTotalCents - total)))") }
+        return (false, "Sổ chưa khớp: " + reasons.joined(separator: "; ") + " — anh kiểm tra các trường bên dưới giúp em.")
+    }
+
+    private var ledgerBanner: some View {
+        let verdict = ledgerVerdict
+        return HStack(alignment: .top, spacing: DS.spaceM) {
+            Image(systemName: verdict.closed ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
+                .font(.title3)
+                .foregroundStyle(verdict.closed ? DS.brand : DS.warning)
+            Text(verdict.text)
+                .font(.callout.weight(.medium))
+        }
+        .padding(.vertical, DS.spaceXS)
+    }
+
+    /// Tổng lớn giữa màn Kiểm Lại (theo mẫu) — đọc từ ô tổng
+    /// ĐANG SỬA (totalText) để đổi ngay khi anh gõ.
+    private var bigTotalText: String {
+        if let cents = dollarsTextToCents(totalText) { return formatMoney(cents: cents) }
+        return totalText.isEmpty ? "—" : totalText
+    }
+
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    ledgerBanner
+                }
+                .listRowBackground((ledgerVerdict.closed ? DS.brand : DS.warning).opacity(0.10))
+
+                Section {
+                    VStack(spacing: 2) {
+                        Text("TỔNG CỘNG")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .tracking(0.6)
+                        Text(bigTotalText)
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.spaceS)
+                }
+                .listRowBackground(Color.clear)
                 if let image = ImageStore.load(fileName: draft.imageFileName) {
                     Section {
                         Image(uiImage: image)
@@ -1441,6 +1550,7 @@ struct ReviewView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .dsListBackground()
             .navigationTitle("Kiểm Lại Hoá Đơn")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear { applySuggestionOnce() }

@@ -4,6 +4,10 @@ import SwiftData
 /// Trang Chủ: thẻ Chờ Duyệt lên đầu (khi có việc), 2 ô tổng năm nay
 /// Cá nhân / Business tách bạch, vài hoá đơn gần nhất. (DESIGN-V2 / Copilot Money)
 struct HomeView: View {
+    /// PASS 2: hàng hành động nhanh chuyển tab thật (tab do
+    /// TabShellView giữ) — không phải nút trang trí.
+    @Binding var selectedTab: Int
+
     @Query(sort: \Receipt.date, order: .reverse) private var receipts: [Receipt]
 
     private var currentYearReceipts: [Receipt] {
@@ -79,20 +83,34 @@ struct HomeView: View {
 
                     heroCard
 
+                    HStack(spacing: DS.spaceM) {
+                        actionTile(icon: "camera.viewfinder", title: "Quét hoá đơn") { selectedTab = 2 }
+                        actionTile(icon: "square.and.arrow.down", title: "Nạp file") { selectedTab = 2 }
+                        actionTile(icon: "doc.text.magnifyingglass", title: "Hồ sơ thuế") { selectedTab = 3 }
+                    }
+
                     if !topCategories.isEmpty {
                         VStack(alignment: .leading, spacing: DS.spaceS) {
                             sectionTitle("Theo mục")
                             VStack(spacing: 0) {
                                 ForEach(Array(topCategories.enumerated()), id: \.element.name) { index, entry in
                                     HStack(spacing: DS.spaceM) {
-                                        Image(systemName: entry.kind.iconName)
-                                            .font(.callout)
-                                            .foregroundStyle(entry.kind.color)
-                                            .frame(width: 32, height: 32)
-                                            .background(entry.kind.color.opacity(0.13))
-                                            .clipShape(Circle())
-                                        Text(entry.name)
-                                            .lineLimit(1)
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 13)
+                                                .fill(LinearGradient(colors: DS.categoryTileColors(entry.name),
+                                                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                                            Image(systemName: DS.categoryIconName(entry.name))
+                                                .font(.system(size: 17, weight: .semibold))
+                                                .foregroundStyle(.white)
+                                        }
+                                        .frame(width: 42, height: 42)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(entry.name)
+                                                .lineLimit(1)
+                                            Text(entry.kind.label)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
                                         Spacer()
                                         MoneyAmount(cents: entry.total, font: .callout.weight(.semibold))
                                     }
@@ -152,7 +170,7 @@ struct HomeView: View {
                 }
                 .padding(DS.spaceL)
             }
-            .background(Color(.systemGroupedBackground))
+            .dsScreenBackground()
             .navigationTitle("GL-Keeper")
         }
     }
@@ -166,17 +184,52 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// PASS 2: dòng phụ của thẻ hero — suy thẳng từ 3 tổng
+    /// năm nay (không thêm phép tính mới): toàn Business /
+    /// toàn Cá nhân / tỉ lệ phần trăm khi có cả hai.
+    private var heroSubtitle: String {
+        let personal = yearSum(.personal), business = yearSum(.business)
+        if personal == 0 && business > 0 { return "Toàn bộ là Business" }
+        if business == 0 && personal > 0 { return "Toàn bộ là Cá nhân" }
+        let total = max(yearTotalCents, 1)
+        let bPct = Int((Double(business) / Double(total) * 100).rounded())
+        return "Business \(bPct)% · Cá nhân \(100 - bPct)%"
+    }
+
+    private func actionTile(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(DS.brand)
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.spaceM)
+            .dsCard(radius: 18)
+        }
+        .buttonStyle(.plain)
+    }
+
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: DS.spaceM) {
-            Text("NĂM NAY — \(String(Calendar.current.component(.year, from: Date())))")
+            Text("TỔNG CHI NĂM NAY — \(String(Calendar.current.component(.year, from: Date())))")
                 .font(.caption.weight(.bold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.white.opacity(0.75))
                 .tracking(0.6)
             Text(formatMoney(cents: yearTotalCents))
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
                 .monospacedDigit()
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
+            Text(heroSubtitle)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.82))
             splitBar
             HStack(spacing: DS.spaceL) {
                 splitLegend(kind: .personal)
@@ -188,7 +241,9 @@ struct HomeView: View {
         }
         .padding(DS.spaceL)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .dsCard()
+        .background(DS.heroGradient)
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .shadow(color: Color(red: 0.016, green: 0.235, blue: 0.157).opacity(0.45), radius: 17, x: 0, y: 9)
     }
 
     private var splitBar: some View {
@@ -209,6 +264,7 @@ struct HomeView: View {
             }
         }
         .frame(height: 8)
+        .background(Capsule().fill(Color.white.opacity(0.22)))
         .clipShape(Capsule())
     }
 
@@ -220,10 +276,11 @@ struct HomeView: View {
                     .frame(width: 8, height: 8)
                 Text(kind.label)
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white.opacity(0.75))
             }
             Text(formatMoney(cents: yearSum(kind)))
                 .font(.callout.weight(.bold))
+                .foregroundStyle(.white)
                 .monospacedDigit()
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
@@ -335,6 +392,7 @@ struct ReportsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .dsListBackground()
             .navigationTitle("Báo Cáo Thuế")
         }
     }
