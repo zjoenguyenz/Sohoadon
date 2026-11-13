@@ -1,3 +1,4 @@
+import AVFoundation
 import AVKit
 import SwiftUI
 import UIKit
@@ -43,6 +44,12 @@ struct PlayerView: View {
                 }
             }
         }
+        .onAppear {
+            OrientationHelper.lock(.landscape, rotateTo: .landscapeRight)
+        }
+        .onDisappear {
+            OrientationHelper.lock(.all, rotateTo: .portrait)
+        }
     }
 }
 
@@ -54,7 +61,14 @@ struct AVPlayerView: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIViewController(context: Context) -> AVPlayerViewController {
+        // Playback audio session: required for Picture in Picture and for
+        // the stream to keep playing when the app leaves the foreground.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
         let controller = AVPlayerViewController()
+        controller.allowsPictureInPicturePlayback = true
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
         let player = AVPlayer(url: url)
         player.allowsExternalPlayback = true
         controller.player = player

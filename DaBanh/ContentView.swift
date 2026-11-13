@@ -1,18 +1,44 @@
 import SwiftUI
 
-/// Root screen: header (title, count, manual refresh) + the five league
-/// tabs. Dark navy gradient and warm amber accent, in the spirit of the
-/// Android app's glass UI.
+/// Accent green used across the redesigned UI.
+private let accentGreen = Color(red: 0.13, green: 0.77, blue: 0.37)
+
+/// Root screen, styled like a TV/streaming app: dark gradient, a header
+/// with the live count, a featured rail of live matches, league chips
+/// instead of a tab bar, and match cards grouped by bucket (Đang đá /
+/// Sắp đá / Khác). All data wiring is unchanged from the previous design:
+/// PlaylistStore drives everything, the league order and the first-load
+/// tab pick live in the store/classifier, and tapping any card or row
+/// presents PlayerView full-screen.
 struct ContentView: View {
     @EnvironmentObject private var store: PlaylistStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedChannel: Channel?
+    @State private var searchText = ""
+
+    private var liveChannels: [Channel] {
+        store.channels.filter { LeagueClassifier.isLive($0) }
+    }
+
+    private var isSearching: Bool { !searchText.isEmpty }
 
     var body: some View {
+        // NavigationStack is the host .searchable needs to actually show
+        // its field; the bar itself carries no title and stays transparent
+        // so the custom header below remains the visual header.
+        NavigationStack {
+            rootContent
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(.hidden, for: .navigationBar)
+        }
+    }
+
+    private var rootContent: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(red: 0.04, green: 0.07, blue: 0.13),
-                         Color(red: 0.09, green: 0.14, blue: 0.24)],
+                colors: [Color(red: 0.04, green: 0.06, blue: 0.08),
+                         Color.black],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea()
@@ -26,20 +52,23 @@ struct ContentView: View {
                         .padding(.horizontal)
                         .padding(.bottom, 4)
                 }
-                TabView(selection: $store.selectedLeague) {
-                    ForEach(League.allCases) { league in
-                        LeagueListView(league: league, onSelect: { selectedChannel = $0 })
-                            .tabItem { Text(league.name) }
-                            .tag(league.rawValue)
+                if isSearching {
+                    searchList
+                } else {
+                    if !liveChannels.isEmpty {
+                        featuredRail
                     }
+                    leagueChips
+                    leagueList
                 }
-                .tint(.orange)
             }
 
             if store.channels.isEmpty {
                 loadingOverlay
             }
         }
+        .preferredColorScheme(.dark)
+        .searchable(text: $searchText, prompt: "Tìm trận, đội bóng…")
         .task { await store.start() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
@@ -51,37 +80,223 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Header
+
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("TRỰC TIẾP BÓNG ĐÁ")
-                    .font(.caption2)
-                    .tracking(2)
-                    .foregroundStyle(.white.opacity(0.8))
-                Text("Đá Banh")
-                    .font(.largeTitle.bold())
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                Circle().fill(accentGreen)
+                Image(systemName: "soccerball")
+                    .font(.title3)
                     .foregroundStyle(.white)
             }
-            Spacer()
-            if store.isLoading {
-                ProgressView().tint(.white)
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Đá Banh")
+                    .font(.title.bold())
+                    .foregroundStyle(.white)
+                if liveChannels.count > 0 {
+                    HStack(spacing: 6) {
+                        PulsingDot()
+                        Text("\(liveChannels.count) trận đang đá")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                } else {
+                    Text("\(store.channels.count) trận trong lịch")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
             }
+            Spacer()
+
+            RoutePickerView()
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(Color.white.opacity(0.10)))
+
             Button {
                 Task { await store.refresh() }
             } label: {
-                Label("Làm mới", systemImage: "arrow.clockwise")
-                    .font(.subheadline)
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.10))
+                    if store.isLoading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.subheadline)
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 40, height: 40)
             }
-            .buttonStyle(.bordered)
-            .tint(.white)
-            Text("\(store.channels.count) kênh")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.7))
+            .disabled(store.isLoading)
+            .accessibilityLabel("Làm mới")
         }
         .padding(.horizontal)
         .padding(.top, 8)
-        .padding(.bottom, 6)
+        .padding(.bottom, 10)
     }
+
+    // MARK: - Featured rail (live matches across all leagues)
+
+    private var featuredRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(liveChannels.prefix(12)) { channel in
+                    Button {
+                        selectedChannel = channel
+                    } label: {
+                        FeaturedCard(channel: channel)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 4)
+        }
+    }
+
+    // MARK: - League chips
+
+    private var leagueChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(League.allCases) { league in
+                    let selected = store.selectedLeague == league.rawValue
+                    Button {
+                        store.selectedLeague = league.rawValue
+                    } label: {
+                        Text(league.name)
+                            .font(.subheadline.weight(selected ? .bold : .regular))
+                            .foregroundStyle(selected ? .white : .white.opacity(0.7))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule().fill(selected ? accentGreen : Color.white.opacity(0.08))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 6)
+        }
+    }
+
+    // MARK: - League list (bucket sections)
+
+    private var leagueList: some View {
+        let league = League(rawValue: store.selectedLeague) ?? .england
+        let channels = store.channels(in: league)
+        let now = Date()
+        let live = channels.filter { LeagueClassifier.bucket(of: $0, now: now) == 0 }
+        let upcoming = channels.filter {
+            let b = LeagueClassifier.bucket(of: $0, now: now)
+            return b == 1 || b == 2
+        }
+        let rest = channels.filter { LeagueClassifier.bucket(of: $0, now: now) == 3 }
+
+        return List {
+            if channels.isEmpty {
+                Text("Chưa có kênh nào trong mục này.")
+                    .foregroundStyle(.white.opacity(0.6))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+            if !live.isEmpty {
+                Section {
+                    ForEach(live) { channel in matchRow(channel) }
+                } header: {
+                    sectionHeader("Đang đá", live: true)
+                }
+            }
+            if !upcoming.isEmpty {
+                Section {
+                    ForEach(upcoming) { channel in matchRow(channel) }
+                } header: {
+                    sectionHeader("Sắp đá", live: false)
+                }
+            }
+            if !rest.isEmpty {
+                Section {
+                    ForEach(rest) { channel in matchRow(channel) }
+                } header: {
+                    sectionHeader("Khác", live: false)
+                }
+            }
+            footerRow
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .refreshable { await store.refresh() }
+    }
+
+    // MARK: - Search results (all leagues, flat)
+
+    private var searchList: some View {
+        let query = searchText.lowercased()
+        let matches = store.channels.filter { $0.title.lowercased().contains(query) }
+        return List {
+            if matches.isEmpty {
+                Text("Không tìm thấy trận nào.")
+                    .foregroundStyle(.white.opacity(0.6))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+            ForEach(matches) { channel in
+                matchRow(channel, caption: searchCaption(for: channel))
+            }
+            footerRow
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .refreshable { await store.refresh() }
+    }
+
+    private func searchCaption(for channel: Channel) -> String {
+        let leagueName = League(rawValue: channel.leagueRank)?.name ?? "Khác"
+        return channel.group.isEmpty ? leagueName : "\(leagueName) • \(channel.group)"
+    }
+
+    // MARK: - Shared rows
+
+    private func matchRow(_ channel: Channel, caption: String? = nil) -> some View {
+        Button {
+            selectedChannel = channel
+        } label: {
+            MatchCard(channel: channel, caption: caption ?? channel.group)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+    }
+
+    private func sectionHeader(_ title: String, live: Bool) -> some View {
+        HStack(spacing: 6) {
+            if live {
+                Circle().fill(Color.red).frame(width: 7, height: 7)
+            }
+            Text(title.uppercased())
+                .font(.caption.bold())
+                .tracking(1)
+                .foregroundStyle(.white.opacity(0.6))
+        }
+        .listRowBackground(Color.clear)
+    }
+
+    private var footerRow: some View {
+        Text("Đá Banh v1.1 • \(store.channels.count) trận")
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.35))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .padding(.vertical, 8)
+    }
+
+    // MARK: - Loading / empty overlay (first load, or error with retry)
 
     private var loadingOverlay: some View {
         VStack(spacing: 14) {
@@ -96,96 +311,190 @@ struct ContentView: View {
                     Task { await store.refresh() }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .tint(accentGreen)
             }
         }
         .padding()
     }
 }
 
-/// One league tab: its channels in the global sorted order, live first,
-/// with pull-to-refresh.
-private struct LeagueListView: View {
-    @EnvironmentObject private var store: PlaylistStore
-    let league: League
-    let onSelect: (Channel) -> Void
+/// Small red dot that pulses while matches are live.
+private struct PulsingDot: View {
+    @State private var faded = false
 
     var body: some View {
-        let channels = store.channels(in: league)
-        List {
-            if channels.isEmpty {
-                Text("Chưa có kênh nào trong mục này.")
-                    .foregroundStyle(.secondary)
-                    .listRowBackground(Color.clear)
-            }
-            ForEach(channels) { channel in
-                Button {
-                    onSelect(channel)
-                } label: {
-                    ChannelRow(channel: channel)
-                }
-                .listRowBackground(Color.white.opacity(0.08))
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .refreshable { await store.refresh() }
+        Circle()
+            .fill(Color.red)
+            .frame(width: 8, height: 8)
+            .opacity(faded ? 0.25 : 1)
+            .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                       value: faded)
+            .onAppear { faded = true }
     }
 }
 
-private struct ChannelRow: View {
-    let channel: Channel
+/// Kickoff formatting shared by the cards (Vietnam time, ICT).
+private enum KickoffFormat {
+    static let time: DateFormatter = {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
 
-    private static let kickoffFormatter: DateFormatter = {
+    static let day: DateFormatter = {
+        let f = DateFormatter()
+        f.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")
+        f.dateFormat = "dd/MM"
+        return f
+    }()
+
+    static let full: DateFormatter = {
         let f = DateFormatter()
         f.timeZone = TimeZone(identifier: "Asia/Ho_Chi_Minh")
         f.dateFormat = "HH:mm dd/MM"
         return f
     }()
+}
+
+/// Big horizontal card for a live match in the featured rail.
+private struct FeaturedCard: View {
+    let channel: Channel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                LogoTile(channel: channel, size: 54, corner: 12)
+                Text(channel.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                Text("● ĐANG ĐÁ")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.red, in: Capsule())
+                if let kickoff = channel.kickoff {
+                    Text(KickoffFormat.full.string(from: kickoff))
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(14)
+        .frame(width: 250, height: 118, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [Color(red: 0.05, green: 0.23, blue: 0.13),
+                         Color(red: 0.02, green: 0.09, blue: 0.06)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 16)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+/// One match as a card row: time block (or LIVE), logo tile, title +
+/// source, play button.
+private struct MatchCard: View {
+    let channel: Channel
+    let caption: String
+
+    private var isLive: Bool { LeagueClassifier.isLive(channel) }
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: channel.logoURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFit()
-                default:
-                    Text("⚽").font(.title2)
+            VStack(spacing: 2) {
+                if isLive {
+                    Text("LIVE")
+                        .font(.caption.bold())
+                        .foregroundStyle(.red)
+                    if let kickoff = channel.kickoff {
+                        Text(KickoffFormat.time.string(from: kickoff))
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                } else if let kickoff = channel.kickoff {
+                    Text(KickoffFormat.time.string(from: kickoff))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                    Text(KickoffFormat.day.string(from: kickoff))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.5))
+                } else {
+                    Text("—")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.3))
                 }
             }
-            .frame(width: 48, height: 48)
+            .frame(width: 46)
+
+            LogoTile(channel: channel, size: 44, corner: 10)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(channel.title)
                     .font(.subheadline)
                     .foregroundStyle(.white)
                     .lineLimit(2)
-                Text(channel.group)
+                    .multilineTextAlignment(.leading)
+                Text(caption)
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.5))
                     .lineLimit(1)
-                HStack(spacing: 8) {
-                    if let kickoff = channel.kickoff {
-                        Text(Self.kickoffFormatter.string(from: kickoff))
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.75))
-                    }
-                    if LeagueClassifier.isLive(channel) {
-                        Text("ĐANG ĐÁ")
-                            .font(.caption2.bold())
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.red, in: Capsule())
-                    }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(accentGreen)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.white.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+/// Fixed-size channel logo with a placeholder that never breaks layout.
+private struct LogoTile: View {
+    let channel: Channel
+    let size: CGFloat
+    let corner: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: corner)
+                .fill(Color.white.opacity(0.08))
+            AsyncImage(url: channel.logoURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFit()
+                default:
+                    Image(systemName: "soccerball")
+                        .font(.system(size: size * 0.45))
+                        .foregroundStyle(.white.opacity(0.4))
                 }
             }
-            Spacer()
-            Image(systemName: "play.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.orange)
+            .padding(4)
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: corner))
     }
 }
