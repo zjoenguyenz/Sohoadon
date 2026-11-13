@@ -1,0 +1,239 @@
+{
+ "case": "L-R09-ANCHOR-TRAP",
+ "source": "core-dissection/corpus/L-R09__DEVICE-A0.txt",
+ "note": "Luồng DEVICE-A0 của L-R09 CHỨA dòng bẫy 'TOTAL DEBIT PURCHASE 92.24' (grep -F xác nhận 2026-11-13, dòng 28 của file). Trap: 92.24 = total 72.24 + cash-back 20.00, thuộc họ TENDER — không bao giờ là neo tổng (DESIGN-V4 §3.2 pha 0 + §4.4(c)).",
+ "expect": {
+  "totalCents": 7224,
+  "trapValueCents": 9224,
+  "trapRole": "tender",
+  "arbiterStatus": "unclosed",
+  "reason": "Luồng A0 mất một chữ số ở tạm tính (in 58.67, thật 68.67) nên E2 không khép trên văn bản: 5867 + (192+165) − 7224 = −1000 → unclosed, thâm hụt định vị khối tổng. Kỳ vọng cứng của fixture: total == 7224 (neo TOTAL), 9224 KHÔNG ở bất kỳ trường tiền nào, vai trò của 9224 trong totalCandidates == tender/chosen=false."
+ },
+ "lines": [
+  {
+   "text": "Give us feedback @ survey.walmart.com",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "Thank you! ID #:7YRKWP2F57YM",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "Walmart >",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "Neighborhood Market",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "918-505-6090 Mgr LYNNA",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "4851 W HOUSTUN ST",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "BROKE PROW OK 7-012",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "ST# 06942 OP# 009012 TE# 12 TR# 00675",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "# ITEMS SOLD 11",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "TC# 2218 8190 7978 0448 8085",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "LUMIFY 310119537250 H 19.56 X",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "CORN PKGD 077512701330 F 5.26 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "CORN RKGD 077512701330 F 5.26 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "APPLE 8 BAG 194346264080 F 2.38 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "SM ORNGE BAG 003374803720 F 3.76",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "HL ORG TNDRS 225683000000 F 7.85 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "CC 67Z TUB 027400694020 F 7.63 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "CC 45Z ORIG 027400264990 F 5.93 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "SD ORNG 128 050200008800 3.€8",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "SD ORNG 128 05020000880 G8 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "SD ORNG 128 :,68 R",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "SUBTOTAL 58.67",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "TAX2 3.9170 % 1.92",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "TAX1 8.4170 % 1.65",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "TOTAL 72.24",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "DEBIT TEND 72.24",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "DEBIT CASH BACK 20.00",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "TOTAL DEBIT PURCHASE 92.24",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "CHANGE DUE 20.00",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "EFT DEBIT PAY FROM PRIMARY",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "72.24 PURCHASE",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "20.00 CASH Brux",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "US DEBIT- 2580 92 24 TOTAL PURCHASE",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "REF # UEUR5F297440",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "NETWORK ID. OUOR APPR. CODE 308602",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "AID A0000000042203",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "TERMINAL # 27622925",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "*Pin Verified",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "04/15/26 14:22:18",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "Get Free Delivery",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "from this store",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "with Walmart+",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "Scan to start a trial",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "Low prices You Can Trust. Every Day. 04/15/26/",
+   "confidence": 0.5,
+   "box": null
+  },
+  {
+   "text": "14:22:25",
+   "confidence": 0.5,
+   "box": null
+  }
+ ]
+}

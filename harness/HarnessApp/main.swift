@@ -535,11 +535,25 @@ case "streamone":
     }
     let streamLines = raw.split(separator: "\n")
         .map { OCRLine(text: String($0), confidence: ReceiptParser.recoveredLineConfidence) }
-    let parsed = ReceiptParser.parse(lines: streamLines)
+    // V4-1: --core v4 chạy parseV4 (ứng viên + trọng tài khối
+    // tổng, DESIGN-V4 §8: công tắc chỉ ở harness/bench) và in
+    // STREAM4-RESULT = STREAM-RESULT + prov= (số trường khối
+    // tổng có provenance: subtotal/tax[i]/total) + arb=
+    // (trạng thái trọng tài). Không tham số = v3 như cũ.
+    let useV4 = argValue("--core") == "v4"
+    let parsed = useV4 ? ReceiptParser.parseV4(lines: streamLines)
+                       : ReceiptParser.parse(lines: streamLines)
     let taxList = parsed.taxes.map { String($0.amountCents) }.joined(separator: ",")
     let qtySum = parsed.items.reduce(0) { $0 + $1.qty }
     let qtyPos = parsed.items.filter { ($0.amountCents ?? 0) > 0 }.reduce(0) { $0 + $1.qty }
-    print("STREAM-RESULT file=\((args[1] as NSString).lastPathComponent) \(parseSummary(parsed)) taxes=[\(taxList)] qty=\(qtySum) qtyPos=\(qtyPos)")
+    if useV4 {
+        let provCount = parsed.totalsProvenance.keys.filter {
+            $0 == "subtotal" || $0 == "total" || $0.hasPrefix("tax[")
+        }.count
+        print("STREAM4-RESULT file=\((args[1] as NSString).lastPathComponent) \(parseSummary(parsed)) taxes=[\(taxList)] qty=\(qtySum) qtyPos=\(qtyPos) prov=\(provCount) arb=\(parsed.arbiterStatus ?? "nil")")
+    } else {
+        print("STREAM-RESULT file=\((args[1] as NSString).lastPathComponent) \(parseSummary(parsed)) taxes=[\(taxList)] qty=\(qtySum) qtyPos=\(qtyPos)")
+    }
     print("SURVIVED streamone")
 
 case "streams":
@@ -558,33 +572,52 @@ case "streams":
     print("[streams] dir=\(dir) files=\(files.count)")
     let selfPath = CommandLine.arguments[0]
     var died = 0
+    var died4 = 0
     for name in files {
         let path = (dir as NSString).appendingPathComponent(name)
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: selfPath)
-        p.arguments = ["streamone", path]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = FileHandle.nullDevice
-        var out = ""
-        var spawnOK = true
-        do { try p.run() } catch { spawnOK = false }
-        if spawnOK {
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            p.waitUntilExit()
-            out = String(data: data, encoding: .utf8) ?? ""
+        // Chạy process con streamone một lượt; extra = tham số
+        // lõi (rỗng = v3, ["--core","v4"] = v4). Ngữ nghĩa chết/
+        // ghi chú giữ nguyên của cổng V4-0.
+        func runChildOnce(_ extra: [String]) -> (ok: Bool, note: String, out: String) {
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: selfPath)
+            p.arguments = ["streamone", path] + extra
+            let pipe = Pipe()
+            p.standardOutput = pipe
+            p.standardError = FileHandle.nullDevice
+            var out = ""
+            var spawnOK = true
+            do { try p.run() } catch { spawnOK = false }
+            if spawnOK {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                p.waitUntilExit()
+                out = String(data: data, encoding: .utf8) ?? ""
+            }
+            let ok = spawnOK && p.terminationReason == .exit && p.terminationStatus == 0
+            let note = !spawnOK ? "spawn-failed"
+                : (p.terminationReason == .exit ? "exit \(p.terminationStatus)" : "signal \(p.terminationStatus)")
+            return (ok, note, out)
         }
-        let ok = spawnOK && p.terminationReason == .exit && p.terminationStatus == 0
-        if ok, let line = out.split(separator: "\n").first(where: { $0.hasPrefix("STREAM-RESULT") }) {
+        let r3 = runChildOnce([])
+        if r3.ok, let line = r3.out.split(separator: "\n").first(where: { $0.hasPrefix("STREAM-RESULT") }) {
             print(line)
         } else {
             died += 1
-            let note = !spawnOK ? "spawn-failed"
-                : (p.terminationReason == .exit ? "exit \(p.terminationStatus)" : "signal \(p.terminationStatus)")
-            print("STREAM-DIED file=\(name) (\(note))")
+            print("STREAM-DIED file=\(name) (\(r3.note))")
+        }
+        // V4-1: lượt v4 trên cùng file — con chết ghi STREAM4-DIED
+        // đích danh, cổng chốt bằng STREAMS4-DONE riêng để số
+        // V4-0 (STREAMS-DONE) giữ nguyên ý nghĩa đối chứng.
+        let r4 = runChildOnce(["--core", "v4"])
+        if r4.ok, let line = r4.out.split(separator: "\n").first(where: { $0.hasPrefix("STREAM4-RESULT") }) {
+            print(line)
+        } else {
+            died4 += 1
+            print("STREAM4-DIED file=\(name) (\(r4.note))")
         }
     }
     print("STREAMS-DONE total=\(files.count) died=\(died)")
+    print("STREAMS4-DONE total=\(files.count) died=\(died4)")
 
 case "bisect":
     // Truy vết cái chết trong parse TRÊN CHÍNH luồng fixture:

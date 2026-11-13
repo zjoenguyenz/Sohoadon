@@ -129,6 +129,17 @@ struct ParseResult {
     var corrections: [DiagCorrection] = []
     var selectionTrace: [String] = []
     var totalCandidates: [TotalCandidate] = []
+    // CORE-V4 (gói V4-1, THUẦN CỘNG THÊM): kết quả trọng tài khối
+    // tổng (Candidates.swift + Arbiter.swift, DESIGN-V4 §2/§3) —
+    // chỉ parseV4 điền; parse() của v3 để mặc định. totalsProvenance
+    // được ReadPipeline.finalize ghi vào ngăn provenance sẵn có
+    // của hồ sơ chẩn đoán (tiền lệ cộng thêm, không đổi schema).
+    var totalsProvenance: [String: FieldProvenance] = [:]
+    var arbiterStatus: String? = nil   // closed|ambiguous|unclosed|budgetExceeded
+    var arbiterDisputed: [String] = []
+    var arbiterDeficitE1: Int? = nil
+    var arbiterDeficitE2: Int? = nil
+    var arbiterRegionHint: String? = nil
     var geometricCandidates: [ParsedLineItem] = []
     var itemsSoldLabelSeen: Bool = false
     var soldContribution: String = "byQuantity"  // printSemantics của vendor
@@ -368,6 +379,57 @@ enum ReceiptParser {
                 corrections: &result.corrections)
         }
         result.warnings = validate(result)
+        return result
+    }
+
+    // MARK: - CORE-V4 (gói V4-1): khối tổng bằng ứng viên + trọng tài
+    //
+    // parseV4 = parse() của v3 cho vendor/date/items/card NGUYÊN
+    // VĂN, riêng khối subtotal/taxes/total được THAY bằng tầng ứng
+    // viên (Candidates.swift) + trọng tài (Arbiter.swift) theo
+    // DESIGN-V4 §2/§3. parserPath GIỮ NGUYÊN ở gói này (hạ công
+    // tắc tiệm là V4-3); mặc định app vẫn chạy parse() — parseV4
+    // chỉ được chọn qua công tắc ở harness/bench (§8: lõi v4 nằm
+    // CẠNH v3 sau một công tắc, không thay thầm đường đang chạy).
+    static func parseV4(lines input: [OCRLine], boxes: [CGRect?]? = nil) -> ParseResult {
+        var result = parse(lines: input, boxes: boxes)
+        // Cùng phép chuẩn hoá dòng mà parse() áp ở đầu vào — mảng
+        // dòng của trọng tài phải khớp lineIndex với lần parse trên.
+        let lines = input
+            .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces),
+                           confidence: $0.confidence) }
+            .filter { !$0.text.isEmpty }
+        // Σmón chỉ tính món CÓ tiền; không món nào có tiền → nil
+        // (chưa đo được) thay vì 0 giả tạo thâm hụt E1.
+        let amounts = result.items.compactMap { $0.amountCents }
+        let itemsSum = amounts.isEmpty ? nil : SafeMoney.sumCents(amounts)
+        let arb = TotalsArbiter.arbitrate(lines: lines, itemsSumCents: itemsSum)
+        result.subtotalCents = arb.subtotalCents
+        result.taxes = arb.taxes
+        result.totalCents = arb.totalCents
+        result.totalConfidence = arb.totalLineConfidence
+        result.totalsProvenance = arb.provenance
+        result.arbiterStatus = arb.status
+        result.arbiterDisputed = arb.disputedSolutions
+        result.arbiterDeficitE1 = arb.deficitE1
+        result.arbiterDeficitE2 = arb.deficitE2
+        result.arbiterRegionHint = arb.regionHint
+        if !arb.totalCandidates.isEmpty {
+            result.totalCandidates = arb.totalCandidates
+        }
+        result.selectionTrace = ["arbiter-v4/\(arb.status)"]
+            + arb.trace + result.selectionTrace
+        // validate() chạy lại trên khối tổng ĐÃ THAY — cảnh báo v3
+        // tính trên số cũ không được để sót sang kết quả v4.
+        result.warnings = validate(result)
+        if arb.status == "ambiguous" {
+            result.warnings.append(
+                "Trọng tài khối tổng: có \(arb.disputedSolutions.count) cách khép sổ khác nhau — trường tranh chấp để trống, anh kiểm tra giúp.")
+        }
+        if arb.status == "budgetExceeded" {
+            result.warnings.append(
+                "Trọng tài khối tổng: vượt ngân sách tìm kiếm — khối tổng chưa khép sổ.")
+        }
         return result
     }
 
@@ -1804,7 +1866,9 @@ enum ReceiptParser {
         return formatter.string(from: NSNumber(value: Double(cents) / 100.0)) ?? "$0.00"
     }
 
-    private static func validate(_ r: ParseResult) -> [String] {
+    // V4-1: bỏ `private` để parseV4 chạy lại đúng bộ phán xét này
+    // trên khối tổng đã thay (không fork logic cảnh báo).
+    static func validate(_ r: ParseResult) -> [String] {
         var warnings: [String] = []
         if r.totalCents == nil {
             warnings.append("Không đọc được TỔNG TIỀN — anh nhập tay giúp.")

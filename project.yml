@@ -35,6 +35,8 @@ targets:
       - LineAssembly.swift
       - VendorData.swift
       - Parser.swift
+      - Candidates.swift
+      - Arbiter.swift
       - Reconcile.swift
       - RegionReReader.swift
       - ReadPipeline.swift
@@ -90,6 +92,8 @@ targets:
       - LineAssembly.swift
       - VendorData.swift
       - Parser.swift
+      - Candidates.swift
+      - Arbiter.swift
       - Reconcile.swift
       - RegionReReader.swift
       - ReadPipeline.swift

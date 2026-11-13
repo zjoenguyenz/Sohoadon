@@ -776,9 +776,25 @@ enum ReceiptReader {
         let boxes: [CGRect?] = assembly.lines.map { $0.box }
         let parsed = ReceiptParser.parse(lines: lines, boxes: boxes)
         stageBreadcrumb?("candidate-parse-done")
+        // V4-1 (quyết định D-V4-2; audit A2-04): QualityMap của
+        // CHÍNH ứng viên này khi ứng viên là MỘT ảnh — trước đây
+        // CandidateScorer.integrity luôn chạy với bản đồ rỗng nên
+        // hạng tử QualityMap trong hàm điểm là mã chết. Cách dựng
+        // bản đồ bám đúng đường winner ở dưới (cùng grid + ngưỡng).
+        // Đa trang giữ []: hộp dòng thuộc hệ toạ độ ảnh đã ghép,
+        // không thuộc ảnh đầu — không bịa bản đồ.
+        var candidateQualityMap: [QualityMapEntry] = []
+        if images.count == 1, let firstImage = images.first,
+           let grid = LuminanceGrid.fromImage(firstImage) {
+            let thresholds = QualityThresholds()
+            candidateQualityMap = assembly.lines.map {
+                grid.qualityMapEntry(for: $0.box, thresholds: thresholds)
+            }
+        }
         let evaluation = makeEvaluation(parsed: parsed,
                                         assembly: assembly,
-                                        isOriginal: step.kind == "original")
+                                        isOriginal: step.kind == "original",
+                                        qualityMap: candidateQualityMap)
         stageBreadcrumb?("candidate-evaluation-done")
         let scored = CandidateScorer.score(evaluation)
         return CandidateRun(step: step, image: images[0],
@@ -796,7 +812,8 @@ enum ReceiptReader {
     /// của tiệm (một-dòng-một cho Walmart, cộng qty còn lại).
     private static func makeEvaluation(parsed: ParseResult,
                                        assembly: AssemblyResult,
-                                       isOriginal: Bool)
+                                       isOriginal: Bool,
+                                       qualityMap: [QualityMapEntry] = [])
         -> CandidateEvaluation {
         var e1 = false
         if let subtotal = parsed.subtotalCents,
@@ -830,7 +847,8 @@ enum ReceiptReader {
         }
         return CandidateEvaluation(
             e1Closed: e1, e2Within2c: e2, e3Closed: e3,
-            integrity: CandidateScorer.integrity(assembly.lines),
+            integrity: CandidateScorer.integrity(assembly.lines,
+                                                 qualityMap: qualityMap),
             hasSubtotal: parsed.subtotalCents != nil,
             hasTotal: parsed.totalCents != nil,
             hasTaxLine: !parsed.taxes.isEmpty,
@@ -1020,6 +1038,14 @@ enum ReceiptReader {
                     .domainCorrected(
                         lexiconVersion: correction.lexiconVersion)
             }
+        }
+        // CORE-V4 (gói V4-1): provenance khối tổng của trọng tài
+        // (chỉ có khi lần đọc đi qua parseV4) vào CÙNG ngăn này —
+        // khoá "subtotal"/"tax[i]"/"total" không trùng khoá sửa
+        // chữ ở trên; cộng thêm thuần, schema chẩn đoán giữ v2.
+        for (key, value) in outcome.parsedBeforeReconcile.totalsProvenance
+        where snapshotProvenance[key] == nil {
+            snapshotProvenance[key] = value
         }
         // Provenance mức UI = provenance khung (F5/ROI) + corrected.
         var uiProvenance = outcome.provenance
