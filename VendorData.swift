@@ -56,11 +56,46 @@ struct VendorEntry: Decodable {
         printSemantics?.atLineSoldContribution ?? "byQuantity"
     }
 
+    // V4-3 (DESIGN-V4 §2.7/§5): GỢI Ý của tiệm — dữ liệu chấm
+    // điểm, KHÔNG còn là ngữ pháp. itemCodeShapes: descriptor
+    // hình dạng mã món, chỉ cộng sức mạnh cho dòng món ở nước
+    // loại của pha món. labelVariants: tiền tố nhãn (đã gập
+    // khoảng trắng, viết hoa) → họ nhãn, tra trước luật nhãn
+    // chung khi sinh ứng viên. taxLabelSplit: tiệm có dạng thuế
+    // tách dòng đã biết (ghi nhận dữ liệu; cơ chế liên kết suất
+    // xuyên dòng là luật chung của §3.2 pha 2, không rẽ theo
+    // tiệm). Mục dữ liệu KHÔNG có khối hints → gợi ý rỗng: tệ
+    // nhất là mất điểm gợi ý, trọng tài vẫn còn đẳng thức sổ.
+    struct Hints: Decodable {
+        var itemCodeShapes: [String] = []
+        var labelVariants: [String: String] = [:]
+        var taxLabelSplit: Bool = false
+        var note: String? = nil
+        enum CodingKeys: String, CodingKey {
+            case itemCodeShapes, labelVariants, taxLabelSplit, note
+        }
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            itemCodeShapes = try c.decodeIfPresent([String].self, forKey: .itemCodeShapes) ?? []
+            labelVariants = try c.decodeIfPresent([String: String].self, forKey: .labelVariants) ?? [:]
+            taxLabelSplit = try c.decodeIfPresent(Bool.self, forKey: .taxLabelSplit) ?? false
+            note = try c.decodeIfPresent(String.self, forKey: .note)
+        }
+        init(itemCodeShapes: [String] = [], labelVariants: [String: String] = [:],
+             taxLabelSplit: Bool = false, note: String? = nil) {
+            self.itemCodeShapes = itemCodeShapes
+            self.labelVariants = labelVariants
+            self.taxLabelSplit = taxLabelSplit
+            self.note = note
+        }
+    }
+    var hints: Hints? = nil
+
     // Giải mã khoan dung: khóa vắng mặt -> giá trị mặc định (Swift
     // Decodable tổng hợp không tự dùng default cho khóa thiếu).
     enum CodingKeys: String, CodingKey {
         case key, displayName, parserPath, matchNames, exactTokenOnly,
-             anchors, signatureItems, printSemantics
+             anchors, signatureItems, printSemantics, hints
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -72,6 +107,7 @@ struct VendorEntry: Decodable {
         anchors = try c.decodeIfPresent([Anchor].self, forKey: .anchors) ?? []
         signatureItems = try c.decodeIfPresent([String].self, forKey: .signatureItems) ?? []
         printSemantics = try c.decodeIfPresent(PrintSemantics.self, forKey: .printSemantics)
+        hints = try c.decodeIfPresent(Hints.self, forKey: .hints)
     }
 }
 

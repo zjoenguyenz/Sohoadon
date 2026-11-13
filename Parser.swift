@@ -387,40 +387,86 @@ enum ReceiptParser {
         return result
     }
 
-    // MARK: - CORE-V4 (gói V4-1 + V4-2): ứng viên + trọng tài
+    // MARK: - CORE-V4 (V4-1 + V4-2 + V4-3): ứng viên + trọng tài
     //
-    // parseV4 = parse() của v3 cho vendor/date/card NGUYÊN VĂN,
-    // riêng khối subtotal/taxes/total được THAY bằng tầng ứng
-    // viên (Candidates.swift) + trọng tài (Arbiter.swift) theo
-    // DESIGN-V4 §2/§3 và — từ V4-2 — khối MÓN được thay bằng
-    // ứng viên món + nối số lượng + pha 3/4 (ItemCandidates
-    // .swift + ItemsArbiter): parseV4 dùng ĐƯỜNG MÓN MỚI THAY
-    // HẲN đường món của v3. Neo ITEMS SOLD + soldContribution
-    // vẫn của v3 (dữ liệu printSemantics của tiệm — §4.4 khai
-    // dạng dữ liệu). parserPath GIỮ NGUYÊN ở gói này (hạ công
-    // tắc tiệm là V4-3); mặc định app vẫn chạy parse() — parseV4
-    // chỉ được chọn qua công tắc ở harness/bench (§8: lõi v4 nằm
-    // CẠNH v3 sau một công tắc, không thay thầm đường đang chạy).
+    // parseV4 là ĐƯỜNG ĐỌC DUY NHẤT VỀ CẤU TRÚC từ gói V4-3
+    // (DESIGN-V4 §5/§9): KHÔNG gọi parse() của v3, KHÔNG đọc
+    // parserPath — parseSams/parseGeneric không còn được gọi
+    // từ đường v4. Mọi trường đều sinh từ ứng viên trên cùng
+    // một đường: tên tiệm (identifyVendor — nguồn tên duy
+    // nhất, 3 nấc như cũ), ngày (DateCandidateFactory §2.3(g)),
+    // thẻ (CardCandidateFactory §2.3(f)), neo số món
+    // (findItemsSoldGeneric — tập mẫu hợp nhất của hai nhánh
+    // cũ, chạy cho mọi tiệm), khối tổng (TotalsArbiter §3),
+    // khối món (ItemsArbiter §4). Tri thức tiệm chỉ còn ba
+    // dạng DỮ LIỆU: tên + printSemantics (soldContribution) +
+    // hints của vendors.json (biến thể nhãn + hình dạng mã —
+    // chấm điểm, không phải cổng; xem VendorData.Hints).
+    // parse() của v3 GIỮ NGUYÊN làm đối chứng đo ở cổng luồng;
+    // app vẫn mặc định v3, tem giữ core-v3-2 (§8.4: chuyển mặc
+    // định + tem core-v4-1 là việc của gói V4-4).
     static func parseV4(lines input: [OCRLine], boxes: [CGRect?]? = nil) -> ParseResult {
-        var result = parse(lines: input, boxes: boxes)
-        // Cùng phép chuẩn hoá dòng mà parse() áp ở đầu vào — mảng
-        // dòng của trọng tài phải khớp lineIndex với lần parse trên.
+        // Cùng phép chuẩn hoá dòng mà parse() áp ở đầu vào —
+        // lineIndex phải khớp giữa mọi tầng của đường v4.
         let lines = input
             .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces),
                            confidence: $0.confidence) }
             .filter { !$0.text.isEmpty }
-        // Σmón của v3 chỉ còn là SỐ ĐO tham chiếu cho trọng tài
-        // khối tổng (deficitE1 sơ bộ) — món trình bày là của pha
-        // món V4-2 ở dưới.
-        let amounts = result.items.compactMap { $0.amountCents }
-        let itemsSum = amounts.isEmpty ? nil : SafeMoney.sumCents(amounts)
-        let arb = TotalsArbiter.arbitrate(lines: lines, itemsSumCents: itemsSum)
-        // PHA 3/4 (V4-2): gán món + nối số lượng + E1/E3 + phân
-        // định liên khối (E1 chỉ lật khối tổng khi đang MƠ HỒ).
+        var result = ParseResult()
+        result.rawText = lines.map { $0.text }.joined(separator: "\n")
+
+        // Tiệm: CHỈ cho trường tên (nguồn tên duy nhất) + dữ
+        // liệu đi kèm (printSemantics, hints). parserPath của
+        // mục dữ liệu KHÔNG được đọc ở đây nữa.
+        let identification = identifyVendor(lines: lines)
+        result.vendor = identification.vendor
+        result.vendorKey = identification.vendorKey
+        result.vendorConfidence = identification.confidence
+        result.vendorSource = identification.source
+        result.vendorSuggestion = identification.suggestion
+        result.vendorAnchorDisputed = identification.anchorDisputed
+        result.soldContribution = identification.entry?.soldContribution ?? "byQuantity"
+        result.vendorDataVersion = VendorData.shared.dataVersion
+        let hints = identification.entry?.hints
+        let contact = extractVendorContact(lines: lines)
+        result.vendorAddress = contact.address
+        result.vendorPhone = contact.phone
+        result.storeNumber = contact.storeNumber
+
+        // Ngày/giờ: ứng viên (§2.3(g)).
+        let dateEx = DateCandidateFactory.extract(lines: lines)
+        result.date = dateEx.date
+        result.dateConfidence = dateEx.confidence
+
+        // Thẻ: ứng viên (§2.3(f)). Tranh chấp đuôi → thẻ trống
+        // + cờ riêng ở cuối hàm (không chọn thầm).
+        let cardEx = CardCandidateFactory.extract(lines: lines)
+        result.cardLast4 = cardEx.last4
+        result.cardBrand = cardEx.brand
+        result.cardConfidence = cardEx.confidence
+
+        // Neo số món đã bán: một bộ mẫu hợp nhất cho mọi tiệm.
+        result.itemsSold = findItemsSoldGeneric(lines: lines)
+        // P1-FLAG-MISSING (giữ kỷ luật của parse()): bill có in
+        // nhãn số món mà không đọc được số → validate() sinh cờ.
+        if result.itemsSold == nil,
+           lines.contains(where: { $0.text.uppercased().contains("ITEMS SOLD") || $0.text.uppercased().contains("ITEM COUNT") }) {
+            result.itemsSoldLabelSeen = true
+        }
+
+        // Khối tổng + khối món: trọng tài (V4-1/V4-2). Σmón của
+        // v3 KHÔNG còn tồn tại trong đường này — trọng tài
+        // tổng chạy với itemsSumCents = nil; δ1 do pha món tự
+        // tính trên món v4 (ItemsArbiter ghi đè deficitE1).
+        let arb = TotalsArbiter.arbitrate(
+            lines: lines, itemsSumCents: nil,
+            vendorVariants: hints?.labelVariants)
         let itemPhase = ItemsArbiter.assign(
             lines: lines, totals: arb,
             soldAnchor: result.itemsSold,
-            contribution: result.soldContribution)
+            contribution: result.soldContribution,
+            vendorVariants: hints?.labelVariants,
+            codeShapes: hints?.itemCodeShapes ?? [])
         let finalTotals = itemPhase.totals
         result.items = itemPhase.items
         result.itemsProvenance = itemPhase.provenance
@@ -438,9 +484,25 @@ enum ReceiptParser {
             result.totalCandidates = finalTotals.totalCandidates
         }
         result.selectionTrace = ["arbiter-v4/\(finalTotals.status)"]
-            + arb.trace + itemPhase.trace + result.selectionTrace
-        // validate() chạy lại trên khối tổng + món ĐÃ THAY — cảnh
-        // báo v3 tính trên số cũ không được để sót sang kết quả v4.
+            + arb.trace + itemPhase.trace + cardEx.trace
+        // P1-DOMAINCORR (như parse() áp cho đường v3): sửa CHỮ
+        // trên tên món + nhãn thuế của đường v4 trước validate —
+        // token số không qua tầng này. Ở V4-1/V4-2 bước này vô
+        // tình rơi mất vì parseV4 thay món/thuế SAU khi parse()
+        // đã sửa trên bản v3 bị bỏ; V4-3 khôi phục đúng thiết
+        // kế (§2.3(c)) trên đúng dữ liệu v4.
+        for i in result.items.indices {
+            result.items[i].name = DomainCorrector.correct(
+                result.items[i].name, field: "itemName",
+                lineIndex: result.items[i].lineIndex,
+                corrections: &result.corrections)
+        }
+        for i in result.taxes.indices {
+            result.taxes[i].label = DomainCorrector.correct(
+                result.taxes[i].label, field: "taxLabel",
+                lineIndex: result.taxes[i].lineIndex,
+                corrections: &result.corrections)
+        }
         result.warnings = validate(result)
         if finalTotals.status == "ambiguous" {
             result.warnings.append(
@@ -449,6 +511,14 @@ enum ReceiptParser {
         if finalTotals.status == "budgetExceeded" {
             result.warnings.append(
                 "Trọng tài khối tổng: vượt ngân sách tìm kiếm — khối tổng chưa khép sổ.")
+        }
+        if cardEx.disputed {
+            result.warnings.append(
+                "Thẻ: có hai đuôi thẻ khác nhau cùng bằng chứng mạnh — chưa chọn đuôi nào, anh kiểm tra giúp.")
+        }
+        if dateEx.distinctDays > 1 {
+            result.warnings.append(
+                "Ngày: có \(dateEx.distinctDays) ngày khác nhau trên tờ — app lấy ngày in đầu tiên, anh kiểm tra giúp.")
         }
         if let d1 = itemPhase.deficitE1, abs(d1) > ItemsArbiter.e1ToleranceCents {
             result.warnings.append(

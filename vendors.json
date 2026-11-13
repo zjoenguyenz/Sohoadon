@@ -1,6 +1,6 @@
 {
  "comment": "Vendor = DỮ LIỆU (DESIGN-FINAL §3.4 / M7). Seed: 9 hãng của WP5 (giữ nguyên tên hiển thị + tên khớp đã kiểm chứng) + T-Johnnys Seafood + Pan-Asia trích TỪ CORPUS ĐÓNG BĂNG (dòng header thật trong answers-lr.json / luồng A0 buổi đo 2026-11-11), không gõ từ trí nhớ. Neo phụ: địa chỉ/điện thoại/cụm chữ đọc từ chính các ca corpus ghi kèm ở trường note của từng neo. Thêm vendor mới = thêm mục dữ liệu + ca sinh nó thành fixture hồi quy + bump dataVersion — KHÔNG sửa code.",
- "dataVersion": "vendors-2026-11-11-p1",
+ "dataVersion": "vendors-2026-11-13-v43",
  "vendors": [
   {
    "anchors": [
@@ -12,14 +12,24 @@
     }
    ],
    "displayName": "Sam's Club",
+   "hints": {
+    "itemCodeShapes": [
+     "\\d{6,13}"
+    ],
+    "labelVariants": {
+     "TAX1": "TAX"
+    },
+    "note": "V4-3 (§2.7): mã 6/9/10 số đã quan sát trên hoá đơn thật của dự án (6+9: ca Sam's giấy 2026-09-30; 10: hoá đơn app) — CHỈ cộng điểm sức mạnh cho dòng món, không phải cổng. TAX1 là biến thể nhãn của chính Sam's; dạng thuế tách dòng đã biết.",
+    "taxLabelSplit": true
+   },
    "key": "sams",
    "matchNames": [
     "SAM S CLUB",
     "SAMS CLUB"
    ],
+   "parserPath": "sams",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "sams"
+   "signatureItems": []
   },
   {
    "anchors": [
@@ -35,12 +45,12 @@
    "matchNames": [
     "WALMART"
    ],
+   "parserPath": "generic",
    "printSemantics": {
     "atLineSoldContribution": "onePerLine",
     "note": "Ngoại lệ E3 (DESIGN-FINAL §3.4): dòng 'N AT 1 FOR X' của Walmart đóng góp 1 vào tổng số-món-đã-bán in trên bill, KHÔNG đóng góp N. Ca sinh: L-R04 (CUCUMBERS '2 AT 1 FOR 0.98' = 1.96 nhưng bill in '# ITEMS SOLD 8' = số DÒNG)."
    },
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [
@@ -52,13 +62,21 @@
     }
    ],
    "displayName": "Costco",
+   "hints": {
+    "itemCodeShapes": [
+     "\\d{7}"
+    ],
+    "labelVariants": {},
+    "note": "V4-3 (§2.7): mã món Costco 7 số đã quan sát (ca L-R01, vd mã ở dòng '3006152 BOUNCE 400' trong DESIGN-V4 §4.6) — chỉ cộng điểm, không phải cổng.",
+    "taxLabelSplit": false
+   },
    "key": "costco",
    "matchNames": [
     "COSTCO"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [
@@ -87,9 +105,9 @@
     "HOME DEPOT",
     "THE HOME DEPOT"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [],
@@ -103,9 +121,9 @@
     "LOWE S",
     "LOWES"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [],
@@ -117,9 +135,9 @@
    "matchNames": [
     "TARGET"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [],
@@ -129,9 +147,9 @@
     "QUIKTRIP",
     "QUIK TRIP"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [],
@@ -141,9 +159,9 @@
     "CASEY S",
     "CASEYS"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [],
@@ -153,9 +171,9 @@
     "LOVE S",
     "LOVES"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [
@@ -185,9 +203,9 @@
     "T JOHNNYS",
     "TJOHNNYS SEAFOOD"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   },
   {
    "anchors": [
@@ -217,9 +235,9 @@
     "PAN ASIA",
     "PANASIA"
    ],
+   "parserPath": "generic",
    "printSemantics": null,
-   "signatureItems": [],
-   "parserPath": "generic"
+   "signatureItems": []
   }
  ]
 }

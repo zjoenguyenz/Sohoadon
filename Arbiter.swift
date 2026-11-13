@@ -142,9 +142,11 @@ enum TotalsArbiter {
         }
     }
 
-    static func arbitrate(lines: [OCRLine], itemsSumCents: Int?) -> TotalsArbitration {
+    static func arbitrate(lines: [OCRLine], itemsSumCents: Int?,
+                          vendorVariants: [String: String]? = nil) -> TotalsArbitration {
         var out = TotalsArbitration()
-        let (money, rates, labels) = CandidateFactory.generate(lines: lines)
+        let (money, rates, labels) = CandidateFactory.generate(
+            lines: lines, vendorVariants: vendorVariants)
         var evaluations = 0
         var budgetHit = false
 
@@ -660,20 +662,44 @@ enum ItemsArbiter {
     /// Thứ tự "yếu nhất trước" cho nước loại (§3.5 nước i):
     /// mảnh không tên → biến thể hậu tố → chưa có liên kết đỡ →
     /// dòng muộn.
+    /// V4-3 (§2.7): món mang mã khớp HÌNH DẠNG MÃ của tiệm đã
+    /// nhận diện (dữ liệu gợi ý vendors.json, truyền qua
+    /// `codeShapes`) được cộng sức mạnh — xếp SAU, loại muộn
+    /// hơn. Đây là điểm gợi ý duy nhất của tiệm vào pha món:
+    /// mã không khớp vẫn là món bình thường, chỉ yếu hơn một
+    /// bậc ở đúng nước loại này — không phải cổng.
     private static func weakKey(_ it: ItemCandidate,
-                                chosen: [Int: Int]) -> (Int, Int, Int, Int) {
-        (it.kind == "fragment" ? 0 : 1,
-         chosen[it.line] != it.primaryCents ? 0 : 1,
-         (!it.qtyLocked && it.weightLb == nil) ? 0 : 1,
-         -it.line)
+                                chosen: [Int: Int],
+                                codeShapes: [String] = []) -> (Int, Int, Int, Int, Int) {
+        var shaped = 0
+        if !codeShapes.isEmpty, let code = it.itemCode {
+            for shape in codeShapes {
+                if let re = try? NSRegularExpression(
+                    pattern: "^(?:\(shape))$"),
+                   re.firstMatch(in: code,
+                                 range: NSRange(location: 0,
+                                                length: (code as NSString).length)) != nil {
+                    shaped = 1
+                    break
+                }
+            }
+        }
+        return (it.kind == "fragment" ? 0 : 1,
+                shaped,
+                chosen[it.line] != it.primaryCents ? 0 : 1,
+                (!it.qtyLocked && it.weightLb == nil) ? 0 : 1,
+                -it.line)
     }
 
     static func assign(lines: [OCRLine], totals: TotalsArbitration,
                        soldAnchor: Int?,
-                       contribution: String) -> ItemArbitration {
+                       contribution: String,
+                       vendorVariants: [String: String]? = nil,
+                       codeShapes: [String] = []) -> ItemArbitration {
         var out = ItemArbitration()
         var finalTotals = totals
-        let (_, rates, labels) = CandidateFactory.generate(lines: lines)
+        let (_, rates, labels) = CandidateFactory.generate(
+            lines: lines, vendorVariants: vendorVariants)
         let classified = lines.enumerated().map { i, line in
             ItemLineClassifier.classify(text: line.text,
                                         family: labels[i].family)
@@ -747,8 +773,8 @@ enum ItemsArbiter {
                 if mtype == "exclude" {
                     let assigned = basePool.filter {
                         chosen[$0.line] != nil && !$0.amountOptions.isEmpty
-                    }.sorted { weakKey($0, chosen: chosen)
-                               < weakKey($1, chosen: chosen) }
+                    }.sorted { weakKey($0, chosen: chosen, codeShapes: codeShapes)
+                               < weakKey($1, chosen: chosen, codeShapes: codeShapes) }
                     for (order, cand) in assigned.enumerated() {
                         let tp = basePool.filter { $0.line != cand.line }
                         let r = assignPass(pool: tp, target: target)

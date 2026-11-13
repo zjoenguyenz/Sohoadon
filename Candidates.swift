@@ -106,10 +106,35 @@ enum CandidateFactory {
     /// (§4.4(c)): họ TENDER thắng họ TOTAL — dòng "TOTAL DEBIT
     /// PURCHASE 92.24" là dòng THANH TOÁN (gồm $20 cash-back),
     /// không bao giờ là neo tổng. Đây là ca bẫy L-R09.
-    static func labelFamily(of text: String, hasMoney: Bool) -> LineLabel {
+    /// V4-3 (§2.7): `vendorVariants` là BIẾN THỂ NHÃN RIÊNG của
+    /// tiệm đã nhận diện, đọc từ DỮ LIỆU vendors.json (tiền tố
+    /// nhãn đã gập trắng → họ nhãn) — tra TRƯỚC luật chung;
+    /// không khớp thì rơi xuống luật chung nguyên vẹn. Đây là
+    /// đường ống dữ liệu gợi ý, không phải rẽ nhánh theo tiệm:
+    /// biến thể khai cho Sam's ("TAX1" → TAX) cho cùng kết quả
+    /// với luật chung, và gợi ý của tiệm A áp lên tờ tiệm B tệ
+    /// nhất chỉ lệch điểm, không mất trường (§2.7).
+    static func labelFamily(of text: String, hasMoney: Bool,
+                            vendorVariants: [String: String]? = nil) -> LineLabel {
         let squashed = text.uppercased().filter { !$0.isWhitespace }
         func make(_ family: String, _ rank: Int? = nil) -> LineLabel {
             LineLabel(family: family, rank: rank, labelOnly: !hasMoney)
+        }
+        if let variants = vendorVariants, !variants.isEmpty {
+            // Tiền tố dài hơn thắng (xác định, không phụ thuộc
+            // thứ tự băm của Dictionary).
+            for prefix in variants.keys.sorted(by: { $0.count > $1.count }) {
+                guard squashed.hasPrefix(prefix),
+                      let family = variants[prefix] else { continue }
+                var rank: Int? = nil
+                if family == "TAX" {
+                    for ch in squashed.dropFirst(prefix.count) {
+                        if ch.isNumber { rank = Int(String(ch)) }
+                        break
+                    }
+                }
+                return make(family, rank)
+            }
         }
         // Dòng đếm số lượng ("TOTAL NUMBER OF ITEMS SOLD = 12")
         // không phải nhãn tiền — nó từng đầu độc neo tổng qua
@@ -156,7 +181,10 @@ enum CandidateFactory {
 
     /// Sinh toàn bộ ứng viên từ các dòng đã chuẩn hoá (cùng mảng
     /// dòng mà ReceiptParser.parse nhìn thấy — lineIndex khớp).
-    static func generate(lines: [OCRLine])
+    /// V4-3: `vendorVariants` (dữ liệu gợi ý của tiệm đã nhận
+    /// diện) được truyền xuống labelFamily — xem chú thích ở đó.
+    static func generate(lines: [OCRLine],
+                         vendorVariants: [String: String]? = nil)
         -> (money: [MoneyCandidate], rates: [RateCandidate], labels: [LineLabel]) {
         var money: [MoneyCandidate] = []
         var rates: [RateCandidate] = []
@@ -190,7 +218,8 @@ enum CandidateFactory {
                 }
             }
 
-            let label = labelFamily(of: line.text, hasMoney: !lineMoney.isEmpty)
+            let label = labelFamily(of: line.text, hasMoney: !lineMoney.isEmpty,
+                                    vendorVariants: vendorVariants)
             labels.append(label)
 
             // --- Vai trò khả thi + gợi ý theo họ nhãn (§2.6) ---
@@ -278,5 +307,316 @@ enum CandidateFactory {
     /// điều kiện vào bể thuế (§3.2 pha 2).
     static func rateSupported(lineIndex: Int, rates: [RateCandidate]) -> Bool {
         rates.contains { $0.lineIndex == lineIndex || $0.lineIndex == lineIndex + 1 }
+    }
+}
+
+// =====================================================================
+//  V4-3 — Ứng viên THẺ (§2.3(f)) + NGÀY/GIỜ (§2.3(g))
+//
+//  Thay các cổng đơn-phát của v3 (findCard/findDateTime của
+//  Parser.swift — giữ nguyên cho đường v3 đối chứng) bằng SINH
+//  ỨNG VIÊN + CHỌN THEO BẰNG CHỨNG, một đường cho mọi tiệm.
+// =====================================================================
+
+/// Ứng viên đuôi thẻ: một cụm 4 số đứng riêng có ngữ cảnh giống
+/// thẻ (mặt nạ che hoặc dòng hãng/tender) trên một dòng in.
+struct CardCandidate {
+    var last4: String
+    var lineIndex: Int
+    var score: Int            // điểm bằng chứng của RIÊNG dòng này
+    var source: String        // "mask" | "tender"
+}
+
+enum CardCandidateFactory {
+
+    private static let tailRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(?<!\d)(\d{4})(?!\d)"#)
+    private static let maskRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"[*•●]{2,}|[Xx]{3,}"#)
+    private static let tenderWordRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"\b(DEBIT|CREDIT)\b"#,
+                                 options: [.caseInsensitive])
+    // Dòng định danh thiết bị/giao dịch mang mặt nạ + 4 số
+    // (MID: ********2882 trên ca L-R02) — đó là SỐ HIỆU, không
+    // phải đuôi thẻ: trừ nặng để không thắng ứng viên thẻ thật.
+    private static let idLabelRegex: NSRegularExpression? =
+        try? NSRegularExpression(
+            pattern: #"\b(MID|AID|REF|TERMINAL|AUTH|SEQ|TRACE|INVOICE)\b|TC#"#,
+            options: [.caseInsensitive])
+    private static let brandWords = ["MASTERCARD", "MASTER CARD", "VISA",
+                                     "AMEX", "AMERICAN EXPRESS", "DISCOVER"]
+
+    /// Sinh ứng viên từ mọi dòng có dãy số/mặt nạ giống thẻ:
+    /// mặt nạ sao/chấm/X kể cả HỎNG (cụm sao lệch nhịp như
+    /// "**** **** * ** 2586" của ca D-06, đuôi dính liền mặt nạ)
+    /// và dòng hãng/tender mang đúng 4 số đứng riêng (dạng
+    /// "MASTERCARD 2586", "US DEBIT - 2586"). Số dài nguyên
+    /// dãy không bao giờ thành ứng viên: đuôi phải là cụm 4 số
+    /// ĐỨNG RIÊNG (biên (?<!\d)/(?!\d)) và dòng hãng/tender có
+    /// ≥3 cụm 4 số (giống dãy PAN/TC#) không sinh ứng viên.
+    static func generate(lines: [OCRLine]) -> [CardCandidate] {
+        var out: [CardCandidate] = []
+        for (i, line) in lines.enumerated() {
+            let text = line.text
+            let ns = text as NSString
+            let full = NSRange(location: 0, length: ns.length)
+            let upper = text.uppercased()
+            let tails: [(value: String, start: Int)] =
+                (tailRegex?.matches(in: text, range: full) ?? []).compactMap { m in
+                    let r = m.range(at: 1)
+                    guard r.location != NSNotFound else { return nil }
+                    return (ns.substring(with: r), r.location)
+                }
+            if tails.isEmpty { continue }
+            let masks: [NSRange] =
+                (maskRegex?.matches(in: text, range: full) ?? []).map { $0.range }
+            let hasBrand = brandWords.contains { upper.contains($0) }
+            let hasTender = (tenderWordRegex?.firstMatch(in: text, range: full)) != nil
+            let idPenalty = (idLabelRegex?.firstMatch(in: text, range: full)) != nil
+                ? -50 : 0
+            for tail in tails {
+                var best: Int? = nil
+                var source = ""
+                for mr in masks {
+                    let maskEnd = mr.location + mr.length
+                    if maskEnd <= tail.start && tail.start - maskEnd <= 3 {
+                        if best == nil || best! < 20 { best = 20; source = "mask" }
+                    }
+                }
+                if (hasBrand || hasTender) && tails.count <= 2 {
+                    let v = hasBrand ? 40 : 30
+                    if best == nil || best! < v { best = v; source = "tender" }
+                }
+                guard let b = best else { continue }
+                out.append(CardCandidate(last4: tail.value, lineIndex: i,
+                                         score: b + idPenalty, source: source))
+            }
+        }
+        return out
+    }
+
+    /// Chọn đuôi thẻ theo tổng điểm bằng chứng: cộng dồn qua
+    /// các dòng (nhiều dòng cùng đuôi = corroboration, §2.3(f)),
+    /// cộng điểm vùng tender (dòng ở/ sau dòng TOTAL/TENDER đầu
+    /// tiên). Hai đuôi KHÁC nhau đồng điểm cao nhất = TRANH
+    /// CHẤP: không chọn thầm — last4 = nil, disputed = true,
+    /// caller gắn cờ. Không ứng viên → nil lặng (cờ do
+    /// validate xử như cũ khi thẻ vắng).
+    static func extract(lines: [OCRLine])
+        -> (last4: String?, brand: String?, confidence: Double,
+            disputed: Bool, trace: [String]) {
+        let candidates = generate(lines: lines)
+        // Vùng tender: từ dòng đầu tiên mang họ TOTAL/TENDER.
+        let families = lines.map {
+            CandidateFactory.labelFamily(of: $0.text, hasMoney: false).family
+        }
+        let zoneStart = families.firstIndex { $0 == "TOTAL" || $0 == "TENDER" }
+        var totals: [String: (score: Int, lines: Set<Int>, bestLine: Int, bestScore: Int)] = [:]
+        for c in candidates {
+            var slot = totals[c.last4] ?? (0, [], c.lineIndex, Int.min)
+            slot.score += c.score
+            slot.lines.insert(c.lineIndex)
+            if c.score > slot.bestScore {
+                slot.bestScore = c.score
+                slot.bestLine = c.lineIndex
+            }
+            totals[c.last4] = slot
+        }
+        for (tail, slot) in totals {
+            if let z = zoneStart, slot.lines.contains(where: { $0 >= z }) {
+                var s = slot
+                s.score += 15
+                totals[tail] = s
+            }
+        }
+        let brand = extractBrand(lines: lines)
+        if totals.isEmpty {
+            return (nil, brand, 0, false, ["card: không ứng viên"])
+        }
+        let ranked = totals.sorted { $0.value.score > $1.value.score }
+        let top = ranked[0]
+        if ranked.count > 1 && ranked[1].value.score >= top.value.score {
+            return (nil, brand, 0, true,
+                    ["card: tranh chấp \(ranked[0].key)/\(ranked[1].key) cùng điểm \(top.value.score)"])
+        }
+        let conf = lines[top.value.bestLine].confidence
+        return (top.key, brand, conf, false,
+                ["card: \(top.key) điểm \(top.value.score) từ \(top.value.lines.count) dòng"])
+    }
+
+    /// Hãng thẻ: giữ nguyên luật của v3 (dòng đầu tiên chứa tên
+    /// hãng; kèm "Debit" nếu in cùng dòng) — tên hãng là trường
+    /// dữ liệu, không phải cổng đuôi thẻ.
+    private static func extractBrand(lines: [OCRLine]) -> String? {
+        for line in lines {
+            let upper = line.text.uppercased()
+            for b in brandWords where upper.contains(b) {
+                var name = b == "MASTER CARD" ? "Mastercard" : b.capitalized
+                if b == "AMEX" || b == "AMERICAN EXPRESS" { name = "Amex" }
+                if upper.contains("DEBIT") { name += " Debit" }
+                return name
+            }
+        }
+        return nil
+    }
+}
+
+/// Ứng viên ngày/giờ (§2.3(g)): mọi dạng in (số / ISO /
+/// tháng-chữ / Clover / tách dòng) đều vào tập; chọn theo vị
+/// trí + tính nhất quán với dòng giờ kề — không còn "thấy đầu
+/// tiên thì chốt" theo từng cổng riêng của hai nhánh v3.
+enum DateCandidateFactory {
+
+    private static let dtNumRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(\d{1,2})/(\d{1,2})/(\d{2,4})\s+(\d{1,2}):(\d{2})\s*([AP]M)?"#)
+    private static let dtCloverRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(\d{1,2})-([A-Za-z]{3})-(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AP])M?"#)
+    private static let dNumRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(\d{1,2})/(\d{1,2})/(\d{2,4})"#)
+    private static let dIsoRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(\d{4})-(\d{2})-(\d{2})"#)
+    private static let dMonRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(\d{1,2})-([A-Za-z]{3})-(\d{2,4})"#)
+    private static let timeAloneRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?$"#)
+    private static let timeAnyRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(\d{1,2}):(\d{2})(?::\d{2})?\s*([AP]M)?"#)
+    private static let monthNames: [String: Int] = [
+        "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+        "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+    ]
+
+    private static func groups(_ re: NSRegularExpression?, _ text: String)
+        -> [String?]? {
+        guard let re = re else { return nil }
+        let ns = text as NSString
+        guard let m = re.firstMatch(in: text,
+                                    range: NSRange(location: 0, length: ns.length))
+        else { return nil }
+        return (0...re.numberOfCaptureGroups).map { g in
+            let r = m.range(at: g)
+            return r.location == NSNotFound ? nil : ns.substring(with: r)
+        }
+    }
+
+    private static func makeDate(month: Int?, day: Int?, year: Int?,
+                                 hour: Int = 0, minute: Int = 0) -> Date? {
+        guard let month = month, let day = day, var year = year else { return nil }
+        if year < 100 { year += 2000 }
+        guard (1...12).contains(month), (1...31).contains(day) else { return nil }
+        var comps = DateComponents()
+        comps.year = year; comps.month = month; comps.day = day
+        comps.hour = hour; comps.minute = minute
+        return Calendar.current.date(from: comps)
+    }
+
+    private static func ampmAdjusted(_ hour: Int, _ ampm: String?) -> Int {
+        guard let ap = ampm?.uppercased() else { return hour }
+        if ap.hasPrefix("P") && hour < 12 { return hour + 12 }
+        if ap.hasPrefix("A") && hour == 12 { return 0 }
+        return hour
+    }
+
+    /// Trả (ngày, tin cậy, loại): "datetime" (ngày+giờ cùng
+    /// dòng) thắng theo thứ tự dòng; không có thì ngày đầu
+    /// tiên + giờ trong ±3 dòng theo luật P1-DATE-MERGE (giờ
+    /// đứng riêng thắng giờ nhúng, gần thắng xa; tin cậy
+    /// min × 0.9 như v3) → "merged"; còn lại "dateOnly".
+    static func extract(lines: [OCRLine])
+        -> (date: Date?, confidence: Double, kind: String?,
+            distinctDays: Int) {
+        var dtCands: [(index: Int, date: Date, conf: Double)] = []
+        var dCands: [(index: Int, date: Date, conf: Double)] = []
+        for (i, line) in lines.enumerated() {
+            let text = line.text
+            var placed = false
+            if let g = groups(dtNumRegex, text), g.count == 7,
+               let d = makeDate(month: Int(g[1] ?? ""), day: Int(g[2] ?? ""),
+                                year: Int(g[3] ?? ""),
+                                hour: ampmAdjusted(Int(g[4] ?? "") ?? 0, g[6]),
+                                minute: Int(g[5] ?? "") ?? 0) {
+                dtCands.append((i, d, line.confidence))
+                placed = true
+            }
+            if !placed, let g = groups(dtCloverRegex, text), g.count == 8,
+               let mon = g[2].flatMap({ monthNames[$0.uppercased()] }),
+               let d = makeDate(month: mon, day: Int(g[1] ?? ""),
+                                year: Int(g[3] ?? ""),
+                                hour: ampmAdjusted(Int(g[4] ?? "") ?? 0, g[7]),
+                                minute: Int(g[5] ?? "") ?? 0) {
+                dtCands.append((i, d, line.confidence))
+                placed = true
+            }
+            if placed { continue }
+            var found: Date? = nil
+            if let g = groups(dNumRegex, text), g.count == 4 {
+                found = makeDate(month: Int(g[1] ?? ""), day: Int(g[2] ?? ""),
+                                 year: Int(g[3] ?? ""))
+            }
+            if found == nil, let g = groups(dIsoRegex, text), g.count == 4 {
+                var comps = DateComponents()
+                comps.year = Int(g[1] ?? ""); comps.month = Int(g[2] ?? "")
+                comps.day = Int(g[3] ?? "")
+                found = Calendar.current.date(from: comps)
+            }
+            if found == nil, let g = groups(dMonRegex, text), g.count == 4,
+               let mon = g[2].flatMap({ monthNames[$0.uppercased()] }) {
+                found = makeDate(month: mon, day: Int(g[1] ?? ""),
+                                 year: Int(g[3] ?? ""))
+            }
+            if let d = found { dCands.append((i, d, line.confidence)) }
+        }
+        // Số NGÀY LỊCH khác nhau trong toàn bộ ứng viên — tín
+        // hiệu mơ hồ cho parseV4 gắn cờ (phán quyết Leader
+        // tích hợp V4-3, mục D5: chọn ngày in đầu tiên nhưng
+        // không được im lặng khi có ≥2 ngày khác nhau).
+        let distinctDays = Set((dtCands + dCands).map { c -> Int in
+            let k = Calendar.current.dateComponents(
+                [.year, .month, .day], from: c.date)
+            return (k.year ?? 0) * 10000 + (k.month ?? 0) * 100
+                + (k.day ?? 0)
+        }).count
+        if let first = dtCands.first {
+            return (first.date, first.conf, "datetime", distinctDays)
+        }
+        guard let base = dCands.first else {
+            return (nil, 0, nil, distinctDays)
+        }
+        // Ghép giờ kề (P1-DATE-MERGE): ±3 dòng, bỏ dòng mang
+        // ngày cạnh tranh; khoá chọn (khoảng cách, giờ nhúng
+        // thua giờ đứng riêng, chỉ số dòng).
+        var best: (key: (Int, Int, Int), hour: Int, minute: Int, conf: Double)? = nil
+        for (j, line) in lines.enumerated() {
+            if j == base.index || abs(j - base.index) > 3 { continue }
+            let text = line.text
+            if groups(dNumRegex, text) != nil || groups(dIsoRegex, text) != nil
+                || groups(dMonRegex, text) != nil { continue }
+            var hm: (hour: Int, minute: Int)? = nil
+            var standalone = false
+            if let g = groups(timeAloneRegex, text), g.count == 4 {
+                standalone = true
+                hm = (ampmAdjusted(Int(g[1] ?? "") ?? 0, g[3]),
+                      Int(g[2] ?? "") ?? 0)
+            } else if let g = groups(timeAnyRegex, text), g.count == 4 {
+                hm = (ampmAdjusted(Int(g[1] ?? "") ?? 0, g[3]),
+                      Int(g[2] ?? "") ?? 0)
+            }
+            guard let v = hm else { continue }
+            let key = (abs(j - base.index), standalone ? 0 : 1, j)
+            if best == nil || key < best!.key {
+                best = (key, v.hour, v.minute, line.confidence)
+            }
+        }
+        if let b = best {
+            var comps = Calendar.current.dateComponents(
+                [.year, .month, .day], from: base.date)
+            comps.hour = b.hour
+            comps.minute = b.minute
+            if let merged = Calendar.current.date(from: comps) {
+                return (merged, min(base.conf, b.conf) * 0.9, "merged",
+                        distinctDays)
+            }
+        }
+        return (base.date, base.conf, "dateOnly", distinctDays)
     }
 }
