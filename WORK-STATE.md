@@ -2990,3 +2990,345 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
   harness #23 + build-ipa của commit cuối 8ddf280f → kiểm gói
   IPA → trình anh bản UI mới + báo cáo đêm.** Ca này không kêu
   anh cài/test gì.
+- ĐẨY CUỐI CA 00:40: **THÀNH CÔNG** — đúng 1 lần, 1 file
+  (WORK-STATE.md), commit mới trên docs/planning:
+  `5956313a59061e68a39b3eae309f2a5d0a93dbbb`; đọc lại từ xa
+  xác nhận đầu nhánh = commit này. (Dòng này chỉ có tại
+  bàn, sẽ đi theo lần đẩy của ca sau.)
+- KẾ HOẠCH PHASE 2 (lệnh anh 00:45 CST): đã lập xong
+  PHASE2-PLAN.md — bảng thiếu G1-G10 đối chiếu code v3,
+  thiết kế lưu trữ/Drive (một bố cục hai đường vận
+  chuyển, test cô lập Test-0 trước engine, khôi phục là
+  cổng bắt buộc), 7 gói P2-0..P2-6, 6 quyết định chờ anh.
+  THI CÔNG CHỈ SAU KHI LÕI 100% — giữ nguyên khoá.
+
+## CA TRỰC 02:40 CST 2026-11-13 — PHÁN QUYẾT HARNESS #23 XANH TRỌN + BUILD-IPA #88 (COMMIT CUỐI 8ddf280f) XANH
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca làm đúng MỘT bước ca 00:40 để lại: đọc phán quyết
+  harness #23 + build-ipa của commit cuối, bằng đọc trực
+  tiếp GitHub Actions (phiên đăng nhập zjoenguyenz) trong
+  ca. Ca không sửa code, không kích lượt CI nào, không tải
+  artifact nào.
+- HARNESS #23 (id 43378874694, workflow_dispatch trên v3
+  @1a0ff281fd14601cb1f8b12327237c7f3f368b08, kích 00:27
+  CST): **SUCCESS** — tổng 1h32m14s; job law-and-control
+  (id 131731727435) xong 02:00 CST, 1h32m11s. Artifact
+  harness-evidence-23 209 KB, sha256 trang run
+  `f5b5bed80ea5…`. Từng cổng theo log job:
+  · Cổng 1 control: "SURVIVED fixture" — L-R01 lines=53 ·
+    vendor=Costco subtotal=12548 tax=938 total=13486
+    items=20 sumItems=12548 card=2586 warnings=1 (đóng sổ).
+  · Cổng 2 (100 lượt): "SET 100 DONE 43/43" + "SURVIVED
+    images x100" (log dòng 17308–17309) — corpus 43 ảnh
+    (33 cũ + 10 WR web) chạy trọn; nhãn bước còn ghi cũ
+    "33 ảnh x 100 set", số thật trong log là 43/43.
+  · Ma trận: 4/4 cấu hình (current 1 · current 3 · old 3 ·
+    enus 1), mỗi cấu hình "SET 3 DONE 43/43" + "SURVIVED
+    images x3"; bước 10m11s.
+  · Cổng 3 fuzz: **32 dòng PASS, 0 dòng DIED** — bước qua
+    (3s). GHI RÕ LỆCH: log KHÔNG có dòng "40/40" (đã tìm,
+    không thấy); số ca fuzz của run này là 32, khác số 40
+    của run #21 — ca chỉ ghi số đã thấy, không suy cơ chế.
+  · Ghi nhận hiển thị phụ (nguyên văn log, chưa điều tra):
+    manifest Cổng 2 ghi langs=["vi-VN","en-US"], manifest
+    ma trận ở cấu hình current ghi ["vi-VT","en-US"].
+  · Không có harness nào sau #23.
+- PHẠM VI CỔNG: verdict #23 phán cho LÕI của 1a0ff281;
+  2 commit sau (023be82d tên/icon + 8ddf280f icon PNG)
+  không đổi file lõi nào (theo mục TIẾN ĐỘ ĐÊM) và harness
+  KHÔNG chạy lại trên commit cuối — đúng rào chi phí anh
+  đã ban; khai rõ để báo cáo sáng không nói quá.
+- BUILD-IPA: #86 (id 43378815819, @1a0ff281) SUCCESS 1m14s
+  — SoHoaDon-V3-run86-2026-11-13 860 KB sha256
+  `7e3d099e715e…`. #87 (id 43379686211, @023be82dec833…)
+  **SUCCESS** 1m16s, V3 861 KB sha256 `1d0c5c53a38d…` —
+  SỬA GHI NHẬN CŨ: mục TIẾN ĐỘ ĐÊM dự kiến lượt trung
+  gian này ĐỎ vì thiếu PNG; thực tế nó XANH (Contents.json
+  tham chiếu icon-1024.png mà PNG chưa lên, build vẫn qua).
+  #88 (id 43379753638, @8ddf280f3e58bc70073247a60795f2dc14699009
+  — commit cuối đủ icon) **SUCCESS** 1m18s —
+  SoHoaDon-V3-run88-2026-11-13 **1,19 MB** sha256
+  `7bdd27d7b811bbab0b5fe3eed2ef703e49961f8199ed5e27af…`;
+  artifact BENCH đi kèm 21,8 MB sha256 `1bcd33aef810…`.
+- CHI PHÍ CI ƯỚC TÍNH (theo giá anh đã nêu $0,08/phút
+  macOS, KHÔNG phải số billing đọc trực tiếp): harness
+  #23 ≈ 92,2 phút ≈ $7,38; build-ipa #86+#87+#88 ≈
+  3,8 phút ≈ $0,30; tổng đêm cho 2 loại lượt này ≈ $7,7.
+- Tuyên bố trung thực — đã chứng minh: trạng thái/kết quả
+  #23 + #86/#87/#88 và từng dòng verdict trích trên bằng
+  đọc trực tiếp trang run + log job trên GitHub Actions;
+  chưa chứng minh: RUỘT IPA #88 CHƯA được tải/kiểm gói —
+  icon trong gói, tên hiển thị GL-Keeper trong binary,
+  tem bản trong app đều CHƯA kiểm; theo checklist B2,
+  bản này CHƯA được gọi là sẵn sàng giao; chưa làm: chưa
+  trình anh bản UI mới + báo cáo đêm (thuộc nhịp sáng của
+  Leader, sau khi kiểm gói).
+- **Bước tiếp theo: Leader (nhịp sáng) tải artifact
+  SoHoaDon-V3-run88-2026-11-13 → kiểm gói (icon + tên
+  GL-Keeper + tem + không lẫn ảnh bench ở app chính) →
+  trình anh bản UI mới kèm báo cáo đêm (kê chi phí CI ở
+  trên + 2 điểm lệch đã ghi: fuzz 32 ca, #87 xanh khác
+  dự kiến).** Ca này không kêu anh cài/test gì.
+
+## CA TRỰC 04:40 CST 2026-11-13 — KIỂM GÓI IPA RUN #88 XONG: HASH KHỚP, GL-Keeper + ICON + TEM core-v3-2 ĐỦ, 0 ẢNH BENCH TRONG APP CHÍNH
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (như các ca
+  trước) — ca làm đúng MỘT bước ca 02:40 để lại: tải artifact
+  SoHoaDon-V3-run88-2026-11-13 → kiểm gói. Ca không sửa code,
+  không kích lượt CI nào. Sổ đầy đủ:
+  `run88-inspect/RUN88-INSPECT-LEDGER.md`.
+- TẢI: qua trình duyệt (phiên zjoenguyenz), run 43379753638
+  Success; zip 1.248.247 byte, sha256
+  `7bdd27d7b811bbab0b5fe3eed2ef703e49961f8199ed5e27affeaf286b16cdb6`
+  TRÙNG sha256 trang run công bố. IPA lưu tại
+  `downloads/SoHoaDon-V3-run88-2026-11-13.ipa` (1.256.482
+  byte, sha256 IPA `7a865b5a…944`).
+- RUỘT GÓI: Payload/SoHoaDon.app ĐÚNG 10 mục — **0 JPG,
+  0 BenchImages** (binary 0 hit BenchImages/benchapp/C-003/
+  L-R01). Info.plist: CFBundleDisplayName = **GL-Keeper**,
+  bundle id com.nje.sohoadon, bản 1.0 (1), iOS tối thiểu 17.0.
+  Binary: "GL-Keeper" 3 hit, nhãn "Bản bộ đọc của app" 1 hit.
+- ICON: AppIcon60x60@2x.png 120×120 + AppIcon76x76@2x~ipad.png
+  152×152 (CgBI) + Assets.car 345.304 byte chứa AppIcon/
+  icon-1024 — icon ĐÃ vào gói (khác hẳn các lượt tvOS từng
+  hụt: ở iOS lần này có cả PNG phẳng lẫn Assets.car).
+- TEM: "core-v3-2" không soi được cstring trong binary
+  (0 hit — đúng kỳ vọng small-string ≤15 ký tự, tiền lệ
+  L-2026-11-10-4). Đối chiếu tại đúng commit dựng 8ddf280f:
+  ReadPipeline.swift dòng 315 parserVersion = "core-v3-2",
+  blob `1bb366f2…3408` byte-trùng file tại bàn → tem khép ở
+  mức nguồn-của-commit + nhãn hiển thị có trong binary,
+  KHÔNG nhận là đọc trực tiếp giá trị từ binary.
+- Tuyên bố trung thực — đã chứng minh: các mục trên bằng
+  file tải thật + đọc trực tiếp GitHub tại commit; chưa
+  chứng minh: app chạy/UI thật trên máy anh (chờ anh cài);
+  harness #23 vẫn chỉ phán cho lõi 1a0ff281; chưa làm:
+  chưa trình anh (nhịp Leader/chat chính).
+- **Bước tiếp theo: Leader/chat chính trình anh bản UI mới
+  (downloads/SoHoaDon-V3-run88-2026-11-13.ipa) kèm báo cáo
+  đêm 2026-11-13.** Checklist B2 sau ca này: mục 1 ✓ ·
+  mục 3 (tên duy nhất) ✓ · mục 4 (tem) ✓ ở mức bằng chứng
+  trên · mục 2 giữ phán quyết harness #23 cho lõi.
+
+## CA TRỰC 06:40 CST 2026-11-13 — XÁC NHẬN LẠI FILE IPA RUN #88 TẠI BÀN: HASH + KÍCH THƯỚC KHỚP SỔ KIỂM GÓI 04:40
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước độc lập: xác nhận
+  lại tính nguyên vẹn của đúng file sẽ trình anh, tại bàn,
+  trước khi nhịp Leader/chat chính trình. Ca không sửa code,
+  không kích lượt CI nào, không đẩy code.
+- KẾT QUẢ (chạy thật trong ca): `downloads/
+  SoHoaDon-V3-run88-2026-11-13.ipa` — sha256 =
+  `7a865b5a0a64787dccdfe1a16a07664c8601c747da7c984a9733cf5547cad944`,
+  kích thước 1.256.482 byte — KHỚP TỪNG KÝ TỰ / TỪNG BYTE với
+  sổ kiểm gói `run88-inspect/RUN88-INSPECT-LEDGER.md` của ca
+  04:40 (IPA sha256 `7a865b5a…944`, 1.256.482 byte). File giao
+  vì vậy không đổi, không lẫn, đúng bản đã kiểm gói (GL-Keeper
+  + icon + tem core-v3-2 ở mức bằng chứng sổ 04:40).
+- Tuyên bố trung thực — đã chứng minh: hash + kích thước của
+  file IPA tại bàn khớp sổ kiểm gói, bằng chạy sha256sum/stat
+  trực tiếp trong ca; chưa chứng minh: app chạy/UI thật trên
+  máy anh (chờ anh cài khi Leader trình); harness #23 vẫn chỉ
+  phán cho lõi 1a0ff281; chưa làm: chưa trình anh — việc đó
+  thuộc nhịp Leader/chat chính, ca trực không kêu anh
+  cài/test gì trong ca này.
+- **Bước tiếp theo giữ nguyên: Leader/chat chính trình anh
+  bản UI mới (downloads/SoHoaDon-V3-run88-2026-11-13.ipa)
+  kèm báo cáo đêm 2026-11-13.**
+
+## CA TRỰC 08:40 CST 2026-11-13 — KIỂM GÓI LẠI ĐỘC LẬP TRƯỚC KHI TRÌNH: IPA RUN #88 NGUYÊN VẸN, GL-Keeper ĐÚNG, 0 ẢNH BENCH
+- Cổng đóng băng nghiên cứu: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng
+  21:02 + duyệt thiết kế chốt D1–D7 21:44 ngày 2026-11-11) —
+  ca quay lại luật chung, làm đúng MỘT bước: kiểm gói lại độc
+  lập (không dùng lại kết luận của ca 04:40/06:40) trên đúng
+  file sẽ trình anh. Ca không sửa code, không kích lượt CI nào,
+  không đẩy code.
+- KẾT QUẢ (tự chạy trong ca): `downloads/
+  SoHoaDon-V3-run88-2026-11-13.ipa` — sha256 =
+  `7a865b5a0a64787dccdfe1a16a07664c8601c747da7c984a9733cf5547cad944`,
+  1.256.482 byte — khớp sổ 04:40 và 06:40. Giải nén tại /tmp:
+  Payload/SoHoaDon.app có 8 file (binary, Info.plist, PkgInfo,
+  Assets.car 338K, AppIcon60x60@2x.png, AppIcon76x76@2x~ipad.png,
+  lexicon.json, vendors.json); **0 file bench / 0 JPG**;
+  Info.plist đọc trực tiếp: CFBundleDisplayName = **GL-Keeper**,
+  bundle id com.nje.sohoadon, bản 1.0 (1), iOS tối thiểu 17.0;
+  chuỗi "GL-Keeper" trong binary: 3 hit.
+- Tuyên bố trung thực — đã chứng minh: tính nguyên vẹn + ruột
+  gói của file trình bằng giải nén + đọc plist + sha256sum
+  trực tiếp trong ca này; chưa chứng minh: app chạy/UI thật
+  trên máy anh (chờ anh cài khi Leader trình); harness #23
+  vẫn chỉ phán cho lõi commit 1a0ff281, không phải commit cuối
+  8ddf280f (chỉ đổi tên/icon) — đã khai ở các ca trước; chưa
+  làm: chưa trình anh — thuộc nhịp Leader/chat chính.
+- **Bước tiếp theo giữ nguyên: Leader/chat chính trình anh bản
+  UI mới (downloads/SoHoaDon-V3-run88-2026-11-13.ipa) kèm báo
+  cáo đêm 2026-11-13 (UI mới + sửa A2-01/A2-06/A2-08 + 10 hoá
+  đơn web + chi phí CI ~$7,7 ước tính của ca 02:40). Phase 2
+  vẫn khoá cho tới khi GATE100-v2 đạt + anh xác nhận trên máy.**
+- ĐẨY CUỐI CA 08:40: **KHÔNG XÁC ĐỊNH** — đã thử đẩy
+  docs/planning ĐÚNG 1 LẦN (1 file: WORK-STATE.md) — lần đẩy
+  bị gián đoạn giữa chừng do dịch vụ khởi động lại, kết quả
+  không xác định (có thể đã lên hoặc chưa); ca sau kiểm từ xa
+  trạng thái nhánh docs/planning trước khi đẩy lại, không đẩy
+  mù trùng lặp. Ca kết thúc bình thường theo luật chống treo.
+- PHẢN HỒI ANH 10:01 CST + ĐÍNH CHÍNH CỦA EM: anh báo
+  UI mới "y chang giao diện cũ", nghi em quên update.
+  Em mở gói #88 kiểm binary tại bàn: DesignSystem/
+  VendorMonogram/StatusChip/heroCard/splitBar ĐỀU có
+  trong binary; Info.plist CFBundleDisplayName =
+  GL-Keeper. Ảnh chụp của anh cũng cho thấy đúng bản
+  mới đang chạy (thẻ hero + thanh chia cam, monogram
+  TS/TH, chip BUSINESS/CÁ NHÂN, tiêu đề GL-Keeper).
+  KẾT LUẬN TRUNG THỰC: không quên update — lỗi ở phía
+  em là PASS 1 CHỈ LÀ CHẢI NHẸ (đổi khung List->Card,
+  thêm chip/monogram/màu) nhưng GIỮ NGUYÊN khung bố
+  cục + nền tối cũ nên nhìn gần như không khác; báo cáo
+  sáng gọi "UI mới" là QUÁ LỜI so với mức thay đổi thật.
+  Đính chính đã gửi anh kèm đề xuất PASS 2 (thiết kế lại
+  cho khác rõ rệt, gửi mẫu duyệt TRƯỚC khi code). Chờ anh
+  chọn hướng ở tin nhắn đó.
+- LỖI LÕI MỚI DO ANH BẮT ĐƯỢC (2026-11-13 10:14 CST, bản
+  run #88): tờ Sam's Club GIẤY MỚI (30/09/2026 13:55, TC#
+  9087...7123 8, 7 món) — app đọc 0/7 món, mất cả 2 dòng
+  thuế (chip Thuế = —), cảnh báo subtotal+thuế $169.16 ≠
+  tổng $179.28. Tiệm/ngày/tổng/thẻ (2586) đọc đúng.
+  Chân lý em đọc từ ảnh anh gửi: SUBTOTAL 159.16 (ảnh mờ,
+  còn khả năng 169.16), TAX1 8.517% = 6.30, TAX2 4.017% =
+  3.82, TOTAL 179.28, DEBIT TEND 179.28 (lần quẹt đầu
+  DECLINED, lần 2 PAY FROM PRIMARY thành công). Số học:
+  nếu subtotal thật 159.16 thì thuế thật 10.12 và
+  159.16+10.12 = 169.28 ≠ 179.28 — TỜ IN TỰ KHÔNG KHỚP
+  trừ khi subtotal là 169.16 (khi đó khớp tuyệt đối).
+  Hai giả thuyết: (A) OCR đọc 159.16->169.16 + mất 2 dòng
+  thuế; (B) subtotal in thật 169.16 + parser/OCR mất hẳn
+  khối thuế. Phân định bằng VĂN BẢN OCR GỐC trên máy anh —
+  đã xin anh mở mục đó gửi em + gửi file ảnh tờ này để
+  đóng băng thành ca L-R12. Đây là tờ NGOÀI bộ mẫu (held-
+  out) — harness #23 xanh trên 43 ảnh KHÔNG bao phủ dạng
+  Sam's giấy này (tờ 004 là cùng đơn với ảnh app). Chưa
+  kết luận cơ chế; chưa dispatch harness nào.
+- LỖI MẤT BẢN NHÁP CHƯA LƯU (anh báo 2026-11-13 10:16 CST):
+  đang ở màn Kiểm Lại chưa bấm Lưu, anh chuyển qua app Muse
+  gửi ảnh, quay lại thì bản scan biến mất, app về Trang Chủ.
+  BẰNG CHỨNG CODE (đọc tại bàn): ScanView.swift:76 draft chỉ
+  là @State trong bộ nhớ; :231 Kiểm Lại là .sheet(item:
+  $draft); KHÔNG có bất kỳ lưu trữ nào cho bản nháp (không
+  UserDefaults/file/scenePhase). Ảnh gốc đã ghi xuống đĩa
+  lúc nạp nhưng kết quả đọc + trạng thái nháp thì không —
+  app bị hệ thống dọn khỏi bộ nhớ khi ở nền (app vừa dùng
+  camera/Vision, rất nặng) là mất sạch, mở lại về tab 0.
+  HỆ QUẢ TRỰC TIẾP: bản nháp tờ Sam's 10:14 nhiều khả năng
+  đã mất theo (ảnh thành file mồ côi trong ReceiptImages,
+  không màn nào mở lại được). Anh sẽ phải quét lại tờ đó —
+  lần quét lại cũng là đường lấy văn bản OCR gốc để chẩn
+  đoán lỗi 0 món/mất thuế.
+  HƯỚNG SỬA (gói tới, cùng gói sửa lõi Sam's): chụp ảnh
+  chụp nhanh bản nháp xuống đĩa ngay khi đọc xong (DTO
+  Codable: kết quả đọc + tên ảnh + nguồn nạp), xoá khi Lưu
+  thành công hoặc Huỷ đích danh; mở app mà còn nháp dở thì
+  tự khôi phục màn Kiểm Lại. Hàng chờ nạp nhiều file có
+  cùng điểm yếu — ghi nhận, ngoài phạm vi v1.
+- UI PASS 2 ĐÃ GIAO (2026-11-13 ~10:19 CST): commit v3
+  8ff8772c, build-ipa run #89 SUCCESS 1m28s, IPA trong
+  downloads/SoHoaDon-V3-run89-2026-11-13.ipa, sha256 nội
+  2d9ce64d... Kiểm gói tại bàn: tên GL-Keeper, Assets.car
+  có mặt, binary chứa đủ DSBackground/heroSubtitle/
+  ledgerBanner/categoryIconName/chip ĐỘ TIN CẬY, 0 ảnh
+  bench. Đúng mẫu anh duyệt 10:08. KHÔNG sửa: lỗi mất
+  bản nháp + lõi Sam's (gói sau). Chi phí build ~$0.12.
+- CHẨN ĐOÁN LẦN 1 TỜ SAM'S (2026-11-13 ~10:20 CST): anh quét
+  lại và gửi VĂN BẢN OCR GỐC (lưu ở samples/sample-016-...-
+  transcribed.txt — em chép tay từ ảnh chụp màn hình của
+  anh, ký tự nhiễu giữ nguyên như đọc được, KHÔNG phải bản
+  trích xuất byte-exact từ máy). KẾT QUẢ LẬT GIẢ THUYẾT:
+  máy đọc thô GIAO GẦN ĐỦ MỌI THỨ — SUBTOTAL 169.16 (tức
+  ảnh em đọc "159.16" là em đọc sai; 169.16+6.30+3.82 =
+  179.28 khớp tuyệt đối), TAX1 6.30 + TAX2 3.82 có mặt,
+  TOTAL 179.28 có mặt, cả 6 dòng món có mặt (kèm dòng
+  "2 @ 19.48" => 7 món). Lỗi nằm ở TẦNG PARSER của mình:
+  lần đọc 1 mất thuế + 0 món; lần đọc 2 (10:17) TỆ HƠN —
+  mất cả tạm tính + tổng, thẻ 2586 bị gắn cờ tin cậy thấp.
+  Dấu vết nhiễu ký tự bám vào token tiền trong luồng:
+  "17.2฿" (số tiền bị phá), "179.28ł", "169.16ęŚ", dòng
+  thuế KHÔNG có dấu % ("TAX1 8.5170 ₺ 6.30") — khớp họ
+  giòn token của F2/F4. Việc tiếp: dò code Parser (nhánh
+  sams + neo thuế/tổng + cổng trích món) trên đúng luồng
+  này + dựng fixture tái hiện trên harness. Đã dặn anh
+  LƯU bản nháp lần 2 để giữ bằng chứng byte-exact.
+- UI PASS 2 ĐƯỢC ANH DUYỆT TRÊN MÁY (2026-11-13 10:23 CST):
+  "Giao diện ok" — banner sổ cái + tổng lớn + nền sâu chạy
+  đúng trên máy anh (ảnh Kiểm Lại 10:21/10:22). Mục UI
+  ĐÓNG. Anh kết luận: "Chỉ còn cốt lõi có vấn đề".
+- ★ CƠ CHẾ LỖI SAM'S ĐÃ TÌM RA (bằng chứng: file chẩn đoán
+  anh gửi A33C7940...ocrdiag.json — lần ĐỌC LẠI từ văn bản
+  đã lưu, source storedText, tái hiện xác định 100%:
+  parse cho subtotal 16916, total 17928, items [], taxes
+  []; 42 dòng assembly em đã trích vào samples/sample-016-
+  lines.txt):
+  1) MÓN 0/7: parseSams chỉ nhận dòng món bằng mẫu
+     ^(\d{10})\s+(.+)$ — mã ĐÚNG 10 số (kế thừa prototype
+     đạt Mẫu 001). Tờ này mã 9 số (980012379...) và 6 số
+     (806965) -> MỌI dòng món bị bỏ qua. Σ 6 dòng nếu mở
+     khoá = 169.16 khớp tuyệt đối; dòng phụ "2 @ 19.48"
+     cho COKE qty 2 -> tổng số lượng 7 = ITEMS SOLD.
+  2) THUẾ 0: mẫu thuế cùng-dòng của parseSams đòi
+     "^TAX\s+(\d)..." (TAX + khoảng trắng + số thứ tự);
+     tờ in "TAX1 8.5170 % 6.30" (không khoảng trắng) ->
+     trượt; TAX2 tách 2 dòng "TAX2 3.82" / "4.0170 ₴"
+     không mẫu nào nhận.
+  3) DAO ĐỘNG GIỮA 2 LẦN QUÉT: neo SUBTOTAL/TOTAL kết
+     thúc bằng $ ngay sau số tiền — luồng quét 1 có ký tự
+     rác bám đuôi ("TOTAL 179.28ł", "SUBTOTAL 169.16ęŚ")
+     là neo chết (giải thích lần 2 mất cả tổng).
+  HƯỚNG SỬA (chỉ trong parseSams): mã món {6,13} số; luật
+  dòng phụ "N @ giá" gắn qty vào món ngay trên; thuế nhận
+  TAXn không khoảng trắng + dạng tách dòng TAXn <tiền>;
+  neo tổng cho phép đuôi rác <=3 ký tự không-phải-số.
+  Cổng kiểm: fixture dựng từ chính file chẩn đoán này +
+  harness trọn (Luật 3) + ảnh JPG gốc làm ca L-R12 (đã xin
+  anh gửi file A33C7940....jpg từ cùng thư mục Files).
+  Gói sửa gộp: parser Sam's + lưu bản nháp (L-14) + tem
+  core-v3-3.
+- ★ LỆNH CỦA ANH 2026-11-13 10:28 CST — SỬA HƯỚNG CỦA EM:
+  "Cốt lõi vấn đề là tờ nào cũng đọc được. Không cần tờ
+  chụp thật của Sam để đặc biệt chú ý. Vấn đề nằm ở lõi
+  app. Vì này là app tài chính nên phải rõ ràng. Cần bóc
+  tách thật kỹ lại lõi app để tìm hướng đi cho đúng, giải
+  quyết 100% vấn đề lỗi của lõi app."
+  -> Em RÚT kế hoạch vá riêng nhánh Sam's + rút yêu cầu
+  gửi JPG (không còn cần theo hướng đặc biệt hoá đó).
+  Lệnh hiệu lực: BÓC TÁCH TOÀN BỘ LÕI (core-dissection/)
+  — kiểm kê mọi cổng khớp trong Parser/ReadPipeline/
+  Reconcile/validate, truy vết trên mọi luồng thật đã có,
+  phân loại lỗi theo cơ chế, rồi trình HƯỚNG KIẾN TRÚC để
+  anh duyệt TRƯỚC khi sửa code lõi (đúng tiền lệ cổng
+  nghiên cứu 11/11). Gói lưu bản nháp (L-14) giữ nguyên
+  hàng chờ, độc lập với nghiên cứu lõi.
+
+## CA TRỰC 10:40 CST 2026-11-13 — TRẠNG THÁI CHỜ: BÓC TÁCH LÕI XONG, CHỜ ANH DUYỆT PHƯƠNG ÁN A
+- Cổng đóng băng nghiên cứu cũ (11/11): ĐÃ HẾT HIỆU LỰC
+  (anh duyệt hướng 21:02 + duyệt thiết kế D1–D7 21:44
+  2026-11-11, đã ghi ở các ca 04:40/06:40/08:40).
+- Cổng MỚI theo lệnh anh 10:28 CST hôm nay: bóc tách toàn
+  bộ lõi ĐÃ XONG ở nhịp Leader/chat chính ngay trước ca
+  này — `core-dissection/` có INVENTORY.md (311 dòng) ·
+  CORPUS-INDEX.md (92 dòng) · DIRECTIONS-DRAFT.md (411
+  dòng) · LEADER-REPORT.md (108 dòng) · corpus/ 169 file
+  luồng. Ca này chỉ đọc + đếm file để xác nhận, KHÔNG làm
+  lại, KHÔNG sửa code lõi, KHÔNG build, KHÔNG đẩy code.
+- TRẠNG THÁI CHỜ (dòng chờ của cổng này, trước ca chưa có):
+  **CHỜ ANH DUYỆT PHƯƠNG ÁN A** trong
+  `core-dissection/LEADER-REPORT.md` (mục "QUYẾT ĐỊNH CHỜ
+  ANH": duyệt A → mới lập thiết kế chi tiết + gói theo
+  pha, trình anh duyệt ở cổng thiết kế rồi mới xây;
+  không dòng code lõi nào bị đụng trước quyết định này).
+  Phương án B/C đã bị Leader bác có lý do trong cùng báo
+  cáo (B = vá giữ nguyên kiến trúc bệnh; C = hoãn vô điều
+  kiện vì corpus dưới ngưỡng dữ liệu).
+- Hàng chờ độc lập giữ nguyên: gói lưu bản nháp xuống đĩa
+  (L-2026-11-13-14) — ngoài phạm vi nghiên cứu lõi.
+- **Bước tiếp theo: chờ quyết định của anh ở chat chính
+  (duyệt / không duyệt Phương án A). Ca trực các ca sau:
+  nếu WORK-STATE chưa ghi anh đã duyệt A thì không thiết
+  kế chi tiết, không sửa code lõi — chỉ xác nhận lại
+  trạng thái chờ này.**
