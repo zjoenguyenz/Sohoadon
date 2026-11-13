@@ -3,35 +3,65 @@ import AVKit
 import SwiftUI
 import UIKit
 
-/// Player page: presents the system AVPlayerViewController MODALLY in
-/// true full screen (edge-to-edge, native transport controls, native PiP
-/// and AirPlay affordances) instead of embedding it under app chrome —
-/// the v1.1 embedded layout left a title bar and black margins, which the
-/// owner flagged as "not really full screen".
+/// Player page (v1.3): the system player is EMBEDDED full-bleed —
+/// edge-to-edge under a small floating overlay (close button + title
+/// capsule), reserving no layout space, so the picture is as full-screen
+/// as the modal design was.
 ///
-/// The page itself only hosts a black background plus the presenter; the
-/// orientation lock narrows the app to landscape while the page is up.
+/// Why not modal (the v1.2 design): when PiP starts, iOS dismisses a
+/// modally presented AVPlayerViewController; the host's viewDidAppear
+/// then looks exactly like "user closed the player", the whole page was
+/// torn down and the PiP stream died with it (owner's clip, 2026-11-12:
+/// PiP tap -> ejected to the portrait channel list). Embedded, PiP opens
+/// in place and nothing else moves.
+///
+/// Pinch-to-fill: a two-finger pinch toggles the controller's
+/// videoGravity between resizeAspect (fit) and resizeAspectFill (fill /
+/// "tràn viền"), which the owner asked for explicitly.
 struct PlayerView: View {
     let channel: Channel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
+
             if let url = channel.streamURL {
-                FullScreenPlayerPresenter(url: url, title: channel.title) {
-                    dismiss()
-                }
-                .ignoresSafeArea()
+                PlayerControllerView(url: url, title: channel.title)
+                    .ignoresSafeArea()
             } else {
                 VStack(spacing: 16) {
+                    Spacer()
                     Text("Kênh không có địa chỉ phát hợp lệ.")
                         .foregroundStyle(.white)
-                    Button("Đóng") { dismiss() }
-                        .buttonStyle(.bordered)
-                        .tint(.green)
+                    Spacer()
                 }
+                .frame(maxWidth: .infinity)
             }
+
+            // Floating chrome: floats OVER the video, reserves nothing.
+            HStack(spacing: 10) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Color.black.opacity(0.45), in: Circle())
+                }
+                .accessibilityLabel("Đóng")
+
+                Text(channel.title)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Color.black.opacity(0.45), in: Capsule())
+            }
+            .padding(.leading, 14)
+            .padding(.top, 10)
         }
         .onAppear {
             OrientationHelper.lock(.landscape, rotateTo: .landscapeRight)
@@ -42,126 +72,76 @@ struct PlayerView: View {
     }
 }
 
-/// Hosts a plain view controller whose only job is to present the system
-/// player full-screen as soon as it appears. When the user closes the
-/// player (its own X / swipe), the host becomes visible again and the
-/// coordinator reports the close so SwiftUI can dismiss the cover.
-struct FullScreenPlayerPresenter: UIViewControllerRepresentable {
+/// SwiftUI wrapper around an embedded AVPlayerViewController with PiP
+/// enabled and a pinch recognizer for fit/fill switching. Plays
+/// immediately on appear; pauses and releases on dismantle.
+struct PlayerControllerView: UIViewControllerRepresentable {
     let url: URL
     let title: String
-    let onClose: () -> Void
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(url: url, title: title, onClose: onClose)
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        // Audio session for background / PiP playback.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        try? AVAudioSession.sharedInstance().setActive(true)
+
+        let item = AVPlayerItem(url: url)
+        let titleItem = AVMutableMetadataItem()
+        titleItem.identifier = AVMetadataIdentifier.commonIdentifierTitle
+        titleItem.value = title as NSString
+        titleItem.extendedLanguageTag = "und"
+        item.externalMetadata = [titleItem]
+
+        let player = AVPlayer(playerItem: item)
+        player.allowsExternalPlayback = true
+
+        let controller = AVPlayerViewController()
+        controller.player = player
+        controller.allowsPictureInPicturePlayback = true
+        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        controller.videoGravity = .resizeAspect
+
+        let pinch = UIPinchGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePinch(_:))
+        )
+        pinch.delegate = context.coordinator
+        controller.view.addGestureRecognizer(pinch)
+
+        context.coordinator.controller = controller
+        player.play()
+        return controller
     }
 
-    func makeUIViewController(context: Context) -> HostViewController {
-        let host = HostViewController()
-        host.view.backgroundColor = .black
-        context.coordinator.host = host
-        host.onDidAppear = { context.coordinator.hostDidAppear() }
-        return host
+    func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {}
+
+    static func dismantleUIViewController(_ uiViewController: AVPlayerViewController, coordinator: Coordinator) {
+        uiViewController.player?.pause()
+        uiViewController.player = nil
+        coordinator.controller = nil
     }
 
-    func updateUIViewController(_ uiViewController: HostViewController, context: Context) {}
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        weak var controller: AVPlayerViewController?
 
-    static func dismantleUIViewController(_ uiViewController: HostViewController, coordinator: Coordinator) {
-        coordinator.teardown()
-    }
-
-    final class HostViewController: UIViewController {
-        var onDidAppear: (() -> Void)?
-
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated)
-            onDidAppear?()
-        }
-    }
-
-    final class Coordinator: NSObject, AVPlayerViewControllerDelegate {
-        private let url: URL
-        private let title: String
-        private let onClose: () -> Void
-        weak var host: HostViewController?
-        private var playerController: AVPlayerViewController?
-        private var didPresent = false
-        private var closed = false
-
-        init(url: URL, title: String, onClose: @escaping () -> Void) {
-            self.url = url
-            self.title = title
-            self.onClose = onClose
-        }
-
-        func hostDidAppear() {
-            if !didPresent {
-                presentPlayer()
-            } else if !closed {
-                // The presented player was dismissed by the user:
-                // hand control back to SwiftUI exactly once.
-                closed = true
-                teardownPlayer()
-                onClose()
+        /// Spread (scale > 1) fills the screen, pinch (scale < 1) returns
+        /// to fit. Thresholded so small movements don't flap the mode,
+        /// and latched per gesture via the recognizer's state.
+        @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+            guard let controller, gesture.state == .changed || gesture.state == .ended else { return }
+            if gesture.scale > 1.12, controller.videoGravity != .resizeAspectFill {
+                controller.videoGravity = .resizeAspectFill
+            } else if gesture.scale < 0.88, controller.videoGravity != .resizeAspect {
+                controller.videoGravity = .resizeAspect
             }
         }
 
-        private func presentPlayer() {
-            guard let host else { return }
-            didPresent = true
-
-            // Audio session for background / PiP playback.
-            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
-            try? AVAudioSession.sharedInstance().setActive(true)
-
-            let item = AVPlayerItem(url: url)
-            let titleItem = AVMutableMetadataItem()
-            titleItem.identifier = AVMetadataIdentifier.commonIdentifierTitle
-            titleItem.value = title as NSString
-            titleItem.extendedLanguageTag = "und"
-            item.externalMetadata = [titleItem]
-
-            let player = AVPlayer(playerItem: item)
-            player.allowsExternalPlayback = true
-
-            let controller = AVPlayerViewController()
-            controller.player = player
-            controller.delegate = self
-            controller.modalPresentationStyle = .fullScreen
-            controller.allowsPictureInPicturePlayback = true
-            controller.canStartPictureInPictureAutomaticallyFromInline = true
-            playerController = controller
-
-            host.present(controller, animated: true) {
-                player.play()
-            }
-        }
-
-        private func teardownPlayer() {
-            playerController?.player?.pause()
-            playerController?.player = nil
-            playerController = nil
-        }
-
-        func teardown() {
-            if let controller = playerController, controller.presentingViewController != nil {
-                controller.dismiss(animated: false)
-            }
-            teardownPlayer()
-        }
-
-        // MARK: AVPlayerViewControllerDelegate
-
-        /// Coming back from PiP: re-present the player if it is not on
-        /// screen, then tell the system the restore succeeded.
-        func playerViewController(_ playerViewController: AVPlayerViewController,
-                                  restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
-            if playerViewController.presentingViewController == nil, let host {
-                host.present(playerViewController, animated: true) {
-                    completionHandler(true)
-                }
-            } else {
-                completionHandler(true)
-            }
+        /// Let the pinch coexist with the player's own gestures
+        /// (scrubbing, double-tap, its fullscreen pinch handling).
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            true
         }
     }
 }
