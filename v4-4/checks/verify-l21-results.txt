@@ -1,0 +1,18 @@
+PASS  live == fix4 byte-identical  sha256=741dcf6c5cec04a1...
+PASS  exactly 1 struct definition  lines=[158]
+PASS  exactly 3 call sites  lines=[802, 828, 1585]
+PASS  options == 5 presets  found=['Mua cho khách trong tiệm', 'Mua cho nhân viên trong tiệm', 'Mua cho khách và nhân viên', 'Dùng cho hoạt động của tiệm', 'Mua nguyên liệu / hàng hoá cho tiệm']
+PASS  placeholder tag '' present  
+PASS  custom tag present  
+PASS  only 1 purpose TextField, inside struct (custom mode)  lines=[198], struct_at=[158]
+PASS  exactly 3 writes receipt.businessPurpose = purposeText  lines=[1154, 1290, 1732]
+PASS  missingPurposeFlagText constant  
+PASS  flag condition business+empty  
+PASS  flag area: field + own 'Lưu mục đích' button  
+PASS  fix3->fix4 diff hunks == 4 (1 add + 3 swaps)  hunks=4
+PASS  diff swaps 3 TextField -> 3 BusinessPurposeField  removed=3 added=3
+PASS  brace balance {} == 0 net  open=370 close=370
+PASS  paren balance () == 0 net  open=742 close=742
+PASS  Models.swift: businessPurpose is String var  
+
+TOTAL: 16/16 PASS
