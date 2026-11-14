@@ -1,0 +1,22 @@
+CA TRỰC 08:40 CST 2026-11-14 — ĐỐI CHIẾU CHỮ 2 MỤC CHỌN L-21 (điểm (a) còn treo từ ca 00:40/02:40/04:40/06:40)
+Phương pháp: đối chiếu nguyên văn từng mục chọn trong code sống + binary run #106 với nguồn ghi nguyên văn danh sách anh chốt — KHÔNG sửa code, KHÔNG build, KHÔNG dispatch CI trong ca này.
+
+NGUỒN NGUYÊN VĂN (đọc trực tiếp trong ca):
+- ~/memory/2026-11-14.md dòng 230 (bản flush của chat chính tối 2026-11-13, mục L-2026-11-13-21): danh sách chọn ghi đầy đủ từng mục, phân tách bằng " / ":
+  "Mua cho khách trong tiệm / Mua cho nhân viên trong tiệm / Mua cho khách và nhân viên / Dùng cho hoạt động của tiệm / Mua nguyên liệu, hàng hoá cho tiệm" + "Tự ghi…"
+- ~/MEMORY.md mục "MỤC ĐÍCH BUSINESS = CHỌN, KHÔNG GÕ" và TEAM.md L-2026-11-13-21 đều ghi mục 5 là "Mua nguyên liệu, hàng hoá cho tiệm" (dấu phẩy) — 3 nguồn độc lập tại bàn khớp nhau ở mục 5.
+- TEAM.md ghi mục 2 dạng rút gọn "cho nhân viên" — nguồn flush ở trên cho dạng đầy đủ "Mua cho nhân viên trong tiệm".
+
+ĐỐI CHIẾU TỪNG MỤC (code sống v3-phase4/app/ReceiptViews.swift:160-166 = cây đã khớp byte fix4 ở ca 00:40; binary run #106 đã đếm byte UTF-8 ở ca 06:40, cùng 5 chuỗi này):
+1. "Mua cho khách trong tiệm" — code KHỚP nguyên văn.
+2. "Mua cho nhân viên trong tiệm" — code KHỚP dạng đầy đủ của nguồn flush. => Nửa đầu của điểm (a) ĐÃ GIẢI QUYẾT: dạng rút gọn ở TEAM.md chỉ là viết tắt, code đúng.
+3. "Mua cho khách và nhân viên" — code KHỚP nguyên văn.
+4. "Dùng cho hoạt động của tiệm" — code KHỚP nguyên văn.
+5. Nguồn: "Mua nguyên liệu, hàng hoá cho tiệm" (dấu ",") — Code/binary #106: "Mua nguyên liệu / hàng hoá cho tiệm" (dấu " / "). => CHÊNH DUY NHẤT còn lại: dấu câu trong mục 5 ("," so với " / "). Nội dung chữ giống hệt, chỉ khác dấu.
+
+KẾT LUẬN CỦA CA:
+- Điểm (a) thu hẹp từ 2 mục xuống còn đúng 1 chênh dấu câu ở mục 5.
+- Đây là chuỗi sẽ được LƯU NGUYÊN VĂN vào businessPurpose của từng tờ khi anh chọn mục 5, nên chữ trong bản giao nên khớp danh sách anh đã chốt. Tuy nhiên chênh này KHÔNG đáng một lượt build riêng (anh đã phàn nàn chi phí Actions tối 13/11 + cam kết gom sửa vào MỘT lượt dựng cho MỘT đợt): ca này KHÔNG tự sửa code, KHÔNG kích build.
+- Kiến nghị cho Leader/chat chính tại cổng trình bản run #106: hoặc (i) trình rõ chênh dấu câu này cho anh trong tin giao và để anh quyết giữ nguyên bản #106, hoặc (ii) nếu có lượt build kế tiếp vì lý do khác, gom sửa mục 5 thành "Mua nguyên liệu, hàng hoá cho tiệm" vào cùng lượt đó rồi mới giao. Ca trực không kêu anh cài/test gì.
+
+Tuyên bố trung thực — đã chứng minh: đối chiếu 5/5 mục bằng 3 nguồn văn bản tại bàn + code sống + số đếm byte của binary #106 từ ca 06:40; chưa chứng minh: ý của anh về dấu "/" trong mục 5 có phải là thay đổi anh muốn sau bản flush hay không — không có ghi chép nào tại bàn nói anh đổi dấu, mọi ghi chép đều là dấu phẩy; chưa làm: không sửa code/binary, không build, 2 điểm test thiết bị vẫn mở nguyên (P-DRAFT giết-app giữa chừng + tờ đầu qua cổng chặn .block); Phase 2 vẫn khoá cho tới GATE100-v2 + anh xác nhận trên máy.
