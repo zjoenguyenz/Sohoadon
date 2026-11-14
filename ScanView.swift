@@ -503,13 +503,13 @@ struct ScanView: View {
     /// kiểu của trình biên dịch (run #99).
     @ViewBuilder
     private var blockedBanner: some View {
-        if blockedDraft != nil, let blockedQuality {
+        if blockedDraft != nil, let quality = blockedQuality {
             VStack(spacing: 12) {
                 Label("Tờ này bị cổng chất lượng chặn",
                       systemImage: "exclamationmark.triangle.fill")
                     .font(.headline)
                     .foregroundStyle(.orange)
-                Text("Ảnh \(qualityIssueText(blockedQuality)) — app chưa mở tờ này để kiểm hay lưu. Ảnh gốc của tờ vẫn đã lưu trong máy. Anh chụp / chọn lại rõ hơn, hoặc vẫn đọc tờ này nếu không chụp lại được.")
+                Text("Ảnh \(qualityIssueText(quality)) — app chưa mở tờ này để kiểm hay lưu. Ảnh gốc của tờ vẫn đã lưu trong máy. Anh chụp / chọn lại rõ hơn, hoặc vẫn đọc tờ này nếu không chụp lại được.")
                     .font(.callout)
                     .multilineTextAlignment(.center)
                 HStack(spacing: 12) {
