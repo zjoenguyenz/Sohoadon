@@ -1,0 +1,37 @@
+v4 results: 169 | STREAM4-DIED: 0
+C-003__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+D-01__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-02__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-03__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-04__DEVICE-A0.txt                    v4-block=CLOSE v3-block=open TIEN prov=4
+D-05__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-06__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-07__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-08__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-09__DEVICE-A0.txt                    v4-block=CLOSE v3-block=open TIEN prov=4
+D-10__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-11__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-12__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=4
+D-13__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=3
+D-14__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=3
+D-15__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=3
+D-16__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=3
+D-17__DEVICE-A0.txt                    v4-block=open  v3-block=open = prov=2
+D-18__DEVICE-A0.txt                    v4-block=CLOSE v3-block=CLOSE = prov=3
+L-R01__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=4
+L-R02__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+L-R03__DEVICE-A0.txt                   v4-block=open  v3-block=open = prov=3
+L-R04__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+L-R05__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+L-R06__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+L-R07__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+L-R08__DEVICE-A0.txt                   v4-block=open  v3-block=open = prov=4
+L-R09__DEVICE-A0.txt                   v4-block=open  v3-block=open = prov=4
+L-R10__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+L-R11__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=3
+N-001__DEVICE-A0.txt                   v4-block=CLOSE v3-block=open TIEN prov=4
+N-002__DEVICE-A0.txt                   v4-block=CLOSE v3-block=CLOSE = prov=4
+S-0__DEVICE-A0.txt                     v4-block=CLOSE v3-block=open TIEN prov=4
+SAMS-20260930__DEVICE.txt              v4-block=CLOSE v3-block=open TIEN prov=4
+GATE LANE totals-block: v4 30/34 CLOSE vs v3 25/34
+THUT cases: []

@@ -3474,3 +3474,64 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
 - Việc của ca: chạy bộ kiểm `p-draft/checks/verify_dto_coverage.py` trên cây `p-draft/assembled/` (bộ kiểm có sẵn tại bàn từ nhịp Leader, ca này không tạo, không sửa). Kết quả **PASS TOÀN BỘ 8/8 ánh xạ DTO**: ParsedLineItem 9/9 · ParsedTaxLine 4/4 · TotalCandidate 4/4 · ParseResult 38/38 (trừ taxTotalCents là thuộc tính tính toán, đã khai loại trừ có lý do) · ReconcileFix 12/12 · ReconcileRegionHint 6 gốc → 7 DTO (lineRange tách Lower/Upper, đã ghi chú) · ReconcileReport 14/14 · ScanDraft → PendingDraftSnapshot 10/10. Kết quả lưu tại `p-draft/checks/verify-dto-coverage-results.txt`.
 - Tuyên bố trung thực — đã chứng minh: ánh xạ DTO của P-DRAFT không rơi thầm trường lưu trữ nào ở mức kê khai trường (đọc từ chính mã assembled thật); chưa chứng minh: hành vi round-trip thật (mã hoá/giải mã giữ nguyên giá trị) — đó là việc của `p-draft/tests/PendingDraftRoundTripTest.swift` chưa chạy trong ca này, và toàn bộ P-DRAFT/V4-3 chưa qua cổng Swift thật; chưa làm: không viết/sửa code lõi hay code P-DRAFT, không build, không dispatch CI trong ca này.
 - **Bước tiếp theo giữ nguyên: Leader/chat chính hoàn tất ráp V4-3 (hạ công tắc parserPath + ứng viên thẻ/ngày, ca đích danh D-06) và P-DRAFT, chạy cổng luồng Swift thật + bài test round-trip của P-DRAFT trước khi trình. Ca này không kêu anh cài/test gì.**
+- P-DRAFT TÍCH HỢP (2026-11-13 16:47 CST): PendingDraft
+  .swift + ScanView (chụp snapshot khi draft ra đời,
+  xoá tại onDone — chỉ lưu thành công/Huỷ tường minh,
+  khôi phục đầu onAppear) + project.yml. Leader tự
+  chạy: phủ trường DTO PASS toàn bộ, S10/P5 PASS, diff
+  ScanView tối thiểu đúng 5 điểm chạm. PHÁN QUYẾT
+  LEADER: hàng chờ nạp nhiều file NGOÀI phạm vi (URL
+  scoped chết theo tiến trình — Inbox sweep đã lo);
+  ảnh mồ côi sau Huỷ: GIỮ NGUYÊN, không tự xoá bằng
+  chứng (mục mở O-DRAFT-1, gói riêng sau); ánh xạ
+  toàn-hay-không cho báo cáo đối chiếu: duyệt.
+  Đang chờ build-ipa tự kích để chứng minh biên dịch
+  tầng app; kiểm giết-app trên thiết bị thuộc V4-4.
+- ĐẨY CUỐI CA 16:40: **THÀNH CÔNG** — đúng 1 lần, 3 file (WORK-STATE.md · p-draft/checks/verify_dto_coverage.py · p-draft/checks/verify-dto-coverage-results.txt), commit mới trên docs/planning: `13b47e09b0fe4f58f27bba8d06104a7c9086b819`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- P-DRAFT BIÊN DỊCH ĐẠT: build-ipa run #97 (commit
+  bb4b8d36) Success 1m15s — tầng app gồm ScanView +
+  PendingDraft biên dịch sạch. Hành vi giết-app vẫn
+  chờ kiểm trên thiết bị ở V4-4 (đã tuyên bố).
+- V4-3 TÍCH HỢP + ĐẨY (2026-11-13 17:00 CST): commit
+  v3 778e824f (Arbiter/Candidates/Parser/VendorData/
+  vendors.json hints v43). Leader tự kiểm: parseV4
+  không còn đọc parserPath (chỉ còn trong chú thích),
+  mô phỏng FULL 28/34 (D-06 khép thẻ), kiểm tĩnh PASS
+  toàn bộ sau khi Leader cộng cờ ngày mơ hồ (điều kiện
+  phán quyết D5 — DateCandidateFactory.distinctDays).
+  Phán quyết D1–D8 + ngữ nghĩa chấm PARTIAL/FLAGGED
+  đã chốt ở AMENDMENTS-V4.md (INT-V4-03). Đang chạy
+  cổng luồng run #29 để nghiệm thu Swift thật.
+- ★ V4-3 NGHIỆM THU ĐẠT trên Swift thật (run #29,
+  commit 778e824f, 1m34s ~$0.21): làn cổng FULL 28/34
+  = TRẦN V4-4 ĐÃ CHỐT (D-06 khép bằng thẻ 2586 đọc
+  trên Swift thật), khối tổng giữ 30/34, thụt = 0,
+  SILENT = 0, died = 0/169. 6 ca còn lại đều cờ đúng
+  khối, toàn bộ là ca mất vật lý — thuốc chữa ở làn
+  ảnh/ROI tại cổng thiết bị, không phải tầng chữ.
+  TIẾP: trình anh gói V4-4 (patch lớn duy nhất).
+- ANH DUYỆT V4-4 (2026-11-13 16:56 CST). Đã mở gói
+  thi công ở staging v4-4/: chuyển mặc định sang v4 +
+  tem core-v4-1, loại đường v3 khỏi bản giao (harness
+  giữ làn đối chứng), cổng chất lượng từng tờ + .block,
+  đường nối ROI theo gợi ý trọng tài. Sau Leader rà:
+  cổng luồng kiểm nhanh → lượt harness ĐẦY ĐỦ (≥100
+  lần, ~$6, một phát ở cổng quyết định) → soi IPA →
+  giao theo checklist B2.
+- V4-4 TÍCH HỢP + ĐẨY (2026-11-13 17:26 CST): commit
+  v3 9088e499 (6 file: Parser/ReadPipeline/Reconcile/
+  ScanView/CaptureIntake/project.yml). Leader tự kiểm:
+  parseV4 bất biến từng byte (diff duy nhất = chú thích
+  của reparse), reparse→parseV4 (Điều 2), điều kiện
+  GLKEEPER_V4_ONLY chỉ ở target app, kiểm tĩnh trên cây
+  sống SAU đồng bộ PASS toàn bộ. 12/12 diễn giải đã
+  phán ở INT-V4-04. Đang chạy cổng luồng kiểm nhanh;
+  đạt thì tới lượt ĐẦY ĐỦ ≥100 lần + soi IPA.
+
+## CA TRỰC 18:40 CST 2026-11-13 — CHẤM CỔNG LUỒNG KIỂM NHANH V4-4 (RUN #30): ĐẠT, STREAM4 KHỚP TỪNG DÒNG RUN #29
+- Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; Phương án A 10:46, DESIGN-V4 10:52, mức chốt V4-4 12:36, AMD-V4-01 15:55 hôm nay; V4-1/V4-2/V4-3 đã nghiệm thu đạt trên Swift thật). Ca quay lại luật chung, làm đúng MỘT bước tiếp theo đang chờ ở mục V4-4 trên: chấm cổng luồng kiểm nhanh của commit tích hợp 9088e499.
+- Việc của ca: chấm độc lập `core-v4-design/run30/streams.log` (artifact cổng luồng run #30 đã về tại bàn, ca này không dispatch lượt nào) bằng hai bộ chấm đã kiểm chứng: `score_full4.py` + `score_v4.py` đối chiếu `gt.json`. Đầu ra lưu tại `core-v4-design/run30/score-full4-output.txt` + `score-v4-output.txt`; sha256 streams.log = `8f161c49c05167af25c5682323afe6c4e4ff1ff90c3f87be35c9b08189e39986`.
+- KẾT QUẢ: làn cổng (DEVICE 1 + DEVICE-A0 33 = 34 ca): **FULL-LEDGER 28/34** (DEVICE 1/1 + A0 27/33) = đúng TRẦN V4-4 đã chốt; 6 ca còn lại đều FLAGGED-LOSS đúng danh sách vật lý đã rà (D-17: total,card · D-18: sumItems · L-R03: subtotal,taxes · L-R05: items,sumItems,sold · L-R08: taxes,sumItems · L-R09: subtotal,items,sumItems,card). Khối tổng/thuế: **v4 30/34 CLOSE vs v3 25/34, THUT = [] (0 ca thụt)**. Toàn corpus: STREAMS4-DONE 169/169, **died = 0, SILENT-LOSS = 0, SILENT-WRONG = 0** (0 dòng SILENT/DIED trong đầu ra bộ chấm).
+- BẰNG CHỨNG MẠNH NHẤT: 169 dòng STREAM4-RESULT của run #30 **khớp từng dòng** với run #29 (V4-3 nghiệm thu đạt) khi sắp xếp đối chiếu (diff rỗng) — tích hợp V4-4 (đổi mặc định sang v4 + tem core-v4-1 + loại đường v3 khỏi bản giao) KHÔNG làm lệch hành vi parseV4 trên Swift thật ở tầng luồng.
+- Tuyên bố trung thực — đã chứng minh: cổng luồng kiểm nhanh V4-4 ĐẠT ở mức số liệu trên (chấm từ log thật tại bàn bằng 2 bộ chấm, đối chiếu run #29 từng dòng); chưa chứng minh: lượt harness ĐẦY ĐỦ ≥100 lần chưa chạy, IPA của bản V4-4 chưa soi, hành vi .block + P-DRAFT giết-app trên thiết bị chưa kiểm (đều thuộc các bước sau của gói V4-4, đã tuyên bố ở HANDOFF); chưa làm: không viết/sửa code lõi, không build, không dispatch CI trong ca này (lượt đầy đủ ~$6 là cổng quyết định của Leader/chat chính, không phải ca trực tự kích).
+- **Bước tiếp theo giữ nguyên của gói V4-4: Leader/chat chính kích lượt harness ĐẦY ĐỦ (≥100 lần, một phát ở cổng quyết định) trên commit V4-4 → soi IPA (tem core-v4-1, GL-Keeper, 0 ảnh bench trong app chính) → giao theo checklist B2 5 mục, gồm đọc lại tờ Sam's ĐÃ LƯU. Ca này không kêu anh cài/test gì.**

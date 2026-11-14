@@ -1,0 +1,135 @@
+== LANE DEVICE (1 ca) ==
+  FULL-LEDGER: 1
+== LANE DEVICE-A0 (33 ca) ==
+  FULL-LEDGER: 27
+  FLAGGED-LOSS: 6
+    [FLAGGED-LOSS] D-17__DEVICE-A0.txt: total,card
+    [FLAGGED-LOSS] D-18__DEVICE-A0.txt: sumItems
+    [FLAGGED-LOSS] L-R03__DEVICE-A0.txt: subtotal,taxes
+    [FLAGGED-LOSS] L-R05__DEVICE-A0.txt: items,sumItems,sold
+    [FLAGGED-LOSS] L-R08__DEVICE-A0.txt: taxes,sumItems
+    [FLAGGED-LOSS] L-R09__DEVICE-A0.txt: subtotal,items,sumItems,card
+== LANE DEVICE-A1 (33 ca) ==
+  FLAGGED-LOSS: 33
+    [FLAGGED-LOSS] C-003__DEVICE-A1.txt: subtotal,total,items,sumItems,taxes
+    [FLAGGED-LOSS] D-01__DEVICE-A1.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-02__DEVICE-A1.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-03__DEVICE-A1.txt: items,sumItems,subtotal,taxes
+    [FLAGGED-LOSS] D-04__DEVICE-A1.txt: subtotal,items,sumItems,taxes
+    [FLAGGED-LOSS] D-05__DEVICE-A1.txt: items,sumItems
+    [FLAGGED-LOSS] D-06__DEVICE-A1.txt: taxes,items,sumItems,subtotal,total,card
+    [FLAGGED-LOSS] D-07__DEVICE-A1.txt: items,sumItems
+    [FLAGGED-LOSS] D-08__DEVICE-A1.txt: taxes,total,items,sumItems,subtotal
+    [FLAGGED-LOSS] D-09__DEVICE-A1.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-10__DEVICE-A1.txt: items,sumItems
+    [FLAGGED-LOSS] D-11__DEVICE-A1.txt: taxes,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-12__DEVICE-A1.txt: subtotal,taxes,items,sumItems
+    [FLAGGED-LOSS] D-13__DEVICE-A1.txt: subtotal,sumItems,taxes,total
+    [FLAGGED-LOSS] D-14__DEVICE-A1.txt: subtotal,items,sumItems,taxes,total
+    [FLAGGED-LOSS] D-15__DEVICE-A1.txt: subtotal,total,sumItems,taxes
+    [FLAGGED-LOSS] D-16__DEVICE-A1.txt: sumItems,subtotal,taxes,total
+    [FLAGGED-LOSS] D-17__DEVICE-A1.txt: subtotal,items,sumItems,taxes,total
+    [FLAGGED-LOSS] D-18__DEVICE-A1.txt: subtotal,taxes,total
+    [FLAGGED-LOSS] L-R01__DEVICE-A1.txt: items,sumItems,sold,subtotal,taxes,total
+    [FLAGGED-LOSS] L-R02__DEVICE-A1.txt: subtotal,sumItems,taxes
+    [FLAGGED-LOSS] L-R03__DEVICE-A1.txt: subtotal,taxes,total
+    [FLAGGED-LOSS] L-R04__DEVICE-A1.txt: subtotal,taxes
+    [FLAGGED-LOSS] L-R05__DEVICE-A1.txt: subtotal,taxes,items,sumItems,sold
+    [FLAGGED-LOSS] L-R06__DEVICE-A1.txt: subtotal,taxes
+    [FLAGGED-LOSS] L-R07__DEVICE-A1.txt: subtotal,taxes,sumItems,sold,items
+    [FLAGGED-LOSS] L-R08__DEVICE-A1.txt: subtotal,taxes,total,items,sumItems
+    [FLAGGED-LOSS] L-R09__DEVICE-A1.txt: subtotal,taxes,items,sumItems,card
+    [FLAGGED-LOSS] L-R10__DEVICE-A1.txt: subtotal,items,sumItems,taxes,total
+    [FLAGGED-LOSS] L-R11__DEVICE-A1.txt: subtotal,taxes,items,sumItems,total
+    [FLAGGED-LOSS] N-001__DEVICE-A1.txt: items,sumItems
+    [FLAGGED-LOSS] N-002__DEVICE-A1.txt: subtotal,items,sumItems,taxes
+    [FLAGGED-LOSS] S-0__DEVICE-A1.txt: subtotal,items,sumItems,taxes,total
+== LANE DEVICE-A2 (33 ca) ==
+  FLAGGED-LOSS: 33
+    [FLAGGED-LOSS] C-003__DEVICE-A2.txt: subtotal,items,sumItems,taxes,total
+    [FLAGGED-LOSS] D-01__DEVICE-A2.txt: subtotal,taxes,items,sumItems
+    [FLAGGED-LOSS] D-02__DEVICE-A2.txt: subtotal,taxes,items,sumItems
+    [FLAGGED-LOSS] D-03__DEVICE-A2.txt: items,sumItems
+    [FLAGGED-LOSS] D-04__DEVICE-A2.txt: subtotal,sumItems,taxes
+    [FLAGGED-LOSS] D-05__DEVICE-A2.txt: items,sumItems
+    [FLAGGED-LOSS] D-06__DEVICE-A2.txt: subtotal,taxes,items,sumItems
+    [FLAGGED-LOSS] D-07__DEVICE-A2.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-08__DEVICE-A2.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-09__DEVICE-A2.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-10__DEVICE-A2.txt: sumItems
+    [FLAGGED-LOSS] D-11__DEVICE-A2.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-12__DEVICE-A2.txt: taxes,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-13__DEVICE-A2.txt: subtotal,items,sumItems,taxes,total
+    [FLAGGED-LOSS] D-14__DEVICE-A2.txt: subtotal,sumItems,taxes,total
+    [FLAGGED-LOSS] D-15__DEVICE-A2.txt: subtotal,taxes
+    [FLAGGED-LOSS] D-16__DEVICE-A2.txt: sumItems,subtotal,taxes,total
+    [FLAGGED-LOSS] D-17__DEVICE-A2.txt: subtotal,items,sumItems,taxes,total
+    [FLAGGED-LOSS] D-18__DEVICE-A2.txt: subtotal,taxes,sumItems,total
+    [FLAGGED-LOSS] L-R01__DEVICE-A2.txt: items,sumItems,sold,subtotal,taxes,total
+    [FLAGGED-LOSS] L-R02__DEVICE-A2.txt: subtotal,sumItems,taxes
+    [FLAGGED-LOSS] L-R03__DEVICE-A2.txt: subtotal,taxes,total
+    [FLAGGED-LOSS] L-R04__DEVICE-A2.txt: subtotal,taxes
+    [FLAGGED-LOSS] L-R05__DEVICE-A2.txt: subtotal,taxes,items,sumItems,sold
+    [FLAGGED-LOSS] L-R06__DEVICE-A2.txt: subtotal,taxes
+    [FLAGGED-LOSS] L-R07__DEVICE-A2.txt: subtotal,taxes,sumItems,sold,items
+    [FLAGGED-LOSS] L-R08__DEVICE-A2.txt: subtotal,taxes,total,items,sumItems
+    [FLAGGED-LOSS] L-R09__DEVICE-A2.txt: subtotal,taxes,items,sumItems,card
+    [FLAGGED-LOSS] L-R10__DEVICE-A2.txt: subtotal,sumItems,taxes,total
+    [FLAGGED-LOSS] L-R11__DEVICE-A2.txt: subtotal,taxes,items,sumItems,total
+    [FLAGGED-LOSS] N-001__DEVICE-A2.txt: taxes,total,items,sumItems,subtotal
+    [FLAGGED-LOSS] N-002__DEVICE-A2.txt: taxes,total,items,sumItems,subtotal
+    [FLAGGED-LOSS] S-0__DEVICE-A2.txt: subtotal,items,sumItems,taxes,total
+== LANE DEVICE-A3 (33 ca) ==
+  FLAGGED-LOSS: 33
+    [FLAGGED-LOSS] C-003__DEVICE-A3.txt: subtotal,taxes,items,sumItems,total
+    [FLAGGED-LOSS] D-01__DEVICE-A3.txt: taxes,total,items,subtotal
+    [FLAGGED-LOSS] D-02__DEVICE-A3.txt: subtotal,taxes,items,sumItems
+    [FLAGGED-LOSS] D-03__DEVICE-A3.txt: items,sumItems
+    [FLAGGED-LOSS] D-04__DEVICE-A3.txt: subtotal,taxes,items,sumItems,total
+    [FLAGGED-LOSS] D-05__DEVICE-A3.txt: items,sumItems
+    [FLAGGED-LOSS] D-06__DEVICE-A3.txt: subtotal,total,items,sumItems,taxes,card
+    [FLAGGED-LOSS] D-07__DEVICE-A3.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-08__DEVICE-A3.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-09__DEVICE-A3.txt: taxes,items,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-10__DEVICE-A3.txt: taxes
+    [FLAGGED-LOSS] D-11__DEVICE-A3.txt: taxes,total,items,sumItems,subtotal
+    [FLAGGED-LOSS] D-12__DEVICE-A3.txt: taxes,sumItems,subtotal,total
+    [FLAGGED-LOSS] D-13__DEVICE-A3.txt: subtotal,sumItems,taxes
+    [FLAGGED-LOSS] D-14__DEVICE-A3.txt: subtotal,taxes,items,sumItems,total
+    [FLAGGED-LOSS] D-15__DEVICE-A3.txt: items,sumItems
+    [FLAGGED-LOSS] D-16__DEVICE-A3.txt: sumItems,subtotal,taxes,total
+    [FLAGGED-LOSS] D-17__DEVICE-A3.txt: subtotal,taxes,total
+    [FLAGGED-LOSS] D-18__DEVICE-A3.txt: subtotal,taxes,sumItems,total
+    [FLAGGED-LOSS] L-R01__DEVICE-A3.txt: items,sumItems,sold,subtotal,taxes,total
+    [FLAGGED-LOSS] L-R02__DEVICE-A3.txt: subtotal,items,sumItems,taxes
+    [FLAGGED-LOSS] L-R03__DEVICE-A3.txt: subtotal,taxes,items,sumItems,total
+    [FLAGGED-LOSS] L-R04__DEVICE-A3.txt: subtotal,taxes
+    [FLAGGED-LOSS] L-R05__DEVICE-A3.txt: subtotal,taxes,items,sumItems,sold
+    [FLAGGED-LOSS] L-R06__DEVICE-A3.txt: subtotal,taxes
+    [FLAGGED-LOSS] L-R07__DEVICE-A3.txt: subtotal,taxes,sumItems,sold,items
+    [FLAGGED-LOSS] L-R08__DEVICE-A3.txt: subtotal,taxes,total,items,sumItems
+    [FLAGGED-LOSS] L-R09__DEVICE-A3.txt: subtotal,taxes,items,sumItems,card,total
+    [FLAGGED-LOSS] L-R10__DEVICE-A3.txt: subtotal,sumItems,taxes,total
+    [FLAGGED-LOSS] L-R11__DEVICE-A3.txt: subtotal,taxes,items,sumItems,total
+    [FLAGGED-LOSS] N-001__DEVICE-A3.txt: subtotal,items,sumItems,taxes
+    [FLAGGED-LOSS] N-002__DEVICE-A3.txt: taxes,total,items,sumItems,subtotal
+    [FLAGGED-LOSS] S-0__DEVICE-A3.txt: subtotal,taxes,total,items,sumItems
+== LANE DEVICE-BUILD1 (1 ca) ==
+  FLAGGED-LOSS: 1
+    [FLAGGED-LOSS] C-003__DEVICE-BUILD1.txt: items,sumItems,subtotal,taxes
+== LANE DEVICE-PROTOTYPE (1 ca) ==
+  FULL-LEDGER: 1
+== LANE DEVICE-RAW-A (1 ca) ==
+  FULL-LEDGER: 1
+== LANE HARNESS-MACOS-R21 (33 ca) ==
+  FULL-LEDGER: 7
+  FLAGGED-LOSS: 8
+  NO-GT: 18
+    [FLAGGED-LOSS] L-R01__HARNESS-MACOS-R21.txt: total,items,sumItems,subtotal,taxes
+    [FLAGGED-LOSS] L-R03__HARNESS-MACOS-R21.txt: taxes,subtotal
+    [FLAGGED-LOSS] L-R05__HARNESS-MACOS-R21.txt: items,sumItems,sold,card
+    [FLAGGED-LOSS] L-R07__HARNESS-MACOS-R21.txt: sumItems
+    [FLAGGED-LOSS] L-R08__HARNESS-MACOS-R21.txt: items,sumItems
+    [FLAGGED-LOSS] L-R09__HARNESS-MACOS-R21.txt: sumItems,subtotal,items
+    [FLAGGED-LOSS] L-R10__HARNESS-MACOS-R21.txt: items,sumItems
+    [FLAGGED-LOSS] N-001__HARNESS-MACOS-R21.txt: items,sumItems
