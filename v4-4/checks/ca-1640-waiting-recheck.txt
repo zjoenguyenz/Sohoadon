@@ -1,0 +1,17 @@
+CA TRỰC 16:40 CST 2026-11-14 — TÁI XÁC NHẬN TRẠNG THÁI CHỜ SAU CA 14:40: KHÔNG CÓ BẰNG CHỨNG TEST #106 MỚI, SỬA CHỮ MỤC 5 VẪN CHƯA THI HÀNH
+
+Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; DESIGN-V4 10:52, mức chốt V4-4 12:36, AMD-V4-01 15:55 ngày 2026-11-13; V4-4 giao run #103, L-21 ở run #106 xanh + soi nhị phân đạt, đối chiếu chữ xong ở ca 08:40, bước trình #106 đã đóng ở ca 10:40, phạm vi sửa chữ đã khoanh ở ca 12:40, tái xác nhận chờ ở ca 14:40).
+
+Việc của ca (đúng MỘT bước): tái xác nhận trạng thái chờ đang mở bằng bằng chứng trực tiếp — ca không sửa code, không build, không dispatch CI, không giao bản mới.
+
+BẰNG CHỨNG ĐỌC TRỰC TIẾP TRONG CA:
+1. Nhật ký ngày ~/memory/2026-11-14.md: grep các khoá "run106 / run #106 / P-DRAFT" — các mục mới nhất vẫn là: ca 14:40 (dòng 1356, tái xác nhận chờ) và mục tổng kết ở dòng 1493–1496 ghi rõ "3 ĐIỂM TEST ĐÃ XIN ANH TRÊN BẢN 106 (chưa có kết quả — vẫn mở): (1) P-DRAFT giết-app, (2) tờ xấu kích hoạt cổng .block + bấm 'Vẫn đọc tờ này', (3) nhìn nhanh trường mục đích đã thành danh sách chọn". KHÔNG có ghi nhận kết quả cài/test #106 nào mới hơn.
+2. Cây sống v3-phase4/app/ReceiptViews.swift: static let options (dòng 161–167) — dòng mục 5 vẫn là "Mua nguyên liệu / hàng hoá cho tiệm" (dấu "/") — sửa chữ mục 5 đã xếp hàng ("/" → ",") VẪN CHƯA THI HÀNH, đúng kế hoạch gom vào lượt build kế tiếp vì lý do khác.
+3. downloads/ vẫn dừng ở IPA run #106 (SoHoaDon-V3-run106-2026-11-14.ipa là IPA mới nhất); không có file kiểm/test mới nào trong receipt-app sau ca 14:40 ngoài file của chính ca đó.
+
+Tuyên bố trung thực:
+- Đã chứng minh: trạng thái chờ không đổi kể từ ca 14:40, bằng grep nhật ký ngày + đọc trực tiếp options trong ReceiptViews.swift + kê khai downloads, thực hiện trực tiếp trong ca này.
+- Chưa chứng minh: kết quả cài/test #106 trên máy anh — chưa có ghi nhận nào tại bàn.
+- Chưa làm: không sửa dòng mục 5 (chờ gom lượt build kế), các điểm test thiết bị vẫn mở nguyên — P-DRAFT giết-app giữa chừng + tờ đầu qua cổng chặn .block (+ nhìn nhanh danh sách chọn mục đích theo mục 1496); Phase 2 vẫn khoá cho tới GATE100-v2 + anh xác nhận trên máy.
+
+Bước tiếp theo giữ nguyên: chờ anh xác nhận trên máy (cài đè #106 + các điểm test thiết bị đang mở). Khi có lượt build kế tiếp vì lý do khác, gom sửa đúng 1 dòng ReceiptViews.swift:166 (dấu "/" → dấu ",") vào cùng lượt. Ca này không kêu anh cài/test gì thêm.
