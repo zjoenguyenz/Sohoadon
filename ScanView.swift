@@ -175,53 +175,11 @@ struct ScanView: View {
                         .padding(.horizontal)
                 }
                 // GÓI V4-4 (D-V4-2): trạng thái giao diện RIÊNG của
-                // tờ bị cổng chất lượng chặn. Tờ nằm yên ở đây cho
-                // tới khi anh chọn một trong hai hành động — hàng
-                // chờ nạp cũng đứng chờ (processNextImportedFile
-                // canh blockedDraft), không tờ nào chen qua mặt.
-                if blockedDraft != nil, let blockedQuality {
-                    VStack(spacing: 12) {
-                        Label("Tờ này bị cổng chất lượng chặn",
-                              systemImage: "exclamationmark.triangle.fill")
-                            .font(.headline)
-                            .foregroundStyle(.orange)
-                        Text("Ảnh \(qualityIssueText(blockedQuality)) — app chưa mở tờ này để kiểm hay lưu. Ảnh gốc của tờ vẫn đã lưu trong máy. Anh chụp / chọn lại rõ hơn, hoặc vẫn đọc tờ này nếu không chụp lại được.")
-                            .font(.callout)
-                            .multilineTextAlignment(.center)
-                        HStack(spacing: 12) {
-                            Button {
-                                blockedDraft = nil
-                                blockedQuality = nil
-                                statusText = nil
-                                errorText = nil
-                                processNextImportedFile()
-                            } label: {
-                                Label("Chụp / chọn lại", systemImage: "camera.fill")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.large)
-
-                            Button {
-                                guard let d = blockedDraft,
-                                      let q = blockedQuality else { return }
-                                blockedDraft = nil
-                                blockedQuality = nil
-                                presentDraft(d, note: blockedNote(q))
-                            } label: {
-                                Label("Vẫn đọc tờ này", systemImage: "doc.text.magnifyingglass")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                            .tint(DS.brand)
-                        }
-                    }
-                    .padding()
-                    .background(Color.orange.opacity(0.12),
-                                in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal)
-                }
+                // tờ bị cổng chất lượng chặn — tách thành view con
+                // riêng (blockedBanner) để thân body không phình quá
+                // ngân sách kiểm tra kiểu của trình biên dịch (lỗi
+                // type-check timeout ở bản dựng run #99).
+                blockedBanner
                 Spacer()
                 Text("Đọc ngay trên máy — ảnh hoá đơn không rời khỏi iPhone.")
                     .font(.footnote)
@@ -535,6 +493,59 @@ struct ScanView: View {
         }
         return issues.isEmpty ? "chất lượng chưa đạt"
             : issues.joined(separator: ", ")
+    }
+
+    /// GÓI V4-4 (D-V4-2): khung trạng thái của tờ bị cổng chất
+    /// lượng chặn. Tờ nằm yên ở đây cho tới khi anh chọn một
+    /// trong hai hành động — hàng chờ nạp cũng đứng chờ
+    /// (processNextImportedFile canh blockedDraft), không tờ
+    /// nào chen qua mặt. Tách khỏi body vì ngân sách kiểm tra
+    /// kiểu của trình biên dịch (run #99).
+    @ViewBuilder
+    private var blockedBanner: some View {
+        if blockedDraft != nil, let blockedQuality {
+            VStack(spacing: 12) {
+                Label("Tờ này bị cổng chất lượng chặn",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Text("Ảnh \(qualityIssueText(blockedQuality)) — app chưa mở tờ này để kiểm hay lưu. Ảnh gốc của tờ vẫn đã lưu trong máy. Anh chụp / chọn lại rõ hơn, hoặc vẫn đọc tờ này nếu không chụp lại được.")
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: 12) {
+                    Button {
+                        blockedDraft = nil
+                        blockedQuality = nil
+                        statusText = nil
+                        errorText = nil
+                        processNextImportedFile()
+                    } label: {
+                        Label("Chụp / chọn lại", systemImage: "camera.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+
+                    Button {
+                        guard let d = blockedDraft,
+                              let q = blockedQuality else { return }
+                        blockedDraft = nil
+                        blockedQuality = nil
+                        presentDraft(d, note: blockedNote(q))
+                    } label: {
+                        Label("Vẫn đọc tờ này", systemImage: "doc.text.magnifyingglass")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(DS.brand)
+                }
+            }
+            .padding()
+            .background(Color.orange.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal)
+        }
     }
 
     /// Dòng nhắc chất lượng lúc chụp cho quyết định .warn.
