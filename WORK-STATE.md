@@ -3535,3 +3535,65 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
 - BẰNG CHỨNG MẠNH NHẤT: 169 dòng STREAM4-RESULT của run #30 **khớp từng dòng** với run #29 (V4-3 nghiệm thu đạt) khi sắp xếp đối chiếu (diff rỗng) — tích hợp V4-4 (đổi mặc định sang v4 + tem core-v4-1 + loại đường v3 khỏi bản giao) KHÔNG làm lệch hành vi parseV4 trên Swift thật ở tầng luồng.
 - Tuyên bố trung thực — đã chứng minh: cổng luồng kiểm nhanh V4-4 ĐẠT ở mức số liệu trên (chấm từ log thật tại bàn bằng 2 bộ chấm, đối chiếu run #29 từng dòng); chưa chứng minh: lượt harness ĐẦY ĐỦ ≥100 lần chưa chạy, IPA của bản V4-4 chưa soi, hành vi .block + P-DRAFT giết-app trên thiết bị chưa kiểm (đều thuộc các bước sau của gói V4-4, đã tuyên bố ở HANDOFF); chưa làm: không viết/sửa code lõi, không build, không dispatch CI trong ca này (lượt đầy đủ ~$6 là cổng quyết định của Leader/chat chính, không phải ca trực tự kích).
 - **Bước tiếp theo giữ nguyên của gói V4-4: Leader/chat chính kích lượt harness ĐẦY ĐỦ (≥100 lần, một phát ở cổng quyết định) trên commit V4-4 → soi IPA (tem core-v4-1, GL-Keeper, 0 ảnh bench trong app chính) → giao theo checklist B2 5 mục, gồm đọc lại tờ Sam's ĐÃ LƯU. Ca này không kêu anh cài/test gì.**
+- ĐẨY CUỐI CA 18:40: **THÀNH CÔNG** — đúng 1 lần, 3 file (WORK-STATE.md · core-v4-design/run30/score-full4-output.txt · core-v4-design/run30/score-v4-output.txt), commit mới trên docs/planning: `d9a84060205c1e1c6296a3ee7cbce034b243420d`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- ★ LUẬT 3 ĐẠT CHO LÕI V4 — harness run #31 ĐẦY ĐỦ
+  (commit 9088e499, 1h31m41s ~$7.3): control SURVIVED,
+  Cổng 2 ảnh 43/43 x 100 bộ SURVIVED 0 DIED, matrix
+  4/4 SURVIVED, fuzz 40 PASS / 0 FAIL / 0 DIED. Cộng
+  cổng luồng run #30: FULL 28/34, died 0/169. Còn lại:
+  soi IPA bản giao theo BINARY-CHECK.md rồi giao anh
+  theo checklist B2.
+- build-ipa run #99 HỎNG (commit 9088e499): ScanView
+  .swift:93 — trình biên dịch quá tải kiểm tra kiểu ở
+  thân body sau khi khung bị chặn nhập vào body (đúng
+  bề mặt rủi ro builder đã khai). Harness KHÔNG biên
+  dịch ScanView nên run #30/#31 vẫn xanh — cổng ảnh/
+  luồng không phủ tầng giao diện, đã ghi nhận. Leader
+  sửa: tách nguyên văn khung bị chặn thành view con
+  blockedBanner (không đổi hành vi), P4 vẫn PASS, đẩy
+  commit 0888a038. Đang chờ build-ipa mới.
+- ★ TƯỜNG NGÂN SÁCH LẠI DỰNG (2026-11-13 19:09 CST):
+  build-ipa run #100 (commit sửa ScanView 0888a038)
+  KHÔNG KHỞI ĐỘNG — GitHub báo "recent account payments
+  have failed or your spending limit needs to be
+  increased". Lượt đầy đủ run #31 (~$7.3) + các lượt
+  hôm nay đã đẩy mức dùng tháng 11 chạm trần $40 anh
+  đặt (hoặc thanh toán lỗi). Chỉ anh xử được ở
+  Billing & plans. ĐÃ BÁO ANH. Sau khi anh xử: chạy lại
+  build-ipa (dispatch tay hoặc commit rỗng) → soi IPA
+  → giao. Phần còn treo: biên dịch tầng app của bản sửa
+  ScanView CHƯA được xác minh (run #99 hỏng type-check
+  timeout, bản sửa đã đẩy), soi nhị phân, giao B2.
+- build-ipa run #101: cổng thanh toán ĐÃ MỞ (anh nâng
+  trần $10 → $20, đính chính con số $40 em ghi trước
+  là sai — đã sửa MEMORY), nhưng dựng hỏng lỗi biên
+  dịch thật: trong blockedBanner, `let blockedQuality`
+  che mất @State cùng tên nên hai nút gán nil vào hằng
+  — lỗi tiềm ẩn trong mã V4-4 gốc (run #99 chết vì
+  timeout trước khi lộ), bản tách view của Leader chép
+  nguyên nên mang theo. ĐÃ SỬA: đổi tên biến cục bộ
+  thành `quality`, đẩy fix 2, đang dựng lại.
+- ★★ V4-4 ĐẠT MỌI CỔNG — build-ipa run #103 XANH
+  (commit 5f38e4a = 9088e499 + 2 bản sửa ScanView;
+  run #102 là bản sinh đôi kích-bởi-đẩy cùng commit).
+  SOI NHỊ PHÂN (strings, theo BINARY-CHECK.md): app
+  chính parseSams=0 parseGeneric=0 ReconcileSession=0
+  parseAndReconcile=0 ReconcileSearch=0; parseV4=1
+  TotalsArbiter=58 ItemsArbiter=32 runArbiter=1
+  items-block=2 totals-block=5. Bench đối chứng:
+  parseSams=1 parseGeneric=6 parseV4=1 (một nguồn OK).
+  IPA giao: downloads/SoHoaDon-V3-run103-2026-11-13
+  .ipa, sha256 trong 0e617d18… (zip artifact 9595b234…).
+  Checklist B2: build xanh + artifact thật ✓ tên duy
+  nhất ✓ tem core-v4-1 (chứng minh qua nhãn Chi Tiết +
+  hồ sơ chẩn đoán khi anh đọc thử) — giao anh kèm
+  bước Điều 2 (đọc lại tờ Sam's đã lưu) + kiểm giết-app
+  của P-DRAFT + tờ đầu bị cổng chặn (blockEnabled=true
+  từ bản này).
+
+## CA TRỰC 20:40 CST 2026-11-13 — KIỂM CHỨNG ĐỘC LẬP IPA GIAO V4-4 (RUN #103): KHỚP TỪNG SỐ BÁO CÁO GIAO
+- Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; Phương án A 10:46, DESIGN-V4 10:52, mức chốt V4-4 12:36, AMD-V4-01 15:55 ngày 2026-11-13; V4-1/V4-2/V4-3 nghiệm thu đạt, V4-4 đã giao run #103). Ca quay lại luật chung, làm đúng MỘT bước kiểm chứng độc lập trên artifact đã giao — không đụng code, không build, không dispatch CI.
+- Việc của ca: soi lại file IPA thật tại bàn `downloads/SoHoaDon-V3-run103-2026-11-13.ipa` theo đúng `v4-4/BINARY-CHECK.md` §0–§2 (ca này không tin lời ghi ở mục giao, tự giải nén + tự đếm lại). Bằng chứng đầy đủ: `v4-4/checks/ca-2040-ipa-recheck.txt`.
+- KẾT QUẢ: sha256 = `0e617d18eada62a4427575ecc1ce2c78a7f9f5df8adf13e992e4eb4f803eb9a2` — khớp tiền tố `0e617d18…` của báo cáo giao. Info.plist: CFBundleDisplayName = GL-Keeper · bundle `com.nje.sohoadon`. nm cho bảng symbol rỗng (bản strip) → dùng `strings -a` làm đường quyết định theo lưu ý §1: vắng mặt parseSams=0 · parseGeneric=0 · ReconcileSession=0 · parseAndReconcile=0 · ReconcileSearch=0; có mặt parseV4=1 · TotalsArbiter=58 · ItemsArbiter=32 · runArbiter=1 · items-block=2 · totals-block=5 — **KHỚP TỪNG SỐ** với mục soi nhị phân trong báo cáo giao V4-4. Ảnh bench trong app chính: 0 file.
+- Tuyên bố trung thực — đã chứng minh: tính nguyên vẹn + thành phần nhị phân của đúng file IPA đã giao, bằng đo trực tiếp trong ca này; chưa chứng minh: tem core-v4-1 (BINARY-CHECK §4 cấm kết luận bằng grep — chỉ phán qua nhãn Chi Tiết + parserVersion trong hồ sơ chẩn đoán trên máy anh), hành vi .block, P-DRAFT giết-app, đọc lại tờ Sam's ĐÃ LƯU — tất cả thuộc test trên thiết bị của anh, ca này không làm thay được; chưa làm: không viết/sửa code, không build, Phase 2 vẫn khoá cho tới GATE100-v2 + anh xác nhận trên máy (PHASE2-PLAN §0).
+- **Bước tiếp theo giữ nguyên: chờ anh test trên máy (cài đè run #103 → đọc lại tờ Sam's đã lưu: đích 6 dòng Σ16916, thuế [630, 382], cờ tắt → giết-app giữa chừng kiểm P-DRAFT → tờ đầu qua cổng chặn .block). Sau xác nhận của anh mới tới GATE100-v2 trên thiết bị. Ca này không kêu anh cài/test gì thêm ngoài bản đã giao.**

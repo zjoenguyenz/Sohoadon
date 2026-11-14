@@ -1,0 +1,12 @@
+CA TRỰC 20:40 CST 2026-11-13 — KIỂM CHỨNG ĐỘC LẬP IPA GIAO V4-4 (run #103)
+Phương pháp: v4-4/BINARY-CHECK.md §0–§2, chạy trên file IPA thật tại bàn.
+IPA: downloads/SoHoaDon-V3-run103-2026-11-13.ipa
+sha256: 0e617d18eada62a4427575ecc1ce2c78a7f9f5df8adf13e992e4eb4f803eb9a2 (khớp tiền tố 0e617d18… đã ghi ở báo cáo giao)
+Kích thước file IPA: 1.4M (ls -lh); nhị phân chính Payload/SoHoaDon.app/SoHoaDon = 4.313.616 byte.
+Info.plist: CFBundleDisplayName=GL-Keeper · CFBundleName=SoHoaDon · CFBundleIdentifier=com.nje.sohoadon · CFBundleShortVersionString=1.0 · CFBundleVersion=1.
+nm: bảng symbol rỗng (bản strip, 0 dòng) → dùng strings -a làm đường quyết định theo đúng lưu ý §1 của BINARY-CHECK.
+Vắng mặt (strings): parseSams=0 parseGeneric=0 ReconcileSession=0 parseAndReconcile=0 ReconcileSearch=0
+Có mặt (strings):   parseV4=1 TotalsArbiter=58 ItemsArbiter=32 runArbiter=1 items-block=2 totals-block=5
+→ Khớp TỪNG SỐ với mục soi nhị phân đã ghi trong WORK-STATE (báo cáo giao V4-4).
+Ảnh bench trong app chính: 0 file (find *Bench*/L-R*.jpg/SYN-*.jpg rỗng) — khớp kỳ vọng "0 ảnh bench trong app chính".
+CHƯA kiểm (giữ nguyên trạng thái đã tuyên bố): tem core-v4-1 KHÔNG kết luận bằng grep nhị phân (§4) — chỉ phán trên máy anh qua nhãn Chi Tiết + parserVersion trong hồ sơ chẩn đoán; hành vi .block, P-DRAFT giết-app, đọc lại tờ Sam's ĐÃ LƯU — đều thuộc test trên thiết bị của anh, ca này không làm thay được.
