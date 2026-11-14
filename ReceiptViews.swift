@@ -143,6 +143,12 @@ func provenanceCaption(_ provenance: FieldProvenance) -> String? {
     }
 }
 
+/// L-2026-11-13-20: chữ cờ "thiếu mục đích" dùng chung giữa hàm
+/// sinh cờ và màn Chi Tiết — màn Chi Tiết nhận ra đúng cờ này để
+/// gắn Ô NHẬP MỤC ĐÍCH ngay dưới cảnh báo (cờ tự phục vụ), thay
+/// vì bắt anh tự tìm ô nhập ở mục Phân loại phía dưới.
+let missingPurposeFlagText = "Thiếu mục đích business — sở thuế hay soi điểm này"
+
 // MARK: - Cờ kiểm tra lại trên 1 hoá đơn đã lưu (chỉ hiển thị, không sửa số)
 
 /// IMGFIX: tờ còn file ảnh gốc nào tải được trong kho bằng chứng không.
@@ -172,7 +178,7 @@ func receiptFlags(_ receipt: Receipt) -> [String] {
         flags.append("Thiếu tổng tiền")
     }
     if receipt.classification == .business && receipt.businessPurpose.trimmingCharacters(in: .whitespaces).isEmpty {
-        flags.append("Thiếu mục đích business — sở thuế hay soi điểm này")
+        flags.append(missingPurposeFlagText)
     }
     if receipt.classification == .unknown {
         flags.append("Chưa phân loại Cá nhân / Business")
@@ -733,6 +739,17 @@ struct ReceiptDetailView: View {
                         Label(flag, systemImage: "exclamationmark.triangle.fill")
                             .font(.callout)
                             .foregroundStyle(.orange)
+                        // L-2026-11-13-20: cờ thiếu mục đích phải TỰ
+                        // PHỤC VỤ — ô nhập + nút lưu nằm ngay dưới
+                        // cảnh báo, dùng chung state với mục Phân
+                        // loại. Trước đây cờ chỉ báo mà không chỉ
+                        // đường sửa; anh bấm "Lưu thay đổi" ở mục
+                        // dưới trong lúc ô này trống thì app lưu
+                        // trống và cờ còn mãi (anh báo 2 lần).
+                        if flag == missingPurposeFlagText {
+                            TextField("Mục đích business (mua để làm gì)", text: $purposeText, axis: .vertical)
+                            Button("Lưu mục đích") { saveChanges() }
+                        }
                     }
                 }
             }
