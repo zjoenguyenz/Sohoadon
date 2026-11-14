@@ -1,0 +1,15 @@
+CA TRUC 12:40 CST 2026-11-14 — KIEM CHUNG PHAM VI SUA CHU MUC 5 L-21 DA XEP HANG
+Nguon doc truc tiep trong ca:
+- v3-phase4/app/ReceiptViews.swift:158 struct BusinessPurposeField (dinh nghia DUY NHAT)
+- :161 static let options = [ ... ] — danh sach chon dinh nghia 1 lan duy nhat
+- :166 "Mua nguyen lieu / hang hoa cho tiem" — chuoi dau "/" xuat hien DUNG 1 lan trong file (grep -n)
+- 3 diem goi dung chung dinh nghia tren: :802 (duoi co thieu muc dich), :828 (muc Phan loai), :1585 (man Kiem Lai luc quet)
+- grep -c BusinessPurposeField = 4 (1 dinh nghia + 3 diem goi)
+Ket luan: sua xep hang cua ca 08:40/10:40 (doi dau "/" -> dau "," o muc 5 thanh
+"Mua nguyen lieu, hang hoa cho tiem") la sua DUNG 1 DONG tai :166, tu dong ap
+cho ca 3 noi hien truong chon; khong can sua them noi nao khac, khong doi model.
+Trang thai tai thoi diem kiem: dong :166 VAN la dang dau "/" — sua chua thi hanh,
+dung nhu ke hoach gom vao luot build ke tiep (khong build rieng).
+Chua chung minh: ket qua cai/test run #106 tren may anh; 2 diem test thiet bi
+van mo (P-DRAFT giet-app giua chung + to dau qua cong chan .block).
+Phase 2 van khoa cho toi GATE100-v2 + anh xac nhan tren may.
