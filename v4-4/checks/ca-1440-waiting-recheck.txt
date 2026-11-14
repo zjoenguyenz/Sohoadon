@@ -1,0 +1,17 @@
+CA TRỰC 14:40 CST 2026-11-14 — TÁI XÁC NHẬN TRẠNG THÁI CHỜ SAU CA 12:40: KHÔNG CÓ BẰNG CHỨNG TEST #106 MỚI, SỬA CHỮ MỤC 5 VẪN CHƯA THI HÀNH
+
+Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; DESIGN-V4 10:52, mức chốt V4-4 12:36, AMD-V4-01 15:55 ngày 2026-11-13; V4-4 giao run #103, L-21 ở run #106 xanh + soi nhị phân đạt, đối chiếu chữ xong ở ca 08:40, bước trình #106 đã đóng ở ca 10:40, phạm vi sửa chữ đã khoanh ở ca 12:40).
+
+Việc của ca (đúng MỘT bước): tái xác nhận trạng thái chờ đang mở ở ca 12:40 bằng bằng chứng trực tiếp — ca không sửa code, không build, không dispatch CI, không giao bản mới.
+
+BẰNG CHỨNG ĐỌC TRỰC TIẾP TRONG CA:
+1. Nhật ký ngày ~/memory/2026-11-14.md, phần SAU mục ca 12:40: grep các khoá "GL-Keeper / Sổ Hóa Đơn / SoHoaDon / run106 / run #106 / P-DRAFT" chỉ trả về chính mục 12:40 — KHÔNG có ghi nhận cài/test #106 mới nào, không có kết quả 2 điểm test thiết bị.
+2. Cây sống v3-phase4/app/ReceiptViews.swift dòng 166 vẫn là "Mua nguyên liệu / hàng hoá cho tiệm" (dấu "/") — sửa chữ mục 5 đã xếp hàng ("/" → ",") VẪN CHƯA THI HÀNH, đúng kế hoạch gom vào lượt build kế tiếp vì lý do khác.
+3. Thư mục receipt-app không có file nào mới hơn thời điểm ca 12:40 ngoài chính các file của ca 12:40 (WORK-STATE.md + ca-1240-l21-queued-fix-scope.txt); downloads/ vẫn dừng ở IPA run #106.
+
+Tuyên bố trung thực:
+- Đã chứng minh: trạng thái chờ không đổi kể từ ca 12:40, bằng grep nhật ký ngày + đọc dòng 166 + kê khai file mới, thực hiện trực tiếp trong ca này.
+- Chưa chứng minh: kết quả cài/test #106 trên máy anh — chưa có ghi nhận nào tại bàn.
+- Chưa làm: không sửa dòng 166 (chờ gom lượt build kế), 2 điểm test thiết bị vẫn mở nguyên — P-DRAFT giết-app giữa chừng + tờ đầu qua cổng chặn .block; Phase 2 vẫn khoá cho tới GATE100-v2 + anh xác nhận trên máy.
+
+Bước tiếp theo giữ nguyên: chờ anh xác nhận trên máy (cài đè #106 + 2 điểm test thiết bị đang mở). Khi có lượt build kế tiếp vì lý do khác, gom sửa đúng 1 dòng ReceiptViews.swift:166 vào cùng lượt. Ca này không kêu anh cài/test gì thêm.
