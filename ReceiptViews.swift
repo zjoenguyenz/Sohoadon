@@ -149,6 +149,58 @@ func provenanceCaption(_ provenance: FieldProvenance) -> String? {
 /// vì bắt anh tự tìm ô nhập ở mục Phân loại phía dưới.
 let missingPurposeFlagText = "Thiếu mục đích business — sở thuế hay soi điểm này"
 
+/// L-2026-11-13-21 — SỬA DỨT KHOÁT theo lệnh anh ("Sao phải
+/// ghi chữ khi hệ thống cho chọn rồi"): mục đích business là
+/// DANH SÁCH CHỌN có sẵn — chọn một mục là trường được điền,
+/// cờ tự tắt sau khi lưu; "Tự ghi…" chỉ dành cho ca lạ. Giá
+/// trị lưu vẫn là businessPurpose nguyên văn (KHÔNG đổi
+/// model dữ liệu): chọn mục nào thì câu đó là mục đích.
+struct BusinessPurposeField: View {
+    @Binding var text: String
+
+    static let options = [
+        "Mua cho khách trong tiệm",
+        "Mua cho nhân viên trong tiệm",
+        "Mua cho khách và nhân viên",
+        "Dùng cho hoạt động của tiệm",
+        "Mua nguyên liệu / hàng hoá cho tiệm",
+    ]
+
+    @State private var customMode = false
+
+    private var selection: Binding<String> {
+        Binding(
+            get: {
+                if customMode { return "__custom__" }
+                if text.isEmpty { return "" }
+                if Self.options.contains(text) { return text }
+                return "__custom__"
+            },
+            set: { newValue in
+                if newValue == "__custom__" {
+                    customMode = true
+                } else {
+                    customMode = false
+                    text = newValue
+                }
+            })
+    }
+
+    var body: some View {
+        Picker("Mục đích business", selection: selection) {
+            Text("— Chọn mục đích —").tag("")
+            ForEach(Self.options, id: \.self) { option in
+                Text(option).tag(option)
+            }
+            Text("Tự ghi…").tag("__custom__")
+        }
+        if selection.wrappedValue == "__custom__" {
+            TextField("Mục đích business (mua để làm gì)",
+                      text: $text, axis: .vertical)
+        }
+    }
+}
+
 // MARK: - Cờ kiểm tra lại trên 1 hoá đơn đã lưu (chỉ hiển thị, không sửa số)
 
 /// IMGFIX: tờ còn file ảnh gốc nào tải được trong kho bằng chứng không.
@@ -747,7 +799,7 @@ struct ReceiptDetailView: View {
                         // dưới trong lúc ô này trống thì app lưu
                         // trống và cờ còn mãi (anh báo 2 lần).
                         if flag == missingPurposeFlagText {
-                            TextField("Mục đích business (mua để làm gì)", text: $purposeText, axis: .vertical)
+                            BusinessPurposeField(text: $purposeText)
                             Button("Lưu mục đích") { saveChanges() }
                         }
                     }
@@ -773,7 +825,7 @@ struct ReceiptDetailView: View {
                     }
                 }
                 if selectedKind == .business {
-                    TextField("Mục đích business (mua để làm gì)", text: $purposeText, axis: .vertical)
+                    BusinessPurposeField(text: $purposeText)
                 }
                 Button("Lưu thay đổi") { saveChanges() }
                 if savedNote {
@@ -1530,7 +1582,7 @@ struct ReviewView: View {
                         }
                     }
                     if selectedKind == .business {
-                        TextField("Mục đích business (mua để làm gì)", text: $purposeText, axis: .vertical)
+                        BusinessPurposeField(text: $purposeText)
                     }
                 }
 
