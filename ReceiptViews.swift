@@ -423,11 +423,9 @@ struct ReceiptDetailView: View {
         return options
     }
 
-    // REPARSE: nút "Đọc lại" chỉ hiện khi còn gì để đọc lại (có văn bản
-    // thô đã lưu) VÀ tờ thuộc thế hệ bộ đọc cũ (dấu parserVersion khác
-    // bản hiện hành — gồm cả dấu rỗng của bản ghi trước WP2) hoặc tờ
-    // vẫn đang nằm ở Hộp Chờ. Tờ đã duyệt + dấu hiện hành thì không
-    // hiện: đọc lại không thêm thông tin gì cho nó.
+    // REPARSE: nút "Đọc lại" hiện khi tờ còn văn bản thô đã lưu —
+    // cổng thế hệ/trạng thái cũ đã gỡ (L-2026-11-13-17, xem
+    // canReparse).
     // SCANPRO: máy ảo / máy không có camera quét tài liệu thì nút
     // chụp lại bị khoá (đúng luật ScanView đang áp ở tab CHỤP).
     private var documentCameraSupported: Bool {
@@ -435,9 +433,13 @@ struct ReceiptDetailView: View {
     }
 
     private var canReparse: Bool {
+        // L-2026-11-13-17: cổng cũ (dấu bộ đọc khác bản hiện hành
+        // HOẶC còn ở Hộp Chờ) là di sản thời di trú một lần — tờ
+        // đã duyệt + dấu hiện hành thì nút biến mất, hoá ra "Đọc
+        // lại chỉ bấm được 1 lần" (anh báo 2026-11-13). Đọc lại
+        // nay là đường sửa số đứng (Điều 2 B2): còn văn bản đã
+        // lưu là còn bấm được, không cổng thế hệ/trạng thái nữa.
         !receipt.ocrRawText.isEmpty
-            && (receipt.parserVersion != currentParserVersion
-                || receipt.status == .needsReview)
     }
 
     var body: some View {
@@ -1066,6 +1068,21 @@ struct ReceiptDetailView: View {
     }
 
     private func reparseReceipt() {
+        // L-2026-11-13-18: CHỐT các sửa tay đang chờ trong màn này
+        // (loại/mục/mục đích anh vừa gõ mà chưa bấm "Lưu thay đổi")
+        // vào bản ghi TRƯỚC khi đọc lại. Trước đây bước áp số mới
+        // đồng bộ ngược state từ bản ghi, nuốt mất phần anh vừa
+        // gõ — ghi chú mục đích là ca anh vấp (báo 2026-11-13:
+        // đã nhập mục đích business mà app vẫn báo thiếu). Chốt
+        // trước = các sửa đó thành "quyết định của anh" và được
+        // luật giữ nguyên của bước áp bảo vệ như thường.
+        let kindChanged = selectedKind != receipt.classification
+        receipt.classification = selectedKind
+        if kindChanged {
+            receipt.classificationReason = "Anh đổi tay trong chi tiết hoá đơn"
+        }
+        receipt.category = selectedCategory
+        receipt.businessPurpose = purposeText
         // V3 (Pha 4): Đọc lại đi qua ĐƯỜNG ĐỌC DUY NHẤT
         // (ReceiptReader, nguồn storedText — cùng F4+F5 như lần
         // quét mới, kèm hồ sơ chẩn đoán v2 cho lần đọc này);
