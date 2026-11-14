@@ -3597,3 +3597,32 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
 - KẾT QUẢ: sha256 = `0e617d18eada62a4427575ecc1ce2c78a7f9f5df8adf13e992e4eb4f803eb9a2` — khớp tiền tố `0e617d18…` của báo cáo giao. Info.plist: CFBundleDisplayName = GL-Keeper · bundle `com.nje.sohoadon`. nm cho bảng symbol rỗng (bản strip) → dùng `strings -a` làm đường quyết định theo lưu ý §1: vắng mặt parseSams=0 · parseGeneric=0 · ReconcileSession=0 · parseAndReconcile=0 · ReconcileSearch=0; có mặt parseV4=1 · TotalsArbiter=58 · ItemsArbiter=32 · runArbiter=1 · items-block=2 · totals-block=5 — **KHỚP TỪNG SỐ** với mục soi nhị phân trong báo cáo giao V4-4. Ảnh bench trong app chính: 0 file.
 - Tuyên bố trung thực — đã chứng minh: tính nguyên vẹn + thành phần nhị phân của đúng file IPA đã giao, bằng đo trực tiếp trong ca này; chưa chứng minh: tem core-v4-1 (BINARY-CHECK §4 cấm kết luận bằng grep — chỉ phán qua nhãn Chi Tiết + parserVersion trong hồ sơ chẩn đoán trên máy anh), hành vi .block, P-DRAFT giết-app, đọc lại tờ Sam's ĐÃ LƯU — tất cả thuộc test trên thiết bị của anh, ca này không làm thay được; chưa làm: không viết/sửa code, không build, Phase 2 vẫn khoá cho tới GATE100-v2 + anh xác nhận trên máy (PHASE2-PLAN §0).
 - **Bước tiếp theo giữ nguyên: chờ anh test trên máy (cài đè run #103 → đọc lại tờ Sam's đã lưu: đích 6 dòng Σ16916, thuế [630, 382], cờ tắt → giết-app giữa chừng kiểm P-DRAFT → tờ đầu qua cổng chặn .block). Sau xác nhận của anh mới tới GATE100-v2 trên thiết bị. Ca này không kêu anh cài/test gì thêm ngoài bản đã giao.**
+- ĐẨY CUỐI CA 20:40: **THÀNH CÔNG** — đúng 1 lần, 2 file (WORK-STATE.md · v4-4/checks/ca-2040-ipa-recheck.txt), commit mới trên docs/planning: `4df4ecb17b4089309990d4f7e6523440b1d9823b`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- Bản sửa L-17/L-18 (commit f7b7402, ReceiptViews.swift):
+  build-ipa run #104 XANH (1m29s) — cổng biên dịch tầng
+  giao diện đạt theo L-2026-11-13-19. IPA:
+  downloads/SoHoaDon-V3-run104-2026-11-13.ipa. Giao anh
+  cài đè: kiểm nút Đọc lại còn hiện sau khi tờ đã duyệt
+  + gõ mục đích business rồi bấm Đọc lại không mất chữ.
+  Hai điểm test còn lại của bản 103 vẫn mở: giết-app
+  giữa chừng (P-DRAFT) + tờ đầu bị cổng chặn.
+- Bản sửa L-20 (commit 9108d47): build-ipa run #105
+  XANH. IPA downloads/SoHoaDon-V3-run105-2026-11-13.ipa.
+  Test máy của anh tối 13/11 (bản 103/104): Điều 2 ĐẠT
+  (tờ Sam's đã lưu đọc lại đủ 6 món Σ16916, thuế
+  630+382, cờ sổ tắt); nút Đọc lại hết cổng (L-17 đạt);
+  ảnh gốc: cờ thiếu ảnh xuất hiện 20:50 (hồ sơ chẩn
+  đoán khoá theo FA86EDC9 ≠ A33C7940 buổi sáng — cùng
+  1 bản ghi theo lời anh), anh chụp lại theo hướng dẫn
+  → ảnh về, cờ tắt 21:00. Cơ chế mất file: CHƯA chứng
+  minh, giữ mục mở ở TEAM.md. Còn lại: anh điền câu mục
+  đích business cho tờ Sam's (ô dưới ô Mục) — bản 105
+  gắn ô nhập ngay dưới cờ. Hai điểm chưa test: P-DRAFT
+  giết-app + tờ đầu bị cổng chặn.
+
+## CA TRỰC 22:40 CST 2026-11-13 — KIỂM CHỨNG ĐỘC LẬP IPA RUN #105: LÕI V4 KHỚP TỪNG SỐ RUN #103, L-21 CHƯA CÓ TRONG BẢN #105
+- Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; Phương án A 10:46, DESIGN-V4 10:52, mức chốt V4-4 12:36, AMD-V4-01 15:55 ngày 2026-11-13; V4-4 đã giao run #103, các bản sửa L-17/L-18 run #104 và L-20 run #105 đã xanh). Ca quay lại luật chung, làm đúng MỘT bước: kiểm chứng độc lập file IPA mới nhất tại bàn (run #105) theo `v4-4/BINARY-CHECK.md` §0–§2 — ca không sửa code, không build, không dispatch CI. Sổ đầy đủ: `v4-4/checks/ca-2240-ipa-recheck-run105.txt`.
+- KẾT QUẢ: `downloads/SoHoaDon-V3-run105-2026-11-13.ipa` sha256 = `953ec57d1de503c5d1802850090bc55709a5fd09182acfe6663991d8d80142a1`, 1.421.141 byte. Info.plist: CFBundleDisplayName = GL-Keeper, bundle `com.nje.sohoadon`, bản 1.0 (1), iOS tối thiểu 17.0. Ruột gói 8 file, **0 JPG / 0 ảnh bench**. strings: vắng mặt parseSams=0 · parseGeneric=0 · ReconcileSession=0 · parseAndReconcile=0 · ReconcileSearch=0; có mặt parseV4=1 · TotalsArbiter=58 · ItemsArbiter=32 · runArbiter=1 · items-block=2 · totals-block=5 — **KHỚP TỪNG SỐ run #103** (ca 20:40), đúng kỳ vọng vì các gói sau #103 chỉ chạm ReceiptViews.
+- PHÁT HIỆN PHẠM VI: `BusinessPurposeField` = 0 hit trong binary run #105 — bản #105 (sửa L-20: ô nhập ngay dưới cờ) CHƯA chứa trường chọn của L-2026-11-13-21; trường chọn đó mới có ở nguồn staging tại bàn (`v3-phase4/app/ReceiptViews.swift:158`, `v4-4/fix4/`), chưa có bằng chứng build/giao. Ca không nhận L-21 đã giao.
+- Tuyên bố trung thực — đã chứng minh: tính nguyên vẹn + thành phần nhị phân của IPA run #105 bằng đo trực tiếp trong ca; chưa chứng minh: tem core-v4-1 bằng grep (BINARY-CHECK §4 cấm), hành vi trên máy anh của bản #105; chưa làm: 2 điểm test thiết bị vẫn mở — P-DRAFT giết-app giữa chừng + tờ đầu bị cổng chặn .block; Phase 2 vẫn khoá cho tới GATE100-v2 + anh xác nhận trên máy.
+- **Bước tiếp theo giữ nguyên: chờ anh test trên máy 2 điểm còn mở (P-DRAFT giết-app + tờ đầu qua cổng chặn) và, ở nhịp Leader/chat chính, build/giao bản chứa L-21 BusinessPurposeField từ staging khi tới cổng của nó. Ca này không kêu anh cài/test gì thêm ngoài các bản đã giao.**

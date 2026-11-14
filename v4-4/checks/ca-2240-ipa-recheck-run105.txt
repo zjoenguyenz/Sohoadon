@@ -1,0 +1,13 @@
+CA TRỰC 22:40 CST 2026-11-13 — KIỂM CHỨNG ĐỘC LẬP IPA RUN #105 (bản sửa L-20)
+Phương pháp: v4-4/BINARY-CHECK.md §0–§2, chạy trên file IPA thật tại bàn. Ca không sửa code, không build, không dispatch CI.
+IPA: downloads/SoHoaDon-V3-run105-2026-11-13.ipa
+sha256: 953ec57d1de503c5d1802850090bc55709a5fd09182acfe6663991d8d80142a1
+Kích thước: 1.421.141 byte. Nhị phân chính Payload/SoHoaDon.app/SoHoaDon = 4.325.760 byte.
+Đối chiếu: run #104 sha256 38e775f8f0aea78d90e13284b75c33b3910326139ec2e087e59f6ce8d96125af (chỉ ghi để phân biệt, không kiểm gói #104 trong ca này).
+Info.plist: CFBundleDisplayName=GL-Keeper · CFBundleIdentifier=com.nje.sohoadon · CFBundleShortVersionString=1.0 · CFBundleVersion=1 · MinimumOSVersion=17.0
+Ruột gói: Payload/SoHoaDon.app đúng 8 file (binary, Info.plist, PkgInfo, Assets.car, AppIcon60x60@2x.png, AppIcon76x76@2x~ipad.png, lexicon.json, vendors.json); 0 JPG / 0 ảnh bench.
+Vắng mặt (strings -a): parseSams=0 parseGeneric=0 ReconcileSession=0 parseAndReconcile=0 ReconcileSearch=0
+Có mặt (strings -a): parseV4=1 TotalsArbiter=58 ItemsArbiter=32 runArbiter=1 items-block=2 totals-block=5 — KHỚP TỪNG SỐ với run #103 đã kiểm ở ca 20:40, đúng kỳ vọng: gói L-17/L-18/L-20 chỉ chạm ReceiptViews (tầng giao diện), lõi v4 không đổi.
+GL-Keeper trong binary: 3 hit.
+BusinessPurposeField trong binary run #105: 0 hit bằng strings — bản #105 CHƯA chứa trường chọn L-2026-11-13-21; trường đó chỉ mới có ở nguồn staging tại bàn (v3-phase4/app/ReceiptViews.swift:158 + v4-4/fix4/), chưa có bằng chứng build. Ca không kết luận L-21 đã giao.
+CHƯA kiểm: tem core-v4-1 không kết luận bằng grep (§4 BINARY-CHECK); hành vi P-DRAFT giết-app + tờ đầu bị cổng chặn .block — vẫn là 2 điểm test thiết bị còn mở theo mục cuối WORK-STATE trước ca này.
