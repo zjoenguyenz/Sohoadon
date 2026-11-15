@@ -69,6 +69,11 @@ jobs:
           set -o pipefail
           "$BIN" probe | tee probe.log
           ! grep -q "unloaded" probe.log
+      - name: Cổng G1 — unit tests (logic thuần + vòng đời nháp)
+        run: |
+          set -o pipefail
+          "$BIN" unittests 2>&1 | tee unittests.log
+          grep -q "SURVIVED unittests" unittests.log
       - name: Cổng 1 — control trên luồng đã ghi L-R01
         run: |
           set -o pipefail
@@ -135,6 +140,7 @@ jobs:
             build.log
             streams/
             probe.log
+            unittests.log
             control.log
             bisect.log
             variants.log
