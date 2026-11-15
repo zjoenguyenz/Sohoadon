@@ -1,0 +1,40 @@
+CA TRUC 12:40 CST 2026-11-15 — KIEM CHUNG DOC LAP GOI G2 TREN v3
+================================================================
+Pham vi: chi kiem chung doc lap goi G2 truoc luot xac nhan cua Leader.
+Khong sua code, khong build, khong dispatch CI trong ca nay.
+
+1) DOI CHIEU BYTE GOI DAY (7 file, g2/push/ tai ban vs nhanh v3 tu xa,
+   doc truc tiep GitHub bang get_file_contents, SHA = git blob hash):
+   - Parser.swift                              local 39311f4f5c93472095fe8318161298553eecf55a = remote 39311f4f5c93472095fe8318161298553eecf55a  KHOP
+   - Candidates.swift                          local cb80c531c9b52da2ad9bb39078d9920cdde1bcfe = remote cb80c531c9b52da2ad9bb39078d9920cdde1bcfe  KHOP
+   - Arbiter.swift                             local 4a2e18533949cfb759cf2cb53607a0188722b5a4 = remote 4a2e18533949cfb759cf2cb53607a0188722b5a4  KHOP
+   - ItemCandidates.swift                      local 848492e00037b613303f860d55630a87f4d143d8 = remote 848492e00037b613303f860d55630a87f4d143d8  KHOP
+   - ReadPipeline.swift                        local 93faaa5252cb9a358f909082031b654bad49abcc = remote 93faaa5252cb9a358f909082031b654bad49abcc  KHOP
+   - RegionReReader.swift                      local 5fb37b3c3378eff1d943022496a6a24809c486f5 = remote 5fb37b3c3378eff1d943022496a6a24809c486f5  KHOP
+   - harness/HarnessApp/UnitTests.swift        local 68be8bac0a00cf458a7e05c33088326244a25438 = remote 68be8bac0a00cf458a7e05c33088326244a25438  KHOP
+   KET QUA: 7/7 KHOP BYTE. Dau nhanh v3 hien tai mang dung goi G2
+   (bao cao goi ghi commit e929322d; ca nay xac minh noi dung nhanh,
+   khong doc duoc commit object bang cong cu read da duyet).
+
+2) CHAY LAI MO PHONG G2 TAI BAN (g2/sim/simulate_g2.py):
+   - mode lane2: 34 ca — 32 ca IDENTICAL; chi 2 ca thay doi:
+     D-17 (khoi tong unclosed->closed, total 10516 bang closureVariant,
+     hang muc van FLAGGED-LOSS do truong the trong guong dong cung) va
+     D-18 (FLAGGED-LOSS -> FULL-LEDGER, sumItems 7694->9691, dE1 -1997->0).
+     CATS: FULL 27 -> 28/34, FLAGGED-LOSS 7 -> 6. 0 ca thut lui.
+     Dau ra khop file da luu g2/sim/lane2-output.txt tung dong noi dung
+     (chi khac 2 dong SyntaxWarning cua Python khi gop stderr).
+   - mode key2: 5 ca neo SAMS-20260930 / L-R01 / L-R09 / L-R03 / L-R08
+     bat bien (identical=True); L-R05 bien the bi TU CHOI dung luat
+     (sum=4400, dE1=-1275, itemsVariantUsed=False); D-18/D-17 OK nhu tren.
+
+TUYEN BO TRUNG THUC:
+- Da chung minh: tinh nguyen ven byte 7/7 cua goi G2 tren v3 va
+  delta mo phong G2 tai ban khop bao cao goi (32/34 y het, D-17+D-18
+  tien, 0 thut).
+- Chua chung minh: Swift that CHUA chay goi nay — loi bien dich/loai
+  chi phan o luot streams xac nhan cua Leader (unittests VT01-VT08 +
+  streams 169); thu hoach da-luot + ROI da dang VAN CHUA DO
+  (Gate D/G5, nhu bao cao goi da khai).
+- Chua lam: khong dispatch CI, khong build-ipa, khong sua code;
+  G3 chua bat dau.

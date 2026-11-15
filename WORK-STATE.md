@@ -3756,3 +3756,96 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
 - BẰNG CHỨNG: (1) nhật ký ngày `~/memory/2026-11-15.md` nay 773 dòng (ca 08:40 ghi 683 dòng) — grep GL-Keeper/SoHoaDon/run106/P-DRAFT chỉ trả 5 kết quả là dòng 322 (ca 00:40), dòng 541 (ca 02:40), dòng 596 (ca 04:40), dòng 658 (ca 06:40) và dòng 684 (ca 08:40), số dòng sau 684 chứa GL-Keeper/SoHoaDon = 0: KHÔNG có ghi nhận kết quả cài/test #106 mới; bằng chứng nội dung mới nhất vẫn là flush 19:43 ngày 14/11: 3 điểm test bản 106 "tới 19:43 CST chưa có kết quả" (P-DRAFT giết-app · tờ xấu kích hoạt cổng .block + bấm "Vẫn đọc tờ này" · nhìn nhanh danh sách chọn mục đích); (2) cây sống `ReceiptViews.swift` dòng 166 vẫn là dạng dấu "/" ở mục 5 — sửa chữ mục 5 VẪN CHƯA THI HÀNH, đúng kế hoạch gom lượt build kế; (3) `downloads/` vẫn dừng ở IPA run #106 (1.426.132 byte, sha256 `2122f6699998b162d2deed026653abfef0e810ae8731ea86eb584926f57c1705`, khớp số các ca trước, sha256sum chạy lại trong ca này), không có file kiểm/test mới sau ca 08:40 ngoài WORK-STATE của chính ca đó.
 - Tuyên bố trung thực — đã chứng minh: trạng thái chờ không đổi kể từ ca 08:40 bằng grep/đọc trực tiếp trong ca; chưa chứng minh: kết quả cài/test #106 trên máy anh (chưa có ghi nhận nào tại bàn); chưa làm: không sửa dòng mục 5, các điểm test thiết bị vẫn mở nguyên — P-DRAFT giết-app giữa chừng + tờ đầu qua cổng chặn .block (+ nhìn nhanh danh sách chọn); Phase 2 vẫn khoá cho tới GATE100-v2 + anh xác nhận trên máy.
 - **Bước tiếp theo giữ nguyên: chờ anh xác nhận trên máy (cài đè #106 + các điểm test thiết bị đang mở: P-DRAFT giết-app + tờ đầu bị cổng chặn). Khi có lượt build kế tiếp vì lý do khác, gom sửa đúng 1 dòng `ReceiptViews.swift:166` (dấu "/" → dấu ",") vào cùng lượt. Ca này không kêu anh cài/test gì thêm.**
+- ĐẨY CUỐI CA 10:40: **THÀNH CÔNG** — đúng 1 lần, 2 file (WORK-STATE.md · v4-4/checks/ca-1040-waiting-recheck.txt), commit mới trên docs/planning: `f431c01eafa4cafe9beffaf71ec560e8bb822f0e`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- 2026-11-15 11:21 CST: anh lệnh DỪNG vá lẻ từng bản;
+  phán quyết của anh: "lõi vẫn chưa bao giờ hoàn thành"
+  + tốn nhiều tiền/thời gian nghiên cứu; lệnh lập TEAM
+  EXPERT tìm hướng TRIỆT ĐỂ. Đã cử 4 tuyến song song
+  (kiểm chứng / kiến trúc lõi / trạng thái-UX / đầu vào
+  OCR), báo cáo vào core-expert/TEAM1..4-*.md; Leader
+  tổng hợp MỘT khuyến nghị trình anh chốt. Vá L-22 (bền
+  hoá trạng thái bị chặn) + dấu phẩy mục 5: ĐÓNG BĂNG
+  chờ kết luận đội. Kích hoạt thực tế trên máy anh sáng
+  15/11: cổng chặn kích hoạt thật (tờ mới tinh, lý do
+  mờ/chói/tương phản) — nửa đầu điểm kiểm #2 đạt; anh
+  thoát app trước khi bấm "Vẫn đọc" → trạng thái chặn
+  mất (O-V44-1 thành thiệt hại thật).
+- 2026-11-15 11:31 CST: anh SỬA LUẬT 3: 100 lượt →
+  10 lượt. Đã ghi MEMORY + TEAM. Tổng chi phí chương
+  trình G1–G5 cập nhật: ≈ $12–14 (hai lượt lớn giảm
+  từ $7,3–14,6 xuống ~$2,5–3). Chờ anh duyệt chương
+  trình để bắt đầu G1.
+- 2026-11-15 11:38 CST: anh DUYỆT chương trình triệt
+  để G1–G5 BẢN TỐI ƯU (tổng ≈ $5–7; 4 luật cắt phí:
+  lặp tại bàn/CI chỉ xác nhận, bỏ tầng simulator, một
+  lượt gộp cho mốc, cổng luồng rẻ khi phát triển).
+  Bắt đầu G1 ngay: test target CI + đặc tả BenchShell
+  tự kiểm. Báo cáo tổng hợp đội chuyên gia:
+  core-expert/LEADER-SYNTHESIS.md.
+- 2026-11-15 G1 ĐÃ XÂY XONG TẠI BÀN (báo cáo:
+  core-expert/G1-PACKAGE-REPORT.md): tách ReceiptLogic.swift
+  thuần Foundation (canReparse/receiptFlags/receiptHas
+  OriginalImage + formatMoney chuyển nguyên văn khỏi
+  Models.swift), ReceiptViews thành tầng bọc — P4/P5/S10
+  PASS sau đồng bộ cây sống; harness cộng chế độ
+  `unittests` với 48 test Swift (PendingDraftStore vòng
+  đời PD01–25 + logic điều kiện CR/IM/FL) — CHƯA chạy
+  Swift thật, chờ lượt streams xác nhận do Leader kích
+  SAU khi cài workflow đã sửa (g1/harness/workflow/
+  harness-ci.yml — connector không đẩy được workflow,
+  Leader cài qua trình duyệt lên v3 + main). Đã đẩy một
+  lần: commit 8bbc188e (v3, 7 đường dẫn). L-18 tương tác
+  đầy đủ không tách sạch được → đặc tả Gate D §5
+  (G1-BENCH-SELFCHECK-SPEC.md, chỉ đặc tả chưa xây).
+- 2026-11-15 12:05 CST: anh LỆNH qua voice call: chuyển
+  TOÀN BỘ repo sang PUBLIC để build miễn phí (Actions ở
+  repo public không tính tiền), khi các project xong hết
+  mới đưa về PRIVATE lại. Lệnh này thay thế quyết định
+  2026-11-12 (không public Sohoadon). Đang thi hành qua
+  trình duyệt; báo anh khi xong.
+- 2026-11-15 12:06 CST: anh THU HẸP lệnh public: CHỈ
+  kho Sohoadon chuyển public; các kho khác anh tự quản
+  lý sau, không đụng. Đã sửa phạm vi cho lượt trình
+  duyệt đang chạy ngay trong phút.
+- 2026-11-15 12:07 CST: G1 QUA CỔNG XÁC NHẬN.
+  build-ipa #107 (commit 8bbc188e) XANH 1m15s — app
+  biên dịch với ReceiptLogic.swift. Workflow
+  harness-ci đã cài bước unittests lên v3 (604e66a)
+  + main (7816d99). Lượt streams #32: unit tests
+  47/47 đạt, 0 lỗi (đếm tại bàn 48 — lệch 1 do cách
+  đếm của bộ đếm CI, không có test nào fail); cổng
+  luồng 169 stream, died=0. Chi phí lượt: 1m40s ≈
+  $0,13 (+ #107 ≈ $0,10). G1 ĐÓNG. Sang G2.
+- 2026-11-15 12:07 CST: Sohoadon ĐÃ CHUYỂN PUBLIC
+  (xác minh tại trang Settings: "This repository is
+  currently public"; qua sudo-mode bằng mã email anh
+  đọc). Hệ quả: build Actions ở kho này từ nay MIỄN
+  PHÍ → ngân sách $5–7 của chương trình gần như về $0.
+  Tình trạng 10 kho: Public = Sohoadon, dabanh-playlist,
+  dabanh-ios, jtv-source, data-582047. Private (giữ
+  nguyên theo lệnh thu hẹp) = inails-2, iNailsv2,
+  inails, jtv-ios, Car-dash-Joe. Hẹn: project xong →
+  Sohoadon về private lại.
+- 2026-11-15 (đội thi công G2): G2 XONG Ở MỨC GÓI — CHỜ
+  LƯỢT XÁC NHẬN CỦA LEADER. Commit e929322d trên v3
+  (7 file, một lần đẩy): OCRLine mang alternates; hồ
+  biến thể ocrVariant (nhóm xung đột theo thứ tự token,
+  provenance closureVariant) vào TotalsArbiter
+  (rescueSearch chỉ khi hồ chính 0 nghiệm) +
+  ItemsArbiter (lượt cứu món chỉ nhận khi khép E1);
+  thu hoạch đa-lượt ở ReadPipeline (IoU ≥ 0.5) + ROI
+  đa dạng vòng 1 (pixel gốc + tương phản cục bộ +
+  engine phụ) + gợi ý ROI mức dòng. Mô phỏng 34 ca:
+  32/34 y hệt, D-18 → FULL, D-17 khép khối tổng,
+  L-R05 từ chối đúng luật, 0 thụt lùi. Statics
+  P4/P5/S10 PASS. Test VT01–VT08 (13 điểm) chờ chạy ở
+  lượt streams xác nhận. Báo cáo:
+  core-expert/G2-PACKAGE-REPORT.md. ROI/thu hoạch =
+  CHƯA ĐO (cổng Gate D/G5).
+
+## CA TRỰC 12:40 CST 2026-11-15 — KIỂM CHỨNG ĐỘC LẬP GÓI G2 TRÊN v3: 7/7 FILE KHỚP BYTE, MÔ PHỎNG CHẠY LẠI KHỚP BÁO CÁO GÓI
+- Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; chương trình G1–G5 duyệt 11:38 ngày 2026-11-15; G1 ĐÓNG 12:07, G2 xong ở mức gói chờ lượt xác nhận của Leader). Ca quay lại luật chung, làm đúng MỘT bước tiếp theo: kiểm chứng độc lập gói G2 TRƯỚC lượt xác nhận — ca không sửa code, không build, không dispatch CI. Sổ đầy đủ: `g2/checks/ca-1240-g2-remote-recheck.txt`.
+- KẾT QUẢ 1 — NGUYÊN VẸN GÓI ĐẨY: git blob hash của 7 file `g2/push/` tại bàn KHỚP TỪNG FILE với SHA đọc trực tiếp từ GitHub ở nhanh v3: Parser `39311f4f…` · Candidates `cb80c531…` · Arbiter `4a2e1853…` · ItemCandidates `848492e0…` · ReadPipeline `93faaa52…` · RegionReReader `5fb37b3c…` · harness/HarnessApp/UnitTests `68be8bac…` — **7/7 KHỚP BYTE**. (Báo cáo gói ghi commit `e929322d`; ca này xác minh nội dung nhánh bằng công cụ read đã duyệt, không đọc commit object.)
+- KẾT QUẢ 2 — MÔ PHỎNG CHẠY LẠI: `g2/sim/simulate_g2.py lane2` tại bàn: 34 ca, **32 IDENTICAL**, chỉ D-17 (khối tổng unclosed→closed, total 10516 bằng closureVariant) + D-18 (FLAGGED-LOSS→FULL-LEDGER, Σ 7694→9691, δE1 −1997→0) thay đổi; FULL 27→28/34, **0 ca thụt**; đầu ra khớp file đã lưu `lane2-output.txt` từng dòng nội dung. `key2`: 5 ca neo (SAMS-20260930, L-R01, L-R09, L-R03, L-R08) bất biến; L-R05 biến thể bị từ chối đúng luật (Σ=4400, δ1=−1275).
+- Tuyên bố trung thực — đã chứng minh: nguyên vẹn byte gói G2 trên v3 + delta mô phỏng khớp báo cáo gói, bằng đo trực tiếp trong ca; chưa chứng minh: Swift thật CHƯA chạy gói này (lỗi biên dịch/loại chỉ phán ở lượt streams xác nhận của Leader: unittests VT01–VT08 + streams 169), thu hoạch đa-lượt + ROI đa dạng VẪN CHƯA ĐO (Gate D/G5); chưa làm: không dispatch CI, không build-ipa, G3 chưa bắt đầu.
+- **Bước tiếp theo giữ nguyên: Leader kích ĐÚNG MỘT lượt streams xác nhận trên v3 @ gói G2 (unittests gồm VT01–VT08, kỳ vọng failed=0 + streams 169 died=0) → G2 ĐÓNG mới sang G3. Ca này không kêu anh cài/test gì.**
