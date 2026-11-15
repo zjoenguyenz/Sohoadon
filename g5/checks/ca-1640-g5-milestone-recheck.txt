@@ -1,0 +1,62 @@
+CA TRỰC 16:40 CST 2026-11-15 — KIỂM CHỨNG TRỰC TIẾP LƯỢT MỐC G5: HARNESS #37 ĐÃ XONG — FAIL Ở CỔNG 2B ROIGATE
+================================================================================
+Nguồn: đọc trực tiếp trang Actions của zjoenguyenz/Sohoadon qua trình duyệt
+có phiên, 16:41–16:48 CST 2026-11-15 (chỉ đọc; không kích/không chạy lại/
+không huỷ bất cứ run nào). Ca không sửa code, không dispatch CI, không build.
+
+1) HARNESS RUN #37 — COMPLETED / FAILURE
+- Run: https://github.com/zjoenguyenz/Sohoadon/actions/runs/43756035020
+  Job law-and-control: .../job/132940217716
+- Workflow "Harness — cổng tự chạy 10 lượt" (harness-ci.yml),
+  workflow_dispatch, nhánh v3 @ 50ccb29, bắt đầu 14:05 CST,
+  kết thúc 15:10 CST, tổng 1h05m08s (job 1h05m01s). Job duy nhất FAIL.
+- So với ca 14:40: lúc đó run còn In progress ở Cổng 2 SET 7/10;
+  nay đã chạy xong toàn bộ các cổng tới được.
+
+2) KẾT QUẢ TỪNG CỔNG (đọc log trực tiếp)
+- Cổng G1 unit tests: PASS — "UNITTESTS-DONE total=113 failed=0" +
+  "SURVIVED unittests".
+- Cổng 1 control (fixture L-R01): PASS — "GATE1-DONE vendor=Costco
+  subtotal=12548 tax=938 total=13486 items=20 sumItems=12548
+  sold=12 card=2586 warnings=1" + "SURVIVED fixture".
+- Cổng 2 — 43 ảnh x 10 set đúng đường app: PASS (56m01s) —
+  10/10 dòng "DONE 43/43" (SET 1 ở dòng log 1833; SET 10 ở 18242),
+  kết thúc "SURVIVED images x10".
+- Cổng 2b — ẢNH–ROI (hai làn cũ/app, G5): FAIL (7m09s, exit code 1) —
+  "ROIGATE-DONE cases=43 deficitCases=37 roiAssertFailures=4
+  f2Rescued=5 regressions=0" +
+  "ROIGATE-FAILED roiAssertFailures=4 regressions=0 f2Rescued=5".
+  Tức: tầng cứu cứu được 5 ca F2 (>=1 đạt kỳ vọng), 0 thụt lùi,
+  nhưng 4 ca thâm hụt không đạt khẳng định ROI (roiAssertFailures=4)
+  nên cổng đỏ đúng thiết kế. Dòng mẫu: L-R05.jpg roiRounds=2
+  roiAssert=roi-ran deltaOk=true (ca mẫu này KHÔNG phải ca fail —
+  log tổng không nêu tên 4 ca fail ở một dòng riêng; per-case lines
+  đã mẫu đều deltaOk=true, chưa xác định được 4 file cụ thể từ
+  trang/log đã đọc).
+- Ma trận cấu hình phụ: SKIPPED (không chạy sau khi 2b fail).
+- Cổng 3 fuzz: SKIPPED. Cổng streams V4-0: SKIPPED.
+- Bước Lưu bằng chứng: PASS — artifact "harness-evidence-37",
+  186 KB (49 file, 190.780 byte), sha256
+  ba54384f74760ba26b53f49ef0f0062ee0ce35a5e39818153cc7cad9ec218f5b,
+  Artifact ID 14180692724.
+- Annotations: 1 error (chính là exit code 1 của Cổng 2b) +
+  1 warning Node.js 20 deprecated + 1 notice hàng chờ macOS —
+  không phải lỗi thêm.
+
+3) BUILD-IPA #120: giữ nguyên kết quả ca 14:40 (SUCCESS, commit
+80d5a0b4) — ca này không kiểm lại, không nhận thêm.
+
+TUYÊN BỐ TRUNG THỰC
+- Đã chứng minh: kết cục #37 = FAILURE ở Cổng 2b với số đo trên
+  (113/0, control SURVIVED, images x10 SURVIVED, f2Rescued=5,
+  regressions=0, roiAssertFailures=4) bằng đọc trực tiếp Actions
+  trong ca.
+- Chưa chứng minh: 4 ca roiAssertFail cụ thể là file nào (log đã
+  đọc không nêu riêng); ma trận + fuzz chưa từng chạy ở lượt này
+  nên chưa có phán quyết; GATE100-v2 chưa chạy.
+- Chưa làm: không sửa code, không dispatch, không đẩy code v3/main,
+  không giao bản mới. G5 CHƯA ĐÓNG.
+Bước tiếp theo: Leader/chat chính mổ 4 ca roiAssertFail từ artifact
+harness-evidence-37 + log đầy đủ -> quyết sửa tầng ROI hay sửa
+khẳng định cổng (trình anh nếu đổi tiêu chí đã duyệt) -> mới kích
+lượt mốc lại. Ca này không kêu anh cài/test gì.
