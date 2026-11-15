@@ -1,0 +1,61 @@
+CA TRUC 20:40 CST 2026-11-14 — TAI XAC NHAN TRANG THAI CHO SAU CA 18:40
+So: v4-4/checks/ca-2040-waiting-recheck.txt
+
+CONG DONG BANG NGHIEN CUU CU: DA HET HIEU LUC
+(WORK-STATE ghi ro anh duyet huong 21:02 + duyet thiet ke D1-D7
+21:44 ngay 2026-11-11; V4-4 giao run #103, L-17/L-18 o run #104,
+L-20 o run #105, L-21 o run #106 xanh + soi nhi phan dat,
+doi chieu chu xong o ca 08:40, buoc trinh #106 da dong o ca 10:40,
+pham vi sua chu da khoanh o ca 12:40, tai xac nhan cho o cac ca
+14:40/16:40/18:40.)
+
+VIEC CUA CA: lam dung MOT buoc — tai xac nhan trang thai cho dang mo
+bang bang chung truc tiep. Khong sua code, khong build, khong
+dispatch CI, khong giao ban moi.
+
+BANG CHUNG TRONG CA (doc truc tiep):
+1) Nhat ky ngay ~/memory/2026-11-14.md:
+   - Muc flush 19:43 CST (sau ca 18:40) ghi ro: ban 106 la ban cuoi
+     cua buoc loi v4, va 3 diem test da xin anh tren ban 106
+     "toi 19:43 CST chua co ket qua" — (1) P-DRAFT giet-app giua
+     chung; (2) to xau kich hoat cong .block + bam "Van doc to nay";
+     (3) nhin nhanh danh sach chon muc dich trong to Sam's.
+   - G rep sau muc flush 19:43 (phan con lai cua file, gom cac muc
+     Da Banh web) khong co ghi nhan ket qua cai/test #106 nao.
+   - Ket luan: KHONG co bang chung ket qua cai/test #106 moi ke tu
+     ca 18:40.
+
+2) Cay song ReceiptViews.swift (v3-phase4/app/ReceiptViews.swift):
+   - options dong 161-167 van gom muc 5 dang dau "/":
+     "Mua nguyen lieu / hang hoa cho tiem" (dong 166).
+   - Sua chu muc 5 ("/" -> ",") VAN CHUA THI HANH, dung ke hoach
+     gom vao luot build ke tiep vi ly do khac — khong build rieng
+     cho dau cau.
+
+3) downloads/:
+   - Van dung o IPA run #106: SoHoaDon-V3-run106-2026-11-14.ipa,
+     1.426.132 byte, sha256
+     2122f6699998b162d2deed026653abfef0e810ae8731ea86eb584926f57c1705
+     (khop so ca 06:40). Khong co IPA moi sau ca 18:40.
+
+4) File moi trong receipt-app/ sau ca 18:40:
+   - Chi WORK-STATE.md + file checks cua chinh ca 18:40.
+     Khong co file kiem/test moi.
+
+TUYEN BO TRUNG THUC:
+- Da chung minh: trang thai cho khong doi ke tu ca 18:40, bang
+  grep/doc truc tiep trong ca (nhat ky ngay toi flush 19:43 +
+  cay song + downloads + danh sach file moi).
+- Chua chung minh: ket qua cai/test #106 tren may anh (chua co
+  ghi nhan nao tai ban).
+- Chua lam: khong sua dong muc 5, cac diem test thiet bi van mo
+  nguyen — P-DRAFT giet-app giua chung + to dau qua cong chan
+  .block (+ nhin nhanh danh sach chon muc dich); Phase 2 van khoa
+  cho toi GATE100-v2 + anh xac nhan tren may.
+
+BUOC TIEP THEO GIU NGUYEN:
+Cho anh xac nhan tren may (cai de #106 + cac diem test thiet bi
+dang mo: P-DRAFT giet-app + to dau bi cong chan).
+Khi co luot build ke tiep vi ly do khac, gom sua dung 1 dong
+ReceiptViews.swift:166 (dau "/" -> dau ",") vao cung luot.
+Ca nay khong keu anh cai/test gi them.
