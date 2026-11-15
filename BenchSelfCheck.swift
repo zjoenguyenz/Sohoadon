@@ -619,8 +619,7 @@ enum BenchSelfCheck {
         let root: [String: Any] = [
             "identity": [
                 "parserVersion": ReadCoreVersion.parserVersion,
-                "appBuild": (Bundle.main.infoDictionary?
-                    ["CFBundleVersion"] as? String) ?? "?",
+                "appBuild": (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "?",
                 "deviceModel": deviceModel,
                 "osVersion": osVersion,
                 "startedAt": p.startedAt,
