@@ -105,6 +105,16 @@ targets:
     sources:
       - BenchApp.swift
       - BenchView.swift
+      # G5 / Gate D: vỏ tự kiểm một chạm (chỉ bench — app chính
+      # không liên kết) + hai file tầng app thuần Foundation mà
+      # khối vòng đời của nó cần (kho nháp/kho chặn của G1/G3 và
+      # logic điều kiện của G1; cả hai vốn đã ở target chính +
+      # harness, nay thêm vào bench để BenchShell gieo/đối
+      # chiếu trạng thái thật thay vì dựng bản sao).
+      - BenchSelfCheck.swift
+      - PendingDraft.swift
+      - ReceiptLogic.swift
+      - bench-gt.json
       - Money.swift
       - ReadDiagnostics.swift
       - CaptureIntake.swift

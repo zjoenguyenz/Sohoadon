@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import Vision
+import UniformTypeIdentifiers
 
 /// Màn BenchShell tối thiểu (Pha 4): liệt kê ảnh đóng băng trong
 /// bundle (BenchImages — corpus 15 ca thật + 18 biến thể tổng
@@ -26,6 +27,15 @@ struct BenchView: View {
     // readerConfigHash, đều lệch khỏi đường giao.
     @State private var top3On: Bool = true
     @State private var langMode: Int = 0
+    // Gate D (G5): trạng thái tự kiểm một chạm — tiến trình
+    // thật nằm trong BenchSelfCheck (ghi xuống đĩa từng bước),
+    // các biến này chỉ là hiển thị của phiên hiện tại.
+    @State private var selfCheckStatus: String = ""
+    @State private var selfCheckBusy: Bool = false
+    @State private var lifecycleStatus: String = ""
+    @State private var replayStatus: String = ""
+    @State private var showDiagImporter: Bool = false
+    @State private var resultFileURL: URL? = nil
 
     private var imageNames: [String] {
         // CI-FIX-4 (2026-11-12): XcodeGen LAM PHANG tai nguyen vao
@@ -158,6 +168,70 @@ struct BenchView: View {
                     }
                 }
 
+                Section("Tự kiểm một chạm — Gate D (G5)") {
+                    Button("Chạy tự kiểm (Phần A — 43 ảnh qua đường app)") {
+                        runSelfCheck()
+                    }
+                    .disabled(selfCheckBusy)
+                    Button("Gieo trạng thái vòng đời (Phần B)") {
+                        let ok = BenchSelfCheck.seedLifecycle()
+                        lifecycleStatus = ok
+                            ? "Đã gieo B1+B2+B3 — hãy VUỐT GIẾT app rồi mở lại BenchShell, app tự đối chiếu."
+                            : "Gieo thất bại: kho bền ghi lỗi."
+                    }
+                    Button("Nạp file chẩn đoán .ocrdiag.json (Phần C)") {
+                        showDiagImporter = true
+                    }
+                    Button("Xuất file kết quả (1 file JSON)") {
+                        resultFileURL = BenchSelfCheck.writeFinalResult(
+                            deviceModel: UIDevice.current.model,
+                            osVersion: UIDevice.current.systemVersion)
+                    }
+                    Button("Xoá tiến trình tự kiểm", role: .destructive) {
+                        BenchSelfCheck.resetProgress()
+                        selfCheckStatus = "Đã xoá tiến trình."
+                        resultFileURL = nil
+                    }
+                    if !selfCheckStatus.isEmpty {
+                        Text(selfCheckStatus).font(.caption2)
+                            .textSelection(.enabled)
+                    }
+                    if !lifecycleStatus.isEmpty {
+                        Text(lifecycleStatus).font(.caption2)
+                            .textSelection(.enabled)
+                    }
+                    if !replayStatus.isEmpty {
+                        Text(replayStatus).font(.caption2)
+                            .textSelection(.enabled)
+                    }
+                    if let url = resultFileURL {
+                        ShareLink(item: url) {
+                            Label("Gửi file kết quả",
+                                  systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+                .fileImporter(isPresented: $showDiagImporter,
+                              allowedContentTypes: [.json],
+                              allowsMultipleSelection: true) { result in
+                    if case .success(let urls) = result {
+                        var n = 0
+                        for url in urls {
+                            let scoped =
+                                url.startAccessingSecurityScopedResource()
+                            let data = try? Data(contentsOf: url)
+                            if scoped {
+                                url.stopAccessingSecurityScopedResource()
+                            }
+                            if let data,
+                               BenchSelfCheck.replayAndStore(diagData: data) != nil {
+                                n += 1
+                            }
+                        }
+                        replayStatus = "Phần C: đã replay \(n) file chẩn đoán."
+                    }
+                }
+
                 Section("Ảnh đóng băng (\(imageNames.count))") {
                     Button("Chạy tất cả qua ReceiptReader") {
                         runAll()
@@ -197,6 +271,18 @@ struct BenchView: View {
                 ReceiptReader.documentEnhancerEnabled = enhancerOn
                 applyEngineBisect()
                 loadStageLog()
+                // Gate D: mở lại sau lần giết ở Phần B -> tự
+                // đối chiếu ngay; phiên Phần A chết dở -> báo
+                // đích danh ảnh chết để anh chạy tiếp.
+                if BenchSelfCheck.lifecycleSeeded() {
+                    let items = BenchSelfCheck.verifyLifecycle()
+                    lifecycleStatus = "Phần B sau giết app — "
+                        + items.map { "\($0.id): \($0.verdict)" }
+                            .joined(separator: " · ")
+                }
+                if let crashed = BenchSelfCheck.pendingCrash() {
+                    selfCheckStatus = "Phiên trước chết ở ảnh \(crashed) — bấm Chạy tự kiểm để ghi CRASHED và chạy tiếp."
+                }
             }
         }
     }
@@ -250,6 +336,64 @@ struct BenchView: View {
                 results[name] = BenchRunSummary(text: text,
                                                 diagnosticsURL: url)
                 running = nil
+            }
+        }
+    }
+
+    // MARK: - Gate D Phần A: tự kiểm 43 ảnh (BenchSelfCheck)
+
+    /// Chạy tuần tự trên hàng đợi nền; tiến trình ghi xuống
+    /// đĩa theo từng ảnh trong BenchSelfCheck nên app chết
+    /// giữa chừng vẫn tiếp tục được ở lần mở sau (marker ->
+    /// CRASHED). Cấu hình engine theo đúng các công tắc bisect
+    /// hiện tại của bench (mặc định = cấu hình app giao).
+    private func runSelfCheck() {
+        guard !selfCheckBusy else { return }
+        guard let gt = BenchSelfCheck.loadGT() else {
+            selfCheckStatus = "Không nạp được bench-gt.json trong bundle."
+            return
+        }
+        selfCheckBusy = true
+        applyEngineBisect()
+        let names = imageNames
+        let dir = diagnosticsDirectory
+        DispatchQueue.global(qos: .userInitiated).async {
+            var progress = BenchSelfCheck.loadProgress()
+            if progress.startedAt.isEmpty {
+                progress.startedAt =
+                    ISO8601DateFormatter().string(from: Date())
+                BenchSelfCheck.saveProgress(progress)
+            }
+            if let crashed = BenchSelfCheck.pendingCrash() {
+                BenchSelfCheck.completeImage(
+                    BenchSelfCheck.crashedEntry(crashed))
+            }
+            let done = Set(BenchSelfCheck.loadProgress()
+                .entries.map { $0.file })
+            for name in names where !done.contains(name) {
+                BenchSelfCheck.beginImage(name)
+                guard let cg = loadCGImage(name) else {
+                    var e = BenchSelfCheck.crashedEntry(name)
+                    e.scoreClass = "DIED"
+                    e.arbiterStatus = "load-failed"
+                    BenchSelfCheck.completeImage(e)
+                    continue
+                }
+                let entry = BenchSelfCheck.readOne(
+                    name: name, cg: cg, gt: gt.cases[name],
+                    diagnosticsDirectory: dir)
+                BenchSelfCheck.completeImage(entry)
+                let count = BenchSelfCheck.loadProgress().entries.count
+                DispatchQueue.main.async {
+                    selfCheckStatus =
+                        "Đang tự kiểm… \(count)/\(names.count)"
+                }
+            }
+            DispatchQueue.main.async {
+                selfCheckBusy = false
+                let total = BenchSelfCheck.loadProgress().entries.count
+                selfCheckStatus =
+                    "Phần A xong: \(total)/\(names.count) ảnh. Đủ 4 phần thì bấm Xuất file kết quả."
             }
         }
     }
