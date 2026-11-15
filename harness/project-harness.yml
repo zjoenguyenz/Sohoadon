@@ -1,5 +1,7 @@
 # SoHoaDonHarness — target CLI macOS cho cổng tự chạy (LUẬT
-# 2026-11-12: >= 100 lượt liên tiếp thành công trước giao test).
+# 2026-11-12, SỬA 2026-11-15: >= 10 lượt liên tiếp thành công
+# trước giao test — anh bỏ mức 100 vì các lượt 100x cũ đo SAI
+# đường đọc; từ G5 harness chạy đúng đường app, xem dưới).
 #
 # Đặt file này ở harness/project-harness.yml trong repo; các
 # đường ../ trỏ về GỐC repo nơi project.yml chính và các file
@@ -55,18 +57,21 @@ targets:
       #   receiptHasOriginalImage) + formatMoney.
       - ../PendingDraft.swift
       - ../ReceiptLogic.swift
+      # G5 (sửa cổng đo — việc gốc của vụ "100 lượt xanh giả"):
+      # ReadPipeline.swift NAY VÀO harness. File chỉ chạm UIKit
+      # ở 3 điểm (import, uprightCGImage(UIImage),
+      # UIDevice.current.model) và cả 3 đã được bọc
+      # #if canImport(UIKit) trong chính file nguồn (hành vi
+      # iOS không đổi); phần còn lại là Foundation/CoreGraphics/
+      # CoreImage/Vision — đều có trên macOS. Nhờ đó chế độ
+      # images/roigate của harness chạy ĐÚNG ReceiptReader.read
+      # của app (chuỗi ứng viên -> chọn winner -> thu hoạch
+      # alternates -> ReadPipeline.run + ROI), thay cho bản tái
+      # lập runCandidate cũ gọi thẳng ReceiptParser.parse.
+      - ../ReadPipeline.swift
       # --- Driver + shim của harness (thư mục này):
       - HarnessApp
       # KHÔNG VÀO (và vì sao):
-      # - ReadPipeline.swift: UIKit + VisionKit (VNDocumentCamera)
-      #   + SwiftUI-free nhưng dính UIImage/UIGraphics — tầng
-      #   app iOS. Hệ quả: chuỗi ứng viên + makeEvaluation +
-      #   finalize KHÔNG chạy trong harness; driver tái lập
-      #   đúng thân runCandidate (recognize -> assemble ->
-      #   parse -> CandidateScorer) từ các module nguyên văn.
-      #   Biểu tượng duy nhất ReadPipeline để lại trong tập
-      #   module là ReceiptReader.stageBreadcrumb — đã có shim
-      #   ở HarnessApp/HarnessShims.swift.
       # - Models.swift / ScanView / ReceiptViews / ContentView /
       #   HomeView / CardsView / SoHoaDonApp / BenchApp /
       #   BenchView: SwiftUI/SwiftData/UIKit — tầng app, ngoài

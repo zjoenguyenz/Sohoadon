@@ -5,18 +5,22 @@ import Vision
 
 // MARK: - SoHoaDonHarness — driver tự chạy cốt lõi đọc (CI macOS)
 //
-// Thi hành LUẬT 2026-11-12 của anh: Muse TỰ CHẠY đường đọc
-// Swift THẬT (engine Vision -> ráp dòng -> parse -> chấm) trên
-// hạ tầng của mình, tối thiểu 100 lượt liên tiếp thành công,
-// trước khi bất kỳ bản nào tới tay anh test.
+// Thi hành LUẬT 2026-11-12 của anh (SỬA 2026-11-15: tối thiểu
+// 10 lượt liên tiếp thành công — anh bỏ mức 100 vì các lượt
+// 100x cũ đo SAI đường đọc): Muse TỰ CHẠY đường đọc Swift
+// THẬT trên hạ tầng của mình trước khi bất kỳ bản nào tới tay
+// anh test.
 //
-// Driver biên dịch NGUYÊN VĂN các file nguồn app sau vào cùng
+// Driver biên dịch NGUYÊN VĂN các file nguồn app vào cùng
 // module (xem project-harness.yml): Money, ReadDiagnostics,
 // CaptureIntake, OCREngine, LineAssembly, VendorData, Parser,
-// Reconcile, RegionReReader. KHÔNG file nào bị sửa để vào đây;
-// điểm nối duy nhất là HarnessShims.swift (biểu tượng
-// ReceiptReader.stageBreadcrumb của ReadPipeline — file đó
-// thuộc tầng UIKit, ngoài phạm vi harness).
+// Candidates, Arbiter, ItemCandidates, Reconcile,
+// RegionReReader, PendingDraft, ReceiptLogic và — TỪ G5 —
+// ReadPipeline (ReceiptReader + ReadPipeline.run + ROI).
+// ReadPipeline chỉ chạm UIKit ở 3 điểm đã bọc
+// #if canImport(UIKit) trong chính file nguồn, nên harness
+// chạy ĐÚNG đường đọc của app chứ không tái lập nó nữa;
+// HarnessShims.swift đã hưu (file rỗng giữ làm dấu tích).
 //
 // Chế độ:
 //   probe
@@ -25,13 +29,33 @@ import Vision
 //       trị khi dataVersion != "unloaded".
 //   images --dir DIR [--lang current|old|enus] [--topk 1|3]
 //          [--sets N] [--dump DIR]
-//       Chạy toàn bộ ảnh .jpg trong DIR qua đường đọc thật.
-//       Mặc định --lang old --topk 1 = đúng mặc định BenchShell
-//       run #46 (cấu hình "đã chứng minh"); --lang current
+//       G5: chạy toàn bộ ảnh .jpg trong DIR qua
+//       ReceiptReader.read — ĐÚNG điểm vào của app (chuỗi ứng
+//       viên -> chọn winner -> thu hoạch alternates của G2 ->
+//       ReadPipeline.run + vòng ROI), KHÔNG còn gọi thẳng
+//       ReceiptParser.parse như bản trước G5 (đó là gốc của
+//       vụ "100 lượt xanh giả": cổng Luật 3 cũ đo một đường
+//       app không bao giờ chạy). Mặc định --lang old --topk 1
+//       = đúng mặc định BenchShell run #46; --lang current
 //       --topk 3 = cấu hình run #45. Mỗi ảnh in: điều tra hộp
 //       (bao nhiêu hộp không-hữu-hạn — đầu mối ứng viên A của
-//       HARNESS-REPRO) + tóm tắt parse + E1/E2. --dump ghi
-//       luồng mảnh + dòng ráp + kết quả từng ảnh ra JSON.
+//       HARNESS-REPRO) + tóm tắt parse + E1/E2 + số vòng ROI
+//       thật (roi=). --dump ghi luồng mảnh + dòng ráp + kết
+//       quả từng ảnh ra JSON.
+//   roigate --dir DIR --gt FILE
+//       G5: cổng ẢNH–ROI. Mỗi ảnh chạy HAI làn: làn CŨ (một
+//       lượt engine -> ráp dòng -> ReceiptParser.parse, đúng
+//       thân chế độ images trước G5) và làn APP
+//       (ReceiptReader.read trọn đường). Khẳng định: (1) ca
+//       nào làn cũ còn thâm hụt sổ mà làn app VẪN chưa khép
+//       thì roiRounds > 0 (ROI phải thật sự chạy ở ca thâm
+//       hụt); (2) ít nhất 1 ca lớp F2 (mất chữ số — tập tên
+//       file đóng băng trong roiF2Files) được làn app khép
+//       trong khi làn cũ không khép; (3) delta từng ca >= 0
+//       (không ca nào làn app kém làn cũ theo thước khép sổ
+//       + thâm hụt xu). In ROIGATE-CASE từng ca + ROIGATE-DONE
+//       tổng kết; sạch thì khép "SURVIVED roigate", có vi
+//       phạm thì thoát 1.
 //   fixture FILE [--nobox]
 //       Parse luồng ĐÃ GHI trong fixture JSON (ca kiểm chứng:
 //       luồng L-R01 của engine cũ — audit đã minh oan; harness
@@ -209,28 +233,57 @@ func loadCGImage(_ url: URL) -> CGImage? {
     return img
 }
 
-// MARK: - Một lượt đọc đầy đủ trên ảnh (đúng thân runCandidate)
+// MARK: - Một lượt đọc trên ảnh — ĐÚNG đường app (G5)
+//
+// Trước G5 hàm này tái lập thân runCandidate (recognize ->
+// assemble -> ReceiptParser.parse) — đường v3 một lượt mà app
+// KHÔNG bao giờ chạy khi quét thật; đó là gốc đo sai của các
+// lượt Luật 3 cũ. Từ G5: gọi ReceiptReader.read như ScanView/
+// BenchView của app (chuỗi ứng viên đầy đủ, winner, thu hoạch
+// alternates G2, ReadPipeline.run + ROI của G2). ReceiptReader
+// không ném lỗi: engine hỏng ở mọi ứng viên -> outcome rỗng
+// có cờ (fail-closed như app) — cổng images vì thế chấm bằng
+// SỐNG sót tiến trình + số khép sổ, và ca rỗng tự lộ ở điểm.
 
 struct ImageRun {
-    var fragments: [Fragment]
+    var outcome: ReadOutcome
     var assembly: AssemblyResult
-    var parsed: ParseResult
     var e1: Bool
     var e2: Bool
     var score: Double
+    var parsed: ParseResult { outcome.result }
+    var fragBoxes: [CGRect] {
+        outcome.diagnostics.fragments.map { $0.box.cgRect }
+    }
+    var asmBoxes: [CGRect] {
+        outcome.diagnostics.assembly.lines.map { $0.box.cgRect }
+    }
 }
 
-func runImage(_ cg: CGImage, engine: ClassicTextEngine) throws -> ImageRun {
-    let fragments = try engine.recognize(in: cg, region: nil)
-    let assembly = LineAssembly.assemble(fragments)
-    let lines = assembly.lines.map {
-        OCRLine(text: $0.text, confidence: $0.confidence)
-    }
-    let boxes: [CGRect?] = assembly.lines.map { $0.box }
-    let parsed = ReceiptParser.parse(lines: lines, boxes: boxes)
-    let ev = evaluate(parsed: parsed, assembly: assembly)
-    return ImageRun(fragments: fragments, assembly: assembly,
-                    parsed: parsed, e1: ev.e1, e2: ev.e2, score: ev.score)
+func runImage(_ cg: CGImage) -> ImageRun {
+    let outcome = ReceiptReader.read(ReadRequest(
+        source: .photoLibrary,
+        imageFileName: "harness-image.jpg",
+        image: cg,
+        diagnosticsDirectory: nil))
+    // AssemblyResult dựng lại từ ngăn assembly của hồ sơ chẩn
+    // đoán (dòng của ỨNG VIÊN THẮNG — cùng dòng outcome mang)
+    // để evaluate() của driver chấm như cũ.
+    let d = outcome.diagnostics
+    let assembly = AssemblyResult(
+        lines: d.assembly.lines.map {
+            AssembledLine(text: $0.text, confidence: $0.confidence,
+                          box: $0.box.cgRect, spans: $0.spans,
+                          passSources: $0.passSources,
+                          contested: $0.contested,
+                          alternates: $0.alternates,
+                          columnBreaks: [])
+        },
+        dedupeDropped: d.assembly.dedupeDropped,
+        invariantViolations: d.assembly.invariantViolations)
+    let ev = evaluate(parsed: outcome.result, assembly: assembly)
+    return ImageRun(outcome: outcome, assembly: assembly,
+                    e1: ev.e1, e2: ev.e2, score: ev.score)
 }
 
 func boxDict(_ b: CGRect) -> [String: Double] {
@@ -249,18 +302,23 @@ func boxDict(_ b: CGRect) -> [String: Double] {
 }
 
 func dumpImageRun(name: String, run: ImageRun, dir: URL) {
+    let d = run.outcome.diagnostics
     let obj: [String: Any] = [
         "image": name,
-        "fragmentCensus": boxCensus(run.fragments.map { $0.box }),
-        "fragments": run.fragments.map {
+        "fragmentCensus": boxCensus(run.fragBoxes),
+        "fragments": d.fragments.map {
             ["text": $0.text, "confidence": $0.confidence,
-             "box": boxDict($0.box), "alternates": $0.alternates.count]
+             "box": boxDict($0.box.cgRect), "alternates": $0.alternates.count]
         },
-        "assembled": run.assembly.lines.map {
-            ["text": $0.text, "confidence": $0.confidence, "box": boxDict($0.box)]
+        "assembled": d.assembly.lines.map {
+            ["text": $0.text, "confidence": $0.confidence, "box": boxDict($0.box.cgRect)]
         },
         "parse": parseSummary(run.parsed),
         "e1": run.e1, "e2": run.e2, "score": run.score,
+        // G5: bằng chứng tầng cứu/ROI chạy thật ở cổng images.
+        "roiRounds": d.roiRounds.count,
+        "roiAccepted": d.roiRounds.filter { $0.accepted }.count,
+        "arbiter": run.parsed.arbiterStatus ?? "nil",
     ]
     if let data = try? JSONSerialization.data(withJSONObject: obj,
                                               options: [.prettyPrinted, .sortedKeys]) {
@@ -793,24 +851,138 @@ case "images":
                 print("SET \(set) \(url.lastPathComponent): LOAD-FAILED")
                 continue
             }
-            do {
-                let run = try runImage(cg, engine: engine)
-                print("SET \(set) \(url.lastPathComponent): frag[\(boxCensus(run.fragments.map { $0.box }))] "
-                    + "asm[\(boxCensus(run.assembly.lines.map { $0.box }))] "
-                    + "\(parseSummary(run.parsed)) e1=\(run.e1) e2=\(run.e2) score=\(String(format: "%.1f", run.score))")
-                if let dumpDir, set == 1 {
-                    dumpImageRun(name: url.lastPathComponent, run: run, dir: dumpDir)
-                }
-                okCount += 1
-            } catch {
-                print("SET \(set) \(url.lastPathComponent): ENGINE-ERROR \(error)")
+            // G5: ReceiptReader.read không ném lỗi (fail-closed
+            // như app) — "sống" ở đây = tiến trình không chết +
+            // outcome trở về; ca đọc rỗng tự lộ qua parseSummary.
+            let run = runImage(cg)
+            print("SET \(set) \(url.lastPathComponent): frag[\(boxCensus(run.fragBoxes))] "
+                + "asm[\(boxCensus(run.asmBoxes))] "
+                + "\(parseSummary(run.parsed)) e1=\(run.e1) e2=\(run.e2) score=\(String(format: "%.1f", run.score))"
+                + " roi=\(run.outcome.diagnostics.roiRounds.count) arb=\(run.parsed.arbiterStatus ?? "nil")")
+            if let dumpDir, set == 1 {
+                dumpImageRun(name: url.lastPathComponent, run: run, dir: dumpDir)
             }
+            okCount += 1
         }
         print("SET \(set) DONE \(okCount)/\(jpgs.count)")
         if okCount != jpgs.count { fail("set \(set) thiếu ảnh", code: 4) }
     }
     print("SURVIVED images x\(sets)")
 
+case "roigate":
+    // CỔNG ẢNH–ROI (G5): hai làn trên cùng một ảnh — làn CŨ
+    // (thân images trước G5: một lượt engine -> ráp -> parse
+    // v3, không ứng viên phụ, không alternates, không ROI) và
+    // làn APP (ReceiptReader.read trọn đường). GT nạp để biết
+    // ca nào là ca hạt giống/F2, nhưng THƯỚC CHẤM của cổng này
+    // là khép sổ nội tại (E1/E2 + thâm hụt xu) của từng làn —
+    // cùng thước evaluate() của chế độ images.
+    guard let dirPath = argValue("--dir") else { fail("roigate cần --dir") }
+    guard let gtPath = argValue("--gt") else { fail("roigate cần --gt") }
+    requireDataLoaded()
+    applyEngineConfig()
+    guard let gtData = try? Data(contentsOf: URL(fileURLWithPath: gtPath)),
+          let gtObj = try? JSONSerialization.jsonObject(with: gtData) as? [String: Any],
+          let gtCases = gtObj["cases"] as? [String: Any] else {
+        fail("roigate: không đọc được bảng GT \(gtPath)")
+    }
+    // Tập F2 đóng băng (mất chữ số ở tầng vật lý trên luồng
+    // DEVICE — G2/TEAM4): họ 003 (C-003 + SYN-003 suy biến),
+    // L-R05 (patty mất chữ số đầu), L-R08 (thuế 13.23 -> 1.23),
+    // L-R09 (tạm tính mất chữ số đầu). Đóng băng theo TÊN FILE.
+    let roiF2Files: Set<String> = [
+        "C-003.jpg", "L-R05.jpg", "L-R08.jpg", "L-R09.jpg",
+        "SYN-003-BLUR.jpg", "SYN-003-DOWNSCALE.jpg",
+        "SYN-003-LIGHT.jpg", "SYN-003-NOISE.jpg",
+        "SYN-003-TILT.jpg", "SYN-003-WRINKLE.jpg",
+    ]
+    let dir = URL(fileURLWithPath: dirPath)
+    let files = (try? FileManager.default.contentsOfDirectory(
+        at: dir, includingPropertiesForKeys: nil)) ?? []
+    let jpgs = files.filter { $0.pathExtension.lowercased() == "jpg" }
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    if jpgs.isEmpty { fail("không có .jpg trong \(dirPath)") }
+    let legacyEngine = ClassicTextEngine()
+    var deficitCases = 0
+    var roiAssertFailures = 0
+    var regressions = 0
+    var f2Rescued = 0
+    // Thước một làn: (số đẳng thức khép 0..2, thâm hụt xu).
+    // Thâm hụt = |Σmón - tạm tính| + |tạm tính + thuế - tổng|;
+    // thiếu neo nào thì cộng phạt cố định 100_000 cho hạng tử
+    // đó (ca tổng-only thiếu cả hai neo ở CẢ hai làn như nhau).
+    func laneMetric(_ p: ParseResult, _ assembly: AssemblyResult)
+        -> (closed: Int, deficit: Int) {
+        let ev = evaluate(parsed: p, assembly: assembly)
+        var deficit = 0
+        let sumItems = SafeMoney.sumCents(p.items.map { $0.amountCents ?? 0 })
+        if let subtotal = p.subtotalCents, let sum = sumItems {
+            deficit += abs(sum - subtotal)
+        } else { deficit += 100_000 }
+        if let subtotal = p.subtotalCents, let total = p.totalCents {
+            deficit += abs(subtotal + p.taxTotalCents - total)
+        } else { deficit += 100_000 }
+        return ((ev.e1 ? 1 : 0) + (ev.e2 ? 1 : 0), deficit)
+    }
+    for url in jpgs {
+        let name = url.lastPathComponent
+        guard let cg = loadCGImage(url) else {
+            print("ROIGATE-CASE file=\(name) LOAD-FAILED")
+            regressions += 1
+            continue
+        }
+        // Làn CŨ: đúng thân runImage trước G5.
+        var legacyParsed = ParseResult()
+        var legacyAssembly = AssemblyResult(lines: [], dedupeDropped: [],
+                                            invariantViolations: 0)
+        if let frags = try? legacyEngine.recognize(in: cg, region: nil) {
+            legacyAssembly = LineAssembly.assemble(frags)
+            let lines = legacyAssembly.lines.map {
+                OCRLine(text: $0.text, confidence: $0.confidence)
+            }
+            let boxes: [CGRect?] = legacyAssembly.lines.map { $0.box }
+            legacyParsed = ReceiptParser.parse(lines: lines, boxes: boxes)
+        }
+        let legacy = laneMetric(legacyParsed, legacyAssembly)
+        // Làn APP: trọn đường ReceiptReader.
+        let app = runImage(cg)
+        let appMetric = laneMetric(app.parsed, app.assembly)
+        let roiRounds = app.outcome.diagnostics.roiRounds.count
+        let isF2 = roiF2Files.contains(name)
+        let hasGT = gtCases[name] != nil
+        var deltaOK = true
+        if appMetric.closed < legacy.closed
+            || (appMetric.closed == legacy.closed
+                && appMetric.deficit > legacy.deficit) {
+            deltaOK = false
+            regressions += 1
+        }
+        var roiAssert = "na"
+        if legacy.closed < 2 {
+            deficitCases += 1
+            if appMetric.closed == 2 {
+                roiAssert = "rescued"
+                if isF2 { f2Rescued += 1 }
+            } else if roiRounds > 0 {
+                roiAssert = "roi-ran"
+            } else {
+                roiAssert = "ROI-MISSING"
+                roiAssertFailures += 1
+            }
+        }
+        print("ROIGATE-CASE file=\(name) gt=\(hasGT ? "yes" : "no") f2=\(isF2 ? "yes" : "no") "
+            + "legacyClosed=\(legacy.closed) legacyDeficit=\(legacy.deficit) "
+            + "appClosed=\(appMetric.closed) appDeficit=\(appMetric.deficit) "
+            + "roiRounds=\(roiRounds) roiAssert=\(roiAssert) deltaOK=\(deltaOK)")
+    }
+    print("ROIGATE-DONE cases=\(jpgs.count) deficitCases=\(deficitCases) "
+        + "roiAssertFailures=\(roiAssertFailures) f2Rescued=\(f2Rescued) regressions=\(regressions)")
+    if roiAssertFailures > 0 || regressions > 0 || f2Rescued < 1 {
+        print("ROIGATE-FAILED roiAssertFailures=\(roiAssertFailures) regressions=\(regressions) f2Rescued=\(f2Rescued)")
+        exit(1)
+    }
+    print("SURVIVED roigate")
+
 default:
-    fail("chế độ không rõ: \(mode) — probe|images|fixture|fuzz|streams")
+    fail("chế độ không rõ: \(mode) — probe|images|roigate|fixture|fuzz|streams|unittests")
 }

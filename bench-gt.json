@@ -1,0 +1,688 @@
+{
+ "cases": {
+  "C-003.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": true,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "L-R01.jpg": {
+   "card": "2586",
+   "date": "2026-09-14",
+   "lines": 20,
+   "seed": true,
+   "sold": 12,
+   "subtotal": 12548,
+   "taxes": [
+    822,
+    116
+   ],
+   "total": 13486,
+   "vendorAliases": [
+    "costco"
+   ]
+  },
+  "L-R02.jpg": {
+   "card": "2586",
+   "date": "2026-05-20",
+   "lines": 2,
+   "seed": true,
+   "sold": null,
+   "subtotal": 16448,
+   "taxes": [
+    1653
+   ],
+   "total": 18101,
+   "vendorAliases": [
+    "t-johnny",
+    "johnny"
+   ]
+  },
+  "L-R03.jpg": {
+   "card": null,
+   "date": "2026-06-24",
+   "lines": 10,
+   "seed": true,
+   "sold": null,
+   "subtotal": 6760,
+   "taxes": [
+    153,
+    240
+   ],
+   "total": 7153,
+   "vendorAliases": [
+    "walmart"
+   ]
+  },
+  "L-R04.jpg": {
+   "card": "2586",
+   "date": "2026-08-12",
+   "lines": 8,
+   "seed": true,
+   "sold": 8,
+   "subtotal": 5686,
+   "taxes": [
+    223
+   ],
+   "total": 5909,
+   "vendorAliases": [
+    "walmart"
+   ]
+  },
+  "L-R05.jpg": {
+   "card": "2586",
+   "date": "2026-08-03",
+   "lines": 10,
+   "seed": true,
+   "sold": 10,
+   "subtotal": 5675,
+   "taxes": [
+    228
+   ],
+   "total": 5903,
+   "vendorAliases": [
+    "pan-asia",
+    "pan asia"
+   ]
+  },
+  "L-R06.jpg": {
+   "card": "2586",
+   "date": "2026-08-12",
+   "lines": 1,
+   "seed": true,
+   "sold": null,
+   "subtotal": 549,
+   "taxes": [
+    22
+   ],
+   "total": 571,
+   "vendorAliases": [
+    "pan-asia",
+    "pan asia"
+   ]
+  },
+  "L-R07.jpg": {
+   "card": "2586",
+   "date": "2026-08-12",
+   "lines": 17,
+   "seed": true,
+   "sold": 17,
+   "subtotal": 8283,
+   "taxes": [
+    333
+   ],
+   "total": 8616,
+   "vendorAliases": [
+    "pan-asia",
+    "pan asia"
+   ]
+  },
+  "L-R08.jpg": {
+   "card": "2586",
+   "date": "2026-03-19",
+   "lines": 4,
+   "seed": true,
+   "sold": null,
+   "subtotal": 15564,
+   "taxes": [
+    133,
+    1323
+   ],
+   "total": 17020,
+   "vendorAliases": [
+    "t-johnny",
+    "johnny"
+   ]
+  },
+  "L-R09.jpg": {
+   "card": "2586",
+   "date": "2026-04-15",
+   "lines": 11,
+   "seed": true,
+   "sold": 11,
+   "subtotal": 6867,
+   "taxes": [
+    192,
+    165
+   ],
+   "total": 7224,
+   "vendorAliases": [
+    "walmart"
+   ]
+  },
+  "L-R10.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": true,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "L-R11.jpg": {
+   "card": "7674",
+   "date": "2026-11-10",
+   "lines": 1,
+   "seed": true,
+   "sold": null,
+   "subtotal": 1206,
+   "taxes": [
+    47
+   ],
+   "total": 1253,
+   "vendorAliases": [
+    "walmart"
+   ]
+  },
+  "N-001.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": true,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "N-002.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": true,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "S-0.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": true,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-001-BLUR.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-001-DOWNSCALE.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-001-LIGHT.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-001-NOISE.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-001-TILT.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-001-WRINKLE.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-002-BLUR.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-002-DOWNSCALE.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-002-LIGHT.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-002-NOISE.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-002-TILT.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-002-WRINKLE.jpg": {
+   "card": "2586",
+   "date": "2026-10-29",
+   "lines": 10,
+   "seed": false,
+   "sold": 15,
+   "subtotal": 20330,
+   "taxes": [
+    960,
+    390
+   ],
+   "total": 21680,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "SYN-003-BLUR.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "SYN-003-DOWNSCALE.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "SYN-003-LIGHT.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "SYN-003-NOISE.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "SYN-003-TILT.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "SYN-003-WRINKLE.jpg": {
+   "card": "3830",
+   "date": "2025-03-03",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 9691,
+   "taxes": [
+    825
+   ],
+   "total": 10516,
+   "vendorAliases": [
+    "home depot"
+   ]
+  },
+  "WR-bestbuy-1.jpg": {
+   "card": null,
+   "date": "2013-12-14",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 39794,
+   "taxes": [
+    2786
+   ],
+   "total": 42580,
+   "vendorAliases": [
+    "best buy"
+   ]
+  },
+  "WR-cvs-1.jpg": {
+   "card": null,
+   "date": "2009-08-09",
+   "lines": 10,
+   "seed": false,
+   "sold": null,
+   "subtotal": 51,
+   "taxes": [
+    29
+   ],
+   "total": 80,
+   "vendorAliases": [
+    "cvs"
+   ]
+  },
+  "WR-dollartree-1.jpg": {
+   "card": null,
+   "date": "2013-06-10",
+   "lines": 5,
+   "seed": false,
+   "sold": null,
+   "subtotal": 500,
+   "taxes": [
+    25
+   ],
+   "total": 525,
+   "vendorAliases": [
+    "dollar tree"
+   ]
+  },
+  "WR-mcdonalds-1.jpg": {
+   "card": null,
+   "date": "2008-11-10",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 317,
+   "taxes": [
+    24
+   ],
+   "total": 341,
+   "vendorAliases": [
+    "mcdonald"
+   ]
+  },
+  "WR-shell-1.jpg": {
+   "card": null,
+   "date": "2006-06-21",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [],
+   "total": 2000,
+   "vendorAliases": [
+    "shell"
+   ]
+  },
+  "WR-starbucks-1.jpg": {
+   "card": "3862",
+   "date": "2011-01-08",
+   "lines": 14,
+   "seed": false,
+   "sold": null,
+   "subtotal": 4080,
+   "taxes": [
+    87,
+    140
+   ],
+   "total": 4307,
+   "vendorAliases": [
+    "starbucks"
+   ]
+  },
+  "WR-target-1.jpg": {
+   "card": null,
+   "date": "2018-05-12",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 39,
+   "taxes": [
+    2
+   ],
+   "total": 41,
+   "vendorAliases": [
+    "target"
+   ]
+  },
+  "WR-traderjoes-1.jpg": {
+   "card": "1694",
+   "date": "2021-09-12",
+   "lines": 75,
+   "seed": false,
+   "sold": 75,
+   "subtotal": 17395,
+   "taxes": [
+    1147,
+    64
+   ],
+   "total": 18606,
+   "vendorAliases": [
+    "trader joe"
+   ]
+  },
+  "WR-walgreens-1.jpg": {
+   "card": "9765",
+   "date": "2016-03-22",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [],
+   "total": 2899,
+   "vendorAliases": [
+    "walgreens"
+   ]
+  },
+  "WR-wendys-1.jpg": {
+   "card": null,
+   "date": "2015-12-04",
+   "lines": 4,
+   "seed": false,
+   "sold": null,
+   "subtotal": 958,
+   "taxes": [
+    84
+   ],
+   "total": 1042,
+   "vendorAliases": [
+    "wendy"
+   ]
+  }
+ },
+ "gtVersion": "bench-gt-2026-11-15-g5",
+ "note": "Bang su that DONG BANG cho 43 anh BenchImages. Nguon: core-v4-design/gt.json (34 ca), bench-prep/lr-freeze/answers-lr.json (ngay L-R; L-R10 = cung to Mau 003 nen khong co muc rieng, ngay 2025-03-03 theo GT-HD-003), web-receipts/FREEZE-WR.md (10 ca WR, Leader doc tay 2026-11-13). SYN ke thua GT to goc. Sua bang nay = patch lon rieng (dac ta Gate D muc 10)."
+}

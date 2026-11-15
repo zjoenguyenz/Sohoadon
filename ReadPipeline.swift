@@ -47,7 +47,17 @@ import CoreGraphics
 // PHA 4 (điểm nối): nửa trước đường đọc nối ở cuối file này cần
 // UIKit (dựng thẳng ảnh, mã máy), CoreImage (ứng viên phái sinh)
 // và Vision (phát hiện tứ giác cho ứng viên phối cảnh).
+// G5 (sửa cổng đo): import UIKit + hai điểm chạm UIKit
+// (uprightCGImage, UIDevice) được bọc #if canImport(UIKit) để
+// harness macOS biên dịch NGUYÊN VĂN file này và chạy ĐÚNG
+// ReceiptReader/ReadPipeline của app ở chế độ images/roigate —
+// khép vụ "100 lượt xanh giả" (harness cũ gọi thẳng
+// ReceiptParser.parse, bỏ qua toàn bộ khung này). Trên iOS
+// (mọi target giao/bench) canImport(UIKit) luôn đúng nên hành
+// vi biên dịch KHÔNG đổi một chữ.
+#if canImport(UIKit)
 import UIKit
+#endif
 import CoreImage
 import Vision
 
@@ -848,6 +858,10 @@ enum ReceiptReader {
     /// còn lại vẽ lại qua renderer tỉ lệ 1 với khung = kích
     /// thước pixel sau xoay — cùng cách bản cũ làm, không đổi
     /// mẫu theo điểm (point) ở tỉ lệ hiển thị.
+    /// G5: chỉ tồn tại khi có UIKit (mọi nơi gọi đều ở tầng
+    /// iOS: ScanView/ReceiptViews/BenchView); harness macOS
+    /// nạp CGImage thẳng bằng ImageIO nên không cần hàm này.
+#if canImport(UIKit)
     static func uprightCGImage(from image: UIImage) -> CGImage? {
         guard let cg = image.cgImage else { return nil }
         if image.imageOrientation == .up { return cg }
@@ -867,6 +881,7 @@ enum ReceiptReader {
         }
         return ui.cgImage
     }
+#endif
 
     // MARK: - Đường chữ (PDF text layer / Đọc lại từ chữ đã lưu)
 
@@ -1707,6 +1722,12 @@ enum ReceiptReader {
                 String(cString: $0)
             }
         }
+#if canImport(UIKit)
         return machine.isEmpty ? UIDevice.current.model : machine
+#else
+        // G5: harness macOS — không có UIDevice; mã máy uname
+        // (vd x86_64/arm64) là đủ cho identity của hồ sơ đo.
+        return machine.isEmpty ? "macOS-harness" : machine
+#endif
     }
 }

@@ -2,17 +2,14 @@ import Foundation
 
 // HARNESS SHIM — không phải code app.
 //
-// OCREngine.swift (file nguồn app, biên dịch NGUYÊN VĂN vào
-// harness) gọi ReceiptReader.stageBreadcrumb tại 3 điểm
-// (engine-perform-begin / -done / engine-convert-done —
-// CI-FIX-7). ReceiptReader thật nằm trong ReadPipeline.swift,
-// file đó kéo UIKit/VisionKit nên KHÔNG vào harness macOS.
-//
-// Shim này cung cấp đúng MỘT biểu tượng còn thiếu để engine
-// biên dịch không sửa một chữ. Harness gán closure ghi mốc ra
-// stdout — nhờ đó log CI cho thấy lượt đọc chết ở mốc nào nếu
-// nó chết bên trong engine (đúng vai trò breadcrumb trên máy
-// anh ở run #45/#46).
-enum ReceiptReader {
-    static var stageBreadcrumb: ((String) -> Void)? = nil
-}
+// TRẠNG THÁI TỪ G5 (2026-11-15): shim ReceiptReader ĐÃ HƯU.
+// Trước G5 file này khai một `enum ReceiptReader` rỗng chỉ để
+// OCREngine.swift (gọi ReceiptReader.stageBreadcrumb ở 3 điểm)
+// biên dịch được trong harness, vì ReadPipeline.swift — nhà
+// thật của ReceiptReader — bị kẹt ngoài harness do 3 điểm chạm
+// UIKit. G5 bọc 3 điểm đó bằng #if canImport(UIKit) ngay trong
+// ReadPipeline.swift và đưa file thật vào project-harness.yml:
+// harness nay liên kết ReceiptReader THẬT của app, shim mà còn
+// khai trùng tên sẽ là lỗi biên dịch (khai báo hai lần). File
+// giữ lại (rỗng, chỉ còn ghi chú này) để đường dẫn trong
+// project không đổi và lịch sử quyết định không mất.
