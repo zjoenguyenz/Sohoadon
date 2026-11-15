@@ -1322,7 +1322,15 @@ enum ItemsArbiter {
         let e1Closed = target != nil && deficitE1 != nil
             && abs(deficitE1!) <= e1ToleranceCents
         for (j, it) in presented.enumerated() {
-            let amount = it.kind == "broken" ? nil : chosen[it.line]
+            // G2-fix (cổng #33, VT05): món gãy ĐÃ được lượt cứu
+            // gán số khép E1 phải vật hoá đúng số đó — bản G2
+            // ép nil vô điều kiện cho mọi món gãy nên số cứu
+            // bị vứt ở bước vật hoá dù lượt cứu đã nhận. Món
+            // gãy không được gán vẫn nil như cũ: lượt chính
+            // không bao giờ gán cho món gãy (amountOptions
+            // rỗng), nên chosen[dòng gãy] khác nil ⟺ lượt
+            // cứu đã chốt nó.
+            let amount = chosen[it.line]
             out.items.append(ParsedLineItem(
                 name: it.name, qty: it.qty,
                 unitPriceCents: it.unitPriceCents,

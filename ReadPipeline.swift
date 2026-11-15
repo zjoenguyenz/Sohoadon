@@ -552,7 +552,7 @@ enum ReadPipeline {
                 guard let li = it.lineIndex, li >= 0, li < lines.count
                 else { return nil }
                 if it.amountCents == nil { return li }
-                if result.itemsProvenance["item[\(j)]"]?.detail
+                if result.itemsProvenance["item[\(j)]"]?.detail?
                     .hasPrefix("suffixVariantOf") == true { return li }
                 return nil
             }
