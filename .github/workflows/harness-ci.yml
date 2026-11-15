@@ -5,33 +5,56 @@
 # push đã bị BỎ vì đốt hạn mức Actions (tháng 11/2026
 # Sohoadon tốn $17.57 trong $18 miễn phí gói Pro, phần
 # lớn do workflow này tự chạy theo mỗi lần đẩy code).
-# Runner macOS $0.08/phút; một lượt toàn phần ≈ 76 phút
-# ≈ $6 — chỉ bấm chạy khi thật sự tới CỔNG QUYẾT ĐỊNH
-# (trước patch lớn). Luật 100 lượt KHÔNG đổi: cổng vẫn
-# phải chạy và xanh hẳn trước khi giao bản.
+# Runner macOS $0.08/phút — chỉ bấm chạy khi thật sự tới
+# CỔNG QUYẾT ĐỊNH (trước patch lớn). SỬA LUẬT 2026-11-15
+# (anh): bỏ mức 100 lượt, cổng đầy đủ chạy 10 lượt — các
+# lượt 100x cũ đo SAI đường đọc (harness images gọi thẳng
+# ReceiptParser.parse, bỏ qua ReadPipeline) nên xanh giả;
+# từ G5 chế độ images chạy ĐÚNG ReceiptReader của app và
+# 10 lượt trên đường đúng thay cho 100 lượt trên đường sai.
+# (Từ 2026-11-15 repo Sohoadon đã public theo lệnh anh —
+# Actions ở repo public không tính vào hạn mức trả phí;
+# kỷ luật gom lượt vẫn giữ vì thời gian chờ.)
 #
 # FILE NHÁP: muốn hiệu lực phải nằm ở .github/workflows/
 # harness-ci.yml trong repo. Connector GitHub KHÔNG đẩy được
 # .github/workflows/* (403 — đã chứng minh) nên Leader cài
 # file này qua đường trình duyệt như mọi lần sửa workflow.
 #
-# Ba cổng, đỏ ở đâu dừng ở đó:
+# Các cổng, đỏ ở đâu dừng ở đó:
 #   1. control  — parse luồng ĐÃ GHI L-R01 bằng Swift thật
 #                 (đối chứng audit: phải SURVIVED).
-#   2. law      — 33 ảnh x 100 set liên tiếp qua Vision macOS
-#                 + assemble + parse + scoring, cấu hình mặc
-#                 định BenchShell run #46 (old + top-1).
+#   2. law      — G5: 43 ảnh x 10 set liên tiếp qua
+#                 ReceiptReader.read (ĐÚNG đường app: chuỗi
+#                 ứng viên + ReadPipeline + ROI), cấu hình
+#                 mặc định BenchShell run #46 (old + top-1).
 #                 Một crash ở bất kỳ lượt nào = job đỏ.
+#   2b. roigate — G5: cổng ẢNH–ROI hai làn (cũ vs app) trên
+#                 43 ảnh: ca thâm hụt phải có roiRounds > 0
+#                 hoặc được cứu khép, >= 1 ca F2 khép nhờ
+#                 tầng cứu/ROI, delta từng ca >= 0.
 #   3. fuzz     — bẫy đột biến trên luồng ghi, mỗi đột biến
 #                 một process riêng; process chết vì signal
 #                 = TÁI HIỆN ĐƯỢC = job đỏ + ghi rõ id.
-name: Harness — cổng tự chạy 100 lượt
+#
+# SỬA G1 (2026-11-15, chương trình triệt để): thêm bước
+# "Cổng G1 — unit tests" chạy ở MỌI lượt (cả full lẫn
+# streams), NGAY SAU probe và TRƯỚC các cổng đắt tiền:
+# chế độ `unittests` của harness kiểm logic điều kiện thuần
+# (ReceiptLogic: canReparse / flags / ảnh gốc — khoá
+# L-2026-11-13-17, L-2026-11-13-20) + vòng đời
+# PendingDraftStore (save/load/file hỏng/schema lạ/xoá —
+# khoá L-2026-11-13-14) bằng Swift thật. Rẻ (giây), fail
+# fast: đỏ ở đây thì dừng trước khi đốt tiền các cổng sau.
+# Lượt XÁC NHẬN của gói G1 = đúng MỘT lượt job=streams
+# (Leader kích sau khi duyệt gói tại bàn).
+name: Harness — cổng tự chạy 10 lượt
 
 on:
   workflow_dispatch:
     inputs:
       job:
-        description: "full = ca 3 cong (mac dinh) | streams = chi cong luong V4-0"
+        description: "full = tat ca cac cong (mac dinh) | streams = chi cong luong V4-0"
         type: choice
         options:
           - full
@@ -95,19 +118,25 @@ jobs:
           else
             echo "BIN không chạy được — bỏ qua variants" | tee variants.log
           fi
-      - name: Cổng 2 — LUẬT 100 lượt (33 ảnh x 100 set)
+      - name: Cổng 2 — LUẬT 10 lượt (43 ảnh x 10 set, đúng đường app)
         if: inputs.job == 'full'
         run: |
-          "$BIN" images --dir BenchImages --sets 100 --dump streams 2>&1 | tee images.log
-          grep -q "SURVIVED images x100" images.log
-      - name: Ma trận cấu hình phụ (3 set mỗi tổ hợp còn lại)
+          "$BIN" images --dir BenchImages --sets 10 --dump streams 2>&1 | tee images.log
+          grep -q "SURVIVED images x10" images.log
+      - name: Cổng 2b — ẢNH–ROI (hai làn cũ/app, G5)
+        if: inputs.job == 'full'
+        run: |
+          set -o pipefail
+          "$BIN" roigate --dir BenchImages --gt bench-gt.json 2>&1 | tee roigate.log
+          grep -q "SURVIVED roigate" roigate.log
+      - name: Ma trận cấu hình phụ (1 set mỗi tổ hợp còn lại)
         if: inputs.job == 'full'
         run: |
           for cfg in "current 1" "current 3" "old 3" "enus 1"; do
             set -- $cfg
-            "$BIN" images --dir BenchImages --sets 3 --lang "$1" --topk "$2" 2>&1 \
+            "$BIN" images --dir BenchImages --sets 1 --lang "$1" --topk "$2" 2>&1 \
               | tee "matrix-$1-$2.log"
-            grep -q "SURVIVED images x3" "matrix-$1-$2.log"
+            grep -q "SURVIVED images x1" "matrix-$1-$2.log"
           done
       - name: Cổng 3 — bẫy đột biến (mỗi ca một process)
         if: inputs.job == 'full'
@@ -145,6 +174,7 @@ jobs:
             bisect.log
             variants.log
             images.log
+            roigate.log
             matrix-*.log
             fuzz-results.txt
             streams.log
