@@ -90,6 +90,11 @@ struct ClassifiedItemLine {
     var amountOptions: [Int] = []   // [số chính, biến thể hậu tố…]
     var primaryCents: Int? = nil
     var primaryTokenText: String = ""
+    /// G2: giá trị tiền đọc được từ các bản đọc THAY THẾ của
+    /// dòng (alternates) + biến thể hậu tố của chúng — chỉ
+    /// thành PHƯƠNG ÁN ở lượt cứu của pha gán, không bao giờ
+    /// vào amountOptions (đường chính không đổi).
+    var variantValues: [Int] = []
     var unitPrices: [Int] = []      // token trước token cuối = GIÁ ĐƠN VỊ ứng viên
     var taxFlag: String? = nil      // chỉ Y/T (§4.1)
     var itemCode: String? = nil     // THUỘC TÍNH — không bao giờ là cổng
@@ -350,11 +355,24 @@ enum ItemLineClassifier {
 
     // MARK: Phân loại một dòng
 
-    static func classify(text: String, family: String) -> ClassifiedItemLine {
+    static func classify(text: String, family: String,
+                         alternates: [AltText] = []) -> ClassifiedItemLine {
         var c = ClassifiedItemLine()
         c.family = family
         let toks = scanTokens(text)
         c.tokens = toks
+        // G2: giá trị alternate của dòng — mọi token tiền trong
+        // các văn bản thay thế + biến thể hậu tố của chúng
+        // (cùng cơ chế token dính như token chính: bản đọc
+        // khác có thể dính mã món vào tiền, vd "1280219.97").
+        for alt in alternates {
+            for tok in scanTokens(alt.text) {
+                for v in [tok.cents] + suffixVariants(of: tok)
+                where !c.variantValues.contains(v) {
+                    c.variantValues.append(v)
+                }
+            }
+        }
         if !matches(dateSlashRegex, text).isEmpty
             || !matches(dateMonthRegex, text).isEmpty {
             c.kind = .skip
@@ -472,6 +490,8 @@ final class ItemCandidate {
     var name: String
     var kind: String            // line | fragment | hang | broken | atOwn
     var amountOptions: [Int] = []
+    /// G2: phương án từ bản đọc thay thế (chỉ lượt cứu dùng).
+    var variantOptions: [Int] = []
     var primaryCents: Int? = nil
     var primaryTokenText: String = ""
     var qty: Int = 1
@@ -548,6 +568,9 @@ enum ItemCandidateFactory {
             case .broken:
                 let it = ItemCandidate(line: i, name: c.brokenName ?? "",
                                        kind: "broken")
+                // G2: món gãy mang theo giá trị alternate — nó
+                // chỉ vào bể ở LƯỢT CỨU của pha gán.
+                it.variantOptions = c.variantValues
                 items.append(it)
             case .itemLine, .fragment:
                 let it = ItemCandidate(line: i, name: c.kind == .itemLine
@@ -555,6 +578,11 @@ enum ItemCandidateFactory {
                                        kind: c.kind == .itemLine
                     ? "line" : "fragment")
                 it.amountOptions = c.amountOptions
+                // G2: phương án alternate = giá trị alternate
+                // chưa có trong phương án chính.
+                it.variantOptions = c.variantValues.filter {
+                    !c.amountOptions.contains($0)
+                }
                 it.primaryCents = c.primaryCents
                 it.primaryTokenText = c.primaryTokenText
                 it.unitPriceCents = c.unitPrices.first

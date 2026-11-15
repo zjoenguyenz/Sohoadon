@@ -145,8 +145,14 @@ enum TotalsArbiter {
     static func arbitrate(lines: [OCRLine], itemsSumCents: Int?,
                           vendorVariants: [String: String]? = nil) -> TotalsArbitration {
         var out = TotalsArbitration()
-        let (money, rates, labels) = CandidateFactory.generate(
+        let (allMoney, rates, labels) = CandidateFactory.generate(
             lines: lines, vendorVariants: vendorVariants)
+        // G2: lượt chính chạy CHỈ trên hồ primary — khi không
+        // có alternate, allMoney == money và hành vi y hệt
+        // trước G2. Hồ biến thể (ocrVariant) chỉ vào TẦNG CỨU
+        // khi lượt chính cho 0 nghiệm (xem rescueSearch).
+        let money = allMoney.filter { $0.tier == "primary" }
+        let variantMoney = allMoney.filter { $0.tier == "ocrVariant" }
         var evaluations = 0
         var budgetHit = false
 
@@ -480,7 +486,22 @@ enum TotalsArbiter {
             return out
         }
 
-        // ---- 0 nghiệm (§3.5): bản đọc neo/nhãn tốt nhất + thâm hụt ----
+        // ---- 0 nghiệm (§3.5) ----
+        // G2 — TẦNG CỨU bằng hồ alternate (§2.6): chỉ chạy khi
+        // hồ chính cho ĐÚNG 0 nghiệm (không chạy khi mơ hồ —
+        // mơ hồ nghĩa là hồ chính ĐÃ khép được, biến thể không
+        // bao giờ lật một khép có sẵn) và ngân sách chưa chạm.
+        // Nhận kết quả cứu chỉ khi nó cho nghiệm khép DUY NHẤT
+        // theo giá trị; ngoài ra kết cục chính đứng nguyên
+        // từng trường, không trộn.
+        if !variantMoney.isEmpty,
+           let rescued = rescueSearch(
+               lines: lines, primaries: money, variants: variantMoney,
+               rates: rates, labels: labels, itemsSumCents: itemsSumCents,
+               evaluationsSoFar: evaluations, trialsSoFar: trials) {
+            return rescued
+        }
+        // Bản đọc neo/nhãn tốt nhất + thâm hụt.
         out.status = "unclosed"
         applyBestEffort(&out, lines: lines, labels: labels, money: money,
                         window: window, subAnchors: subAnchors,
@@ -493,6 +514,288 @@ enum TotalsArbiter {
             out.regionHint = "totals-block/no-closure"
         }
         candidateMap(chosenTaxIDs: [], subtotalID: nil, totalID: nil)
+        return out
+    }
+
+    // MARK: - G2: tầng cứu bằng hồ alternate (§2.6)
+
+    /// Tìm khép sổ trên hồ GỘP (primary + ocrVariant) — chỉ
+    /// được gọi khi hồ chính cho 0 nghiệm và ngân sách chưa
+    /// chạm. Luật nhận: nghiệm khép DUY NHẤT theo giá trị sau
+    /// thang bằng chứng (khớp tuyệt đối > suất đỡ > chứng
+    /// thực lặp — chứng thực đếm trên token CHÍNH, vì biến thể
+    /// là bản đọc khác của cùng một lần in, không phải lần in
+    /// thứ hai). Một nghiệm không dùng hai ứng viên cùng nhóm
+    /// xung đột (hai bản đọc của cùng một token in). Trường
+    /// chốt bằng token biến thể mang provenance
+    /// "closureVariant" (§2.6 + ví dụ §3.9). Ngân sách §3.3
+    /// dùng CHUNG với lượt chính (đếm tiếp từ
+    /// evaluationsSoFar/trialsSoFar); chạm ngân sách → nil.
+    /// Không có nghiệm duy nhất → nil: kết cục chính đứng
+    /// nguyên từng trường.
+    private static func rescueSearch(
+        lines: [OCRLine], primaries: [MoneyCandidate],
+        variants: [MoneyCandidate], rates: [RateCandidate],
+        labels: [LineLabel], itemsSumCents: Int?,
+        evaluationsSoFar: Int, trialsSoFar: Int) -> TotalsArbitration? {
+        let combined = primaries + variants
+        var out = TotalsArbitration()
+        out.trace.append("rescue: variant pool size=\(variants.count)")
+        var evaluations = evaluationsSoFar
+        var trials = trialsSoFar
+        var budgetHit = false
+
+        // Cửa sổ: cùng phép như lượt chính (lùi qua dòng
+        // chỉ-có-tiền đếm trên token CHÍNH).
+        var windowStart: Int? = nil
+        for (i, l) in labels.enumerated()
+        where l.family == "SUBTOTAL" || l.family == "TOTAL" {
+            windowStart = i; break
+        }
+        if windowStart == nil {
+            for (i, l) in labels.enumerated() where l.family == "TAX" {
+                windowStart = i; break
+            }
+        }
+        var wStart = windowStart ?? 0
+        var back = 0
+        while wStart - back - 1 >= 0 && back < maxWindowLookback {
+            let j = wStart - back - 1
+            let toks = primaries.filter { $0.lineIndex == j }
+            let hasLetters = lines[j].text.contains { $0.isLetter }
+            if toks.count == 1 && !hasLetters { back += 1 } else { break }
+        }
+        wStart -= back
+        out.windowStart = wStart
+        let window = combined.filter { $0.lineIndex >= wStart }
+        let windowPrimary = primaries.filter { $0.lineIndex >= wStart }
+
+        // Neo: trên hồ GỘP — dòng nhãn không có token chính
+        // vẫn có thể có token biến thể (dòng TOTAL in gãy).
+        func anchorTokens(_ family: String) -> [MoneyCandidate] {
+            var result: [MoneyCandidate] = []
+            for (i, l) in labels.enumerated() where l.family == family {
+                let onLine = combined.filter { $0.lineIndex == i }
+                if let first = onLine.first {
+                    result.append(first)
+                } else if l.labelOnly, i + 1 < lines.count,
+                          labels[i + 1].family == "NONE",
+                          let next = combined.filter({ $0.lineIndex == i + 1 }).first {
+                    result.append(next)
+                }
+            }
+            return result
+        }
+        let subAnchors = anchorTokens("SUBTOTAL")
+        let totAnchors = anchorTokens("TOTAL")
+
+        // Danh sách vai: phần chính y hệt lượt chính (neo
+        // trước, hồ chính tới trần), biến thể NỐI SAU — token
+        // chính không bao giờ bị biến thể đẩy khỏi danh sách.
+        func roleCandidates(_ role: String, anchors: [MoneyCandidate]) -> [MoneyCandidate] {
+            var result: [MoneyCandidate] = []
+            var seen = Set<Int>()
+            for c in anchors where !seen.contains(c.id) {
+                seen.insert(c.id); result.append(c)
+            }
+            let pool = windowPrimary.filter { $0.feasibleRoles.contains(role) }
+                .sorted { a, b in
+                    if a.hintScore != b.hintScore { return a.hintScore > b.hintScore }
+                    return a.lineIndex < b.lineIndex
+                }
+            for c in pool where result.count < maxRoleCandidates {
+                if !seen.contains(c.id) {
+                    seen.insert(c.id); result.append(c)
+                }
+            }
+            let vpool = window.filter {
+                $0.tier == "ocrVariant" && $0.feasibleRoles.contains(role)
+            }.sorted { $0.lineIndex < $1.lineIndex }
+            for c in vpool where result.count < maxRoleCandidates + 6 {
+                if !seen.contains(c.id) {
+                    seen.insert(c.id); result.append(c)
+                }
+            }
+            return result
+        }
+        let subCands = roleCandidates(MoneyRole.subtotal, anchors: subAnchors)
+        let totCands = roleCandidates(MoneyRole.total, anchors: totAnchors)
+        var pairs: [(MoneyCandidate, MoneyCandidate)] = []
+        for s in subCands { for t in totCands
+        where s.id != t.id && s.lineIndex <= t.lineIndex
+            && s.conflictGroup != t.conflictGroup {
+            pairs.append((s, t))
+        } }
+        if pairs.count > maxAnchorPairs { pairs = Array(pairs.prefix(maxAnchorPairs)) }
+
+        var solutions: [Solution] = []
+        var seenKeys = Set<String>()
+        pairLoop: for (sTok, tTok) in pairs {
+            guard let need = SafeMoney.checkedSubtract(tTok.cents, sTok.cents),
+                  need >= 0 else { continue }
+            let lo = min(sTok.lineIndex, tTok.lineIndex)
+            let hi = max(sTok.lineIndex, tTok.lineIndex)
+            let pool = window.filter {
+                $0.feasibleRoles.contains(MoneyRole.tax)
+                    && $0.id != sTok.id && $0.id != tTok.id
+                    && $0.conflictGroup != sTok.conflictGroup
+                    && $0.conflictGroup != tTok.conflictGroup
+                    && $0.cents > 0
+                    && (labels[$0.lineIndex].family == "TAX"
+                        || CandidateFactory.rateSupported(lineIndex: $0.lineIndex, rates: rates)
+                        || (lo <= $0.lineIndex && $0.lineIndex <= hi))
+            }.sorted { a, b in
+                if (a.tier == "primary") != (b.tier == "primary") {
+                    return a.tier == "primary"
+                }
+                return a.lineIndex < b.lineIndex
+            }
+            if pool.count > maxWindowCandidatesPerRole {
+                budgetHit = true
+                out.trace.append("rescueBudgetExceeded:pool=\(pool.count)")
+                break pairLoop
+            }
+            let n = pool.count
+            let maxK = min(maxTaxSubsetSize, n)
+            var chosen: [Int] = []
+            func enumerate(_ start: Int, _ depth: Int) {
+                if budgetHit { return }
+                do {
+                    trials += 1; evaluations += 1
+                    if trials > maxSubsetTrials || evaluations > maxEvaluations {
+                        budgetHit = true
+                        out.trace.append("rescueBudgetExceeded:trials=\(trials)")
+                        return
+                    }
+                    var sum = 0
+                    var ok = true
+                    var usedGroups = Set<Int>()
+                    for idx in chosen {
+                        let g = pool[idx].conflictGroup
+                        if usedGroups.contains(g) { ok = false; break }
+                        usedGroups.insert(g)
+                        if let v = SafeMoney.checkedAdd(sum, pool[idx].cents) {
+                            sum = v
+                        } else { ok = false; break }
+                    }
+                    if ok {
+                        let diff = Swift.abs(sum - need)
+                        // Luật bằng chứng thuế như lượt chính:
+                        // bể có bằng chứng thì tập rỗng bị cấm.
+                        if diff <= e2ToleranceCents
+                            && !(chosen.isEmpty && !pool.isEmpty) {
+                            let sol = Solution(
+                                subtotal: sTok.cents,
+                                taxTokens: chosen.map { pool[$0] },
+                                total: tTok.cents,
+                                totalToken: tTok, subtotalToken: sTok,
+                                diff: diff)
+                            if !seenKeys.contains(sol.key) {
+                                seenKeys.insert(sol.key)
+                                solutions.append(sol)
+                            }
+                        }
+                    }
+                }
+                guard depth < maxK else { return }
+                var i = start
+                while i < n {
+                    chosen.append(i)
+                    enumerate(i + 1, depth + 1)
+                    chosen.removeLast()
+                    if budgetHit { return }
+                    i += 1
+                }
+            }
+            enumerate(0, 0)
+            if budgetHit { break pairLoop }
+        }
+        out.evaluationsUsed = evaluations
+        if budgetHit { return nil }
+
+        // Thang bằng chứng — như lượt chính, trừ bậc chứng
+        // thực lặp đếm trên hồ CHÍNH (xem đầu hàm).
+        func distinctKeys(_ sols: [Solution]) -> Set<String> {
+            Set(sols.map { $0.key })
+        }
+        var effective = solutions
+        let exact = effective.filter { $0.diff == 0 }
+        if !exact.isEmpty { effective = exact }
+        if distinctKeys(effective).count > 1 {
+            let supported = effective.filter {
+                !$0.taxTokens.isEmpty && $0.taxTokens.allSatisfy {
+                    CandidateFactory.rateSupported(lineIndex: $0.lineIndex, rates: rates)
+                }
+            }
+            if !supported.isEmpty { effective = supported }
+        }
+        if distinctKeys(effective).count > 1 {
+            let corro = effective.filter { sol in
+                primaries.filter { $0.cents == sol.total }.count >= 2
+            }
+            if !corro.isEmpty { effective = corro }
+        }
+        guard distinctKeys(effective).count == 1, let sol = effective.first
+        else {
+            out.trace.append("rescue: no unique closure (solutions=\(solutions.count))")
+            return nil
+        }
+
+        // Dựng kết quả cứu.
+        out.status = "closed"
+        out.subtotalCents = sol.subtotal
+        out.taxes = buildTaxLines(tokens: sol.taxTokens, labels: labels, rates: rates)
+        out.totalCents = sol.total
+        out.totalLineConfidence = lines[sol.totalToken.lineIndex].confidence
+        func prov(_ kind: String, _ detail: String) -> FieldProvenance {
+            FieldProvenance(kind: kind, detail: detail)
+        }
+        func fieldProv(chosen: MoneyCandidate, anchors: [MoneyCandidate]) -> FieldProvenance {
+            if chosen.tier == "ocrVariant" { return prov("read", "closureVariant") }
+            if anchors.contains(where: { $0.id == chosen.id }) {
+                return prov("anchored", "hardAnchor")
+            }
+            if !anchors.isEmpty {
+                return prov("anchored", "anchorOverriddenByClosure")
+            }
+            return prov("read", "closureUnique")
+        }
+        out.provenance["subtotal"] = fieldProv(chosen: sol.subtotalToken, anchors: subAnchors)
+        out.provenance["total"] = fieldProv(chosen: sol.totalToken, anchors: totAnchors)
+        for (i, tok) in sol.taxTokens.enumerated() {
+            out.provenance["tax[\(i)]"] = tok.tier == "ocrVariant"
+                ? prov("read", "closureVariant") : prov("read", "closureUnique")
+        }
+        out.trace.append("rescue: unique closure \(sol.describe) diff=\(sol.diff)")
+        out.effectiveSolutions = [TotalsSolutionView(
+            subtotalCents: sol.subtotal, taxTokens: sol.taxTokens,
+            totalCents: sol.total, subtotalToken: sol.subtotalToken,
+            totalToken: sol.totalToken)]
+        if let isum = itemsSumCents {
+            out.deficitE1 = SafeMoney.checkedSubtract(isum, sol.subtotal)
+        }
+        if let taxSum = SafeMoney.sumCents(out.taxes.map { $0.amountCents }),
+           let st = SafeMoney.checkedAdd(sol.subtotal, taxSum) {
+            out.deficitE2 = SafeMoney.checkedSubtract(st, sol.total)
+        }
+        if let d1 = out.deficitE1, d1 != 0 {
+            out.regionHint = "items-block/e1-deficit:\(d1)"
+        }
+        out.totalCandidates = window.map { c in
+            var role = MoneyRole.unassigned
+            var chosen = false
+            if c.id == sol.subtotalToken.id {
+                role = MoneyRole.subtotal; chosen = true
+            } else if c.id == sol.totalToken.id {
+                role = MoneyRole.total; chosen = true
+            } else if sol.taxTokens.contains(where: { $0.id == c.id }) {
+                role = MoneyRole.tax; chosen = true
+            } else if c.feasibleRoles.count == 1 {
+                role = c.feasibleRoles.first ?? MoneyRole.unassigned
+            }
+            return TotalCandidate(lineIndex: c.lineIndex, cents: c.cents,
+                                  role: role, chosen: chosen)
+        }
         return out
     }
 
@@ -638,15 +941,20 @@ enum ItemsArbiter {
     /// Một lượt gán: mọi món trong bể, theo thứ tự dòng, nhận
     /// phương án tiền tối thiểu hoá |δ| tại chỗ (hoà → số
     /// chính). Trả (bản gán theo dòng, Σ).
+    /// G2: `options` là nhà cung cấp phương án — lượt chính
+    /// dùng amountOptions (mặc định, hành vi cũ); lượt cứu
+    /// dùng amountOptions + variantOptions.
     private static func assignPass(
-        pool: [ItemCandidate], target: Int
+        pool: [ItemCandidate], target: Int,
+        options: (ItemCandidate) -> [Int] = { $0.amountOptions }
     ) -> (chosen: [Int: Int], sigma: Int) {
         var sigma = 0
         var chosen: [Int: Int] = [:]
         for it in pool.sorted(by: { $0.line < $1.line }) {
-            guard !it.amountOptions.isEmpty else { continue }
+            let opts = options(it)
+            guard !opts.isEmpty else { continue }
             let primary = it.primaryCents
-            let best = it.amountOptions.min { a, b in
+            let best = opts.min { a, b in
                 let ka = (abs(sigma + a - target), a == primary ? 0 : 1)
                 let kb = (abs(sigma + b - target), b == primary ? 0 : 1)
                 return ka < kb
@@ -702,7 +1010,8 @@ enum ItemsArbiter {
             lines: lines, vendorVariants: vendorVariants)
         let classified = lines.enumerated().map { i, line in
             ItemLineClassifier.classify(text: line.text,
-                                        family: labels[i].family)
+                                        family: labels[i].family,
+                                        alternates: line.alternates)
         }
         let window = ItemLineClassifier.itemsWindow(
             lines: lines, classified: classified,
@@ -750,87 +1059,130 @@ enum ItemsArbiter {
         var sigma = 0
         var finalPool = pool
         if let target {
-            let first = assignPass(pool: pool, target: target)
-            chosen = first.chosen
-            sigma = first.sigma
-            var best = (abs: abs(sigma - target), chosen: chosen,
-                        sigma: sigma, pool: pool)
-            var deficit = sigma - target
-            var excludedLines = Set<Int>()
-            var statePool = pool
-            var moveTypes = ["exclude", "admitOOW", "admitExcluded"]
-            var mv = 0
-            while abs(deficit) > e1ToleranceCents && mv < 3
-                    && !moveTypes.isEmpty {
-                let mtype = moveTypes.removeFirst()
-                mv += 1
-                let basePool = statePool.filter {
-                    !excludedLines.contains($0.line)
+            // Một lượt gán ĐẦY ĐỦ (lượt đầu + các nước sửa)
+            // trên một bể + một nhà cung cấp phương án. Lượt
+            // chính và lượt cứu G2 dùng chung thân này — thân
+            // là nguyên văn khối gán trước G2, chỉ tổng quát
+            // hoá bể + phương án.
+            func runAssignment(_ poolX: [ItemCandidate],
+                               _ options: (ItemCandidate) -> [Int])
+                -> (chosen: [Int: Int], sigma: Int, finalPool: [ItemCandidate]) {
+                let first = assignPass(pool: poolX, target: target, options: options)
+                var chosen = first.chosen
+                var sigma = first.sigma
+                var best = (abs: abs(sigma - target), chosen: chosen,
+                            sigma: sigma, pool: poolX)
+                var deficit = sigma - target
+                var excludedLines = Set<Int>()
+                var statePool = poolX
+                var moveTypes = ["exclude", "admitOOW", "admitExcluded"]
+                var mv = 0
+                while abs(deficit) > e1ToleranceCents && mv < 3
+                        && !moveTypes.isEmpty {
+                    let mtype = moveTypes.removeFirst()
+                    mv += 1
+                    let basePool = statePool.filter {
+                        !excludedLines.contains($0.line)
+                    }
+                    var trials: [(absDef: Int, order: Int,
+                                   chosen: [Int: Int], sigma: Int,
+                                   pool: [ItemCandidate], desc: String)] = []
+                    if mtype == "exclude" {
+                        let assigned = basePool.filter {
+                            chosen[$0.line] != nil && !options($0).isEmpty
+                        }.sorted { weakKey($0, chosen: chosen, codeShapes: codeShapes)
+                                   < weakKey($1, chosen: chosen, codeShapes: codeShapes) }
+                        for (order, cand) in assigned.enumerated() {
+                            let tp = basePool.filter { $0.line != cand.line }
+                            let r = assignPass(pool: tp, target: target, options: options)
+                            trials.append((abs(r.sigma - target), order,
+                                           r.chosen, r.sigma, tp,
+                                           "exclude line \(cand.line + 1)"))
+                        }
+                    } else if mtype == "admitOOW" {
+                        let baseLines = Set(basePool.map { $0.line })
+                        let rest = oowPool.filter {
+                            !baseLines.contains($0.line)
+                        }
+                        for (order, cand) in rest.enumerated() {
+                            let tp = basePool + [cand]
+                            let r = assignPass(pool: tp, target: target, options: options)
+                            trials.append((abs(r.sigma - target), order,
+                                           r.chosen, r.sigma, tp,
+                                           "admitOOW line \(cand.line + 1)"))
+                        }
+                    } else {
+                        let baseLines = Set(basePool.map { $0.line })
+                        let rest = exclPool.filter {
+                            !baseLines.contains($0.line)
+                        }
+                        for (order, cand) in rest.enumerated() {
+                            let tp = basePool + [cand]
+                            let r = assignPass(pool: tp, target: target, options: options)
+                            trials.append((abs(r.sigma - target), order,
+                                           r.chosen, r.sigma, tp,
+                                           "admitExcluded line \(cand.line + 1)"))
+                        }
+                    }
+                    if trials.isEmpty { continue }
+                    trials.sort { ($0.absDef, $0.order) < ($1.absDef, $1.order) }
+                    let t = trials[0]
+                    out.trace.append("move\(mv):\(t.desc) (trials=\(trials.count))")
+                    statePool = t.pool
+                    if mtype == "exclude" {
+                        excludedLines.formUnion(
+                            Set(basePool.map { $0.line })
+                                .subtracting(t.pool.map { $0.line }))
+                    }
+                    chosen = t.chosen
+                    sigma = t.sigma
+                    deficit = sigma - target
+                    if abs(deficit) < best.abs {
+                        best = (abs(deficit), chosen, sigma, t.pool)
+                    }
                 }
-                var trials: [(absDef: Int, order: Int,
-                               chosen: [Int: Int], sigma: Int,
-                               pool: [ItemCandidate], desc: String)] = []
-                if mtype == "exclude" {
-                    let assigned = basePool.filter {
-                        chosen[$0.line] != nil && !$0.amountOptions.isEmpty
-                    }.sorted { weakKey($0, chosen: chosen, codeShapes: codeShapes)
-                               < weakKey($1, chosen: chosen, codeShapes: codeShapes) }
-                    for (order, cand) in assigned.enumerated() {
-                        let tp = basePool.filter { $0.line != cand.line }
-                        let r = assignPass(pool: tp, target: target)
-                        trials.append((abs(r.sigma - target), order,
-                                       r.chosen, r.sigma, tp,
-                                       "exclude line \(cand.line + 1)"))
-                    }
-                } else if mtype == "admitOOW" {
-                    let baseLines = Set(basePool.map { $0.line })
-                    let rest = oowPool.filter {
-                        !baseLines.contains($0.line)
-                    }
-                    for (order, cand) in rest.enumerated() {
-                        let tp = basePool + [cand]
-                        let r = assignPass(pool: tp, target: target)
-                        trials.append((abs(r.sigma - target), order,
-                                       r.chosen, r.sigma, tp,
-                                       "admitOOW line \(cand.line + 1)"))
-                    }
+                let finalPool: [ItemCandidate]
+                if best.abs < abs(sigma - target) {
+                    chosen = best.chosen
+                    sigma = best.sigma
+                    finalPool = best.pool
                 } else {
-                    let baseLines = Set(basePool.map { $0.line })
-                    let rest = exclPool.filter {
-                        !baseLines.contains($0.line)
-                    }
-                    for (order, cand) in rest.enumerated() {
-                        let tp = basePool + [cand]
-                        let r = assignPass(pool: tp, target: target)
-                        trials.append((abs(r.sigma - target), order,
-                                       r.chosen, r.sigma, tp,
-                                       "admitExcluded line \(cand.line + 1)"))
+                    finalPool = statePool.filter {
+                        !excludedLines.contains($0.line)
                     }
                 }
-                if trials.isEmpty { continue }
-                trials.sort { ($0.absDef, $0.order) < ($1.absDef, $1.order) }
-                let t = trials[0]
-                out.trace.append("move\(mv):\(t.desc) (trials=\(trials.count))")
-                statePool = t.pool
-                if mtype == "exclude" {
-                    excludedLines.formUnion(
-                        Set(basePool.map { $0.line })
-                            .subtracting(t.pool.map { $0.line }))
-                }
-                chosen = t.chosen
-                sigma = t.sigma
-                deficit = sigma - target
-                if abs(deficit) < best.abs {
-                    best = (abs(deficit), chosen, sigma, t.pool)
-                }
+                return (chosen, sigma, finalPool)
             }
-            if best.abs < abs(sigma - target) {
-                chosen = best.chosen
-                sigma = best.sigma
-                finalPool = best.pool
-            } else {
-                finalPool = statePool.filter {
-                    !excludedLines.contains($0.line)
+
+            // Lượt chính: phương án primary (hành vi trước G2).
+            let primaryRun = runAssignment(pool, { $0.amountOptions })
+            chosen = primaryRun.chosen
+            sigma = primaryRun.sigma
+            finalPool = primaryRun.finalPool
+
+            // G2 — LƯỢT CỨU món (§2.6): chỉ khi E1 chưa khép
+            // quá dung sai VÀ có phương án alternate ở đâu đó
+            // (món trong cửa sổ, hoặc món GÃY mang biến thể —
+            // món gãy có biến thể được vào bể cứu). Nhận lượt
+            // cứu CHỈ khi nó khép E1 trong dung sai; ngoài ra
+            // lượt chính đứng nguyên từng trường.
+            let rescuableBroken = broken.filter { !$0.variantOptions.isEmpty }
+            let anyVariant = !rescuableBroken.isEmpty
+                || pool.contains { !$0.variantOptions.isEmpty }
+            if abs(sigma - target) > e1ToleranceCents, anyVariant {
+                let rescueRun = runAssignment(pool + rescuableBroken, { it in
+                    var seen = Set<Int>()
+                    return (it.amountOptions + it.variantOptions).filter {
+                        seen.insert($0).inserted
+                    }
+                })
+                if abs(rescueRun.sigma - target) <= e1ToleranceCents {
+                    chosen = rescueRun.chosen
+                    sigma = rescueRun.sigma
+                    finalPool = rescueRun.finalPool
+                    out.trace.append("items-rescue: E1 closed via ocrVariant pool")
+                } else {
+                    out.trace.append("items-rescue: no E1 closure — primary stands")
                 }
             }
         } else {
@@ -845,7 +1197,12 @@ enum ItemsArbiter {
 
         // Trình bày: món gãy luôn trình (tiền nil); món có tiền
         // trình khi được gán. Σ/δ1 tính trên đúng bản trình này.
-        let presented = (finalPool + broken).sorted { $0.line < $1.line }
+        // G2: món gãy ĐÃ vào bể cứu (nằm trong finalPool) không
+        // được trình hai lần.
+        let extraBroken = broken.filter { b in
+            !finalPool.contains { $0 === b }
+        }
+        let presented = (finalPool + extraBroken).sorted { $0.line < $1.line }
             .filter { $0.kind == "broken" || chosen[$0.line] != nil }
         let sumItems = presented.reduce(0) { $0 + (chosen[$1.line] ?? 0) }
         out.sumItemsCents = sumItems
@@ -975,7 +1332,12 @@ enum ItemsArbiter {
                 weightUnitCents: it.weightUnitCents,
                 lineIndex: it.line))
             let detail: String
-            if it.kind == "broken" {
+            if let amount, !it.amountOptions.contains(amount),
+               it.variantOptions.contains(amount) {
+                // G2: số chốt đến từ bản đọc THAY THẾ (alternate)
+                // và chỉ được nhận vì nó khép E1 (§2.6).
+                detail = "closureVariant"
+            } else if it.kind == "broken" {
                 detail = "brokenMoney"
             } else if let amount, amount != it.primaryCents {
                 detail = "suffixVariantOf:\(it.primaryTokenText)"

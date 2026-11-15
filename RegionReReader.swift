@@ -73,12 +73,16 @@ final class RegionReReader: ReOCRService {
     static let softDeadlineSeconds: Double = 4.0
 
     private let qualityMap: [QualityMapEntry]
-    /// Bộ nhận dạng vùng: (vùng, hệ số phóng) -> dòng đọc lại.
-    /// Trên thiết bị do Pha 4 tiêm vào; nil = không đọc lại được.
-    private let recognizer: ((CGRect, Double) -> [OCRLine])?
+    /// Bộ nhận dạng vùng: (vùng, hệ số phóng, BIẾN THỂ vòng)
+    /// -> dòng đọc lại. Trên thiết bị do Pha 4 tiêm vào; nil =
+    /// không đọc lại được. Biến thể 0 = cách đọc gốc (phóng
+    /// nội suy + engine chính); biến thể ≥1 = cách đọc ĐA DẠNG
+    /// của G2 (pixel gốc + tăng cường cục bộ + cấu hình engine
+    /// khác) — xem ReceiptReader.finishImagePath.
+    private let recognizer: ((CGRect, Double, Int) -> [OCRLine])?
 
     init(qualityMap: [QualityMapEntry] = [],
-         recognizer: ((CGRect, Double) -> [OCRLine])? = nil) {
+         recognizer: ((CGRect, Double, Int) -> [OCRLine])? = nil) {
         self.qualityMap = qualityMap
         self.recognizer = recognizer
     }
@@ -187,12 +191,22 @@ final class RegionReReader: ReOCRService {
     /// QualityMap như luật chung) rồi gọi recognizer đã tiêm.
     /// Không có recognizer => [] (fail-closed: session giữ nguyên
     /// trạng thái, vòng ROI kết thúc).
+    /// Bản 2 tham số (giao thức ReOCRService, đường v3) luôn là
+    /// biến thể 0 — hành vi cũ không đổi.
     func recognizeRegion(_ hint: ReconcileRegionHint, upscale: Double) -> [OCRLine] {
+        recognizeRegion(hint, upscale: upscale, variant: 0)
+    }
+
+    /// G2: bản có BIẾN THỂ vòng — vòng ROI thứ hai của
+    /// runArbiter đọc lại bằng cách đọc đa dạng thay vì lặp
+    /// lại đúng cách đọc đã không khép được sổ.
+    func recognizeRegion(_ hint: ReconcileRegionHint, upscale: Double,
+                         variant: Int) -> [OCRLine] {
         guard let recognizer = recognizer else { return [] }
         let regions = RegionReReader.targetRegions(hints: [hint],
                                                    qualityMap: qualityMap,
                                                    maxRegions: 1)
         guard let region = regions.first else { return [] }
-        return recognizer(region.band, upscale)
+        return recognizer(region.band, upscale, variant)
     }
 }

@@ -65,6 +65,14 @@ struct MoneyCandidate {
     var feasibleRoles: Set<String>
     var hints: [CandidateHint]
     var hintScore: Int { hints.reduce(0) { $0 + $1.delta } }
+    /// G2 (tầng cứu): NHÓM XUNG ĐỘT — hai ứng viên cùng nhóm
+    /// là hai BẢN ĐỌC của cùng một token in; một nghiệm không
+    /// bao giờ dùng cả hai. Primary: nhóm = id của chính nó.
+    /// ocrVariant trói theo THỨ TỰ token trong văn bản
+    /// alternate vào token chính cùng thứ tự (nhóm = id của
+    /// token chính đó); biến thể vượt số token chính của dòng
+    /// dùng nhóm-chung-của-dòng (số âm, duy nhất theo dòng).
+    var conflictGroup: Int = -1
 }
 
 /// Ứng viên suất thuế (§2.1 kind "rate"): token thập phân 3–4 số
@@ -222,46 +230,111 @@ enum CandidateFactory {
                                     vendorVariants: vendorVariants)
             labels.append(label)
 
-            // --- Vai trò khả thi + gợi ý theo họ nhãn (§2.6) ---
+            // --- Vai trò khả thi theo họ nhãn (§2.6) ---
+            // Tính MỘT lần theo họ, độc lập với token chính:
+            // dòng không có token chính vẫn có thể có token
+            // BIẾN THỂ cần vai trò (dòng nhãn in gãy — G2).
+            // TAXSUM: giá trị kiểm — ứng viên vẫn được SINH
+            // (luật không xoá ở tầng sinh) nhưng không mang vai
+            // trò khả thi nào: không neo, không vào bể.
+            let lineRoles: Set<String>
+            switch label.family {
+            case "SUBTOTAL": lineRoles = [MoneyRole.subtotal]
+            case "TOTAL": lineRoles = [MoneyRole.total]
+            case "TAX": lineRoles = [MoneyRole.tax]
+            case "TENDER": lineRoles = [MoneyRole.tender]
+            case "CHANGE": lineRoles = [MoneyRole.change]
+            case "TAXSUM": lineRoles = []
+            default:
+                lineRoles = [MoneyRole.subtotal, MoneyRole.tax, MoneyRole.total,
+                             MoneyRole.itemAmount, MoneyRole.discount,
+                             MoneyRole.tender]
+            }
+            var primaryIDs: [Int] = []
             for t in lineMoney {
-                var roles: Set<String>
+                let roles = lineRoles
                 var hints: [CandidateHint] = []
                 switch label.family {
                 case "SUBTOTAL":
-                    roles = [MoneyRole.subtotal]
                     hints.append(CandidateHint(
                         source: CandidateHintSource.labelAdjacency, delta: 40,
                         reason: "cùng dòng nhãn SUBTOTAL"))
                 case "TOTAL":
-                    roles = [MoneyRole.total]
                     hints.append(CandidateHint(
                         source: CandidateHintSource.labelAdjacency, delta: 40,
                         reason: "cùng dòng nhãn TOTAL"))
                 case "TAX":
-                    roles = [MoneyRole.tax]
                     hints.append(CandidateHint(
                         source: CandidateHintSource.labelAdjacency, delta: 35,
                         reason: "cùng dòng nhãn TAX"))
-                case "TENDER":
-                    roles = [MoneyRole.tender]
-                case "CHANGE":
-                    roles = [MoneyRole.change]
-                case "TAXSUM":
-                    // Giá trị kiểm: ứng viên vẫn được SINH (luật
-                    // không xoá ở tầng sinh) nhưng không mang vai
-                    // trò khả thi nào — không neo, không vào bể.
-                    roles = []
                 default:
-                    roles = [MoneyRole.subtotal, MoneyRole.tax, MoneyRole.total,
-                             MoneyRole.itemAmount, MoneyRole.discount,
-                             MoneyRole.tender]
+                    break
                 }
                 money.append(MoneyCandidate(
                     id: nextID, cents: t.cents, text: t.text,
                     negative: t.negative, lineIndex: i,
                     utf16Start: t.start, utf16Length: t.length,
-                    tier: "primary", feasibleRoles: roles, hints: hints))
+                    tier: "primary", feasibleRoles: roles, hints: hints,
+                    conflictGroup: nextID))
+                primaryIDs.append(nextID)
                 nextID += 1
+            }
+
+            // --- G2: token BIẾN THỂ (tier ocrVariant, §2.6) ---
+            // Bản đọc thay thế của ĐÚNG dòng này (OCRLine
+            // .alternates: topCandidates của Vision + dòng
+            // tương ứng của các lượt đọc khác của cùng ảnh).
+            // Quét bằng ĐÚNG mẫu biên tiền + luật % + SafeMoney
+            // như token chính — chỉ chuỗi đã thật sự đọc được
+            // mới thành ứng viên, không bịa số. Trói theo THỨ
+            // TỰ token: biến thể thứ k trói vào token chính thứ
+            // k của dòng (cùng nhóm xung đột); trùng giá trị với
+            // token chính đã trói thì BỎ (không phải bằng chứng
+            // mới). Biến thể mang vai trò theo họ nhãn của dòng
+            // nhưng KHÔNG mang gợi ý — không bao giờ vượt mặt
+            // token chính trong thứ tự hồ. Trần 6 biến thể/dòng.
+            if !line.alternates.isEmpty, let re = moneyRegex {
+                var seenVariantKeys = Set<String>()
+                var variantCount = 0
+                for alt in line.alternates {
+                    if variantCount >= 6 { break }
+                    let ans = alt.text as NSString
+                    let afull = NSRange(location: 0, length: ans.length)
+                    var ordinal = 0
+                    for m in re.matches(in: alt.text, range: afull) {
+                        if variantCount >= 6 { break }
+                        let tr = m.range(at: 1)
+                        guard tr.location != NSNotFound else { continue }
+                        let token = ans.substring(with: tr)
+                        let afterEnd = tr.location + tr.length
+                        if afterEnd < ans.length,
+                           ans.substring(with: NSRange(location: afterEnd, length: 1)) == "%" {
+                            continue   // token suất: không chiếm thứ tự
+                        }
+                        let negative = m.range(at: 2).location != NSNotFound
+                        guard let cents = SafeMoney.parseCents(token, negative: negative)
+                        else { continue }   // không parse được: không chiếm thứ tự
+                        let myOrdinal = ordinal
+                        ordinal += 1
+                        let key = "\(myOrdinal)|\(cents)"
+                        if !seenVariantKeys.insert(key).inserted { continue }
+                        let group: Int
+                        if myOrdinal < primaryIDs.count {
+                            group = primaryIDs[myOrdinal]
+                            if lineMoney[myOrdinal].cents == cents { continue }
+                        } else {
+                            group = -(1_000_000 + i)
+                        }
+                        money.append(MoneyCandidate(
+                            id: nextID, cents: cents, text: token,
+                            negative: negative, lineIndex: i,
+                            utf16Start: tr.location, utf16Length: tr.length,
+                            tier: "ocrVariant", feasibleRoles: lineRoles,
+                            hints: [], conflictGroup: group))
+                        nextID += 1
+                        variantCount += 1
+                    }
+                }
             }
 
             // --- Token suất ---

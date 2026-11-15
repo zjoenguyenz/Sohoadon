@@ -35,7 +35,135 @@ enum HarnessUnitTests {
         runCanReparseTests(check)
         runHasLoadableOriginalTests(check)
         runFlagsTests(check)
+        runVariantRescueTests(check)
         return lines
+    }
+
+    // MARK: - G2: tầng cứu bằng hồ alternate (DESIGN-V4 §2.6)
+    //
+    // Các ca tổng hợp chạy qua ĐÚNG đường đọc của app
+    // (ReceiptParser.parseV4 trên OCRLine có alternates) —
+    // kiểm luật cứu: biến thể chỉ thắng khi làm đẳng thức
+    // khép mà giá trị chính không khép được; không alternate
+    // thì kết quả y hệt đường cũ; hai bản đọc của cùng một
+    // token in không bao giờ cộng vào nhau.
+
+    private static func vline(_ text: String,
+                              alts: [String] = []) -> OCRLine {
+        OCRLine(text: text, confidence: 0.9,
+                alternates: alts.map { AltText(text: $0, confidence: 0.8) })
+    }
+
+    private static func runVariantRescueTests(
+        _ check: (String, Bool) -> Void) {
+
+        // VT01 — ví dụ §3.9 (ca L-R08): thuế in 1.23, bản đọc
+        // thay thế 13.23 → tập thuế {133, 1323} khép duy nhất,
+        // dòng thuế thứ hai mang provenance closureVariant.
+        let vt01 = ReceiptParser.parseV4(lines: [
+            vline("STORE A"),
+            vline("SUBTOTAL 155.64"),
+            vline("TAX 1.33"),
+            vline("TAX 1.23", alts: ["TAX 13.23"]),
+            vline("TOTAL 170.20"),
+        ])
+        check("VT01-status-closed", vt01.arbiterStatus == "closed")
+        check("VT01-taxes", vt01.taxes.map { $0.amountCents } == [133, 1323])
+        check("VT01-prov", vt01.totalsProvenance["tax[1]"]?.detail == "closureVariant")
+        check("VT01-total", vt01.totalCents == 17020)
+
+        // VT02 — cùng tờ, KHÔNG alternate: hồ chính không
+        // khép → unclosed, thuế đọc tốt nhất giữ nguyên in.
+        let vt02 = ReceiptParser.parseV4(lines: [
+            vline("STORE A"),
+            vline("SUBTOTAL 155.64"),
+            vline("TAX 1.33"),
+            vline("TAX 1.23"),
+            vline("TOTAL 170.20"),
+        ])
+        check("VT02-status-unclosed", vt02.arbiterStatus == "unclosed")
+        check("VT02-taxes-primary", vt02.taxes.map { $0.amountCents } == [133, 123])
+
+        // VT03 — hồ chính ĐÃ khép: biến thể lạ không được
+        // lật kết quả (cứu chỉ chạy khi 0 nghiệm).
+        let vt03 = ReceiptParser.parseV4(lines: [
+            vline("STORE A"),
+            vline("SUBTOTAL 56.75", alts: ["SUBTOTAL 99.99"]),
+            vline("TAX 2.28"),
+            vline("TOTAL 59.03"),
+        ])
+        check("VT03-closed-primary", vt03.arbiterStatus == "closed"
+              && vt03.subtotalCents == 5675 && vt03.totalCents == 5903)
+
+        // VT04 — hồ biến thể cho HAI nghiệm khác giá trị:
+        // mơ hồ ở tầng cứu → từ chối, kết cục chính đứng
+        // nguyên (unclosed, thuế tốt nhất = mọi dòng thuế in).
+        let vt04 = ReceiptParser.parseV4(lines: [
+            vline("STORE A"),
+            vline("SUBTOTAL 100.00"),
+            vline("TAX 5.00", alts: ["TAX 20.00"]),
+            vline("TAX 8.00"),
+            vline("TAX 9.00", alts: ["TAX 12.00"]),
+            vline("TOTAL 120.00"),
+        ])
+        check("VT04-ambiguous-rescue-refused",
+              vt04.arbiterStatus == "unclosed"
+              && vt04.taxes.map { $0.amountCents } == [500, 800, 900])
+
+        // VT05 — mẫu D-18: món gãy "19.9Z", alternate chứa
+        // token dính "1280219.97" → biến thể hậu tố 1997 khép
+        // E1, provenance closureVariant.
+        let vt05 = ReceiptParser.parseV4(lines: [
+            vline("ITEM ONE 6.98"),
+            vline("HARDWD FLOOR CLEANER 19.9Z",
+                  alts: ["HARDWD FLOOR CLEANER 1280219.97"]),
+            vline("ITEM THREE 69.96"),
+            vline("SUBTOTAL 96.91"),
+            vline("SALES TAX 8.25"),
+            vline("TOTAL 105.16"),
+        ])
+        check("VT05-items-closed", vt05.items.count == 3
+              && vt05.items[1].amountCents == 1997
+              && vt05.arbiterDeficitE1 == 0)
+        check("VT05-prov", vt05.itemsProvenance["item[1]"]?.detail == "closureVariant")
+
+        // VT06 — mẫu L-R05: biến thể khá hơn nhưng KHÔNG khép
+        // E1 → bị từ chối, số in đứng nguyên.
+        let vt06 = ReceiptParser.parseV4(lines: [
+            vline("ITEM A 2.19"),
+            vline("PATTY 0.29", alts: ["PATTY 6.29"]),
+            vline("ITEM B 9.19"),
+            vline("SUBTOTAL 20.00"),
+            vline("TAX 0.50"),
+            vline("TOTAL 20.50"),
+        ])
+        check("VT06-variant-refused", vt06.items.count == 3
+              && vt06.items[1].amountCents == 29
+              && vt06.arbiterDeficitE1 == 1167 - 2000)
+
+        // VT07 — mẫu D-17: dòng TOTAL in gãy không token,
+        // alternate của chính dòng đó mang 105.16 → tổng chốt
+        // bằng closureVariant, sổ khép.
+        let vt07 = ReceiptParser.parseV4(lines: [
+            vline("SUBTOTAL 96.91"),
+            vline("SALES TAX 8.25"),
+            vline("TOTAL $105.1G", alts: ["TOTAL 105.16"]),
+        ])
+        check("VT07-total-rescued", vt07.arbiterStatus == "closed"
+              && vt07.totalCents == 10516
+              && vt07.totalsProvenance["total"]?.detail == "closureVariant")
+
+        // VT08 — nhóm xung đột: 1.23 và bản thay thế 13.23
+        // của nó KHÔNG được cộng nhau (123 + 1323 = 1446
+        // đúng bằng thiếu hụt giả) — hai bản đọc của cùng
+        // một token in không phải hai dòng thuế.
+        let vt08 = ReceiptParser.parseV4(lines: [
+            vline("STORE A"),
+            vline("SUBTOTAL 100.00"),
+            vline("TAX 1.23", alts: ["TAX 13.23"]),
+            vline("TOTAL 114.46"),
+        ])
+        check("VT08-same-token-not-summed", vt08.arbiterStatus == "unclosed")
     }
 
     // MARK: - Dựng dữ liệu kiểm (bản nháp đầy đủ trường)

@@ -50,6 +50,14 @@ struct OCRLine {
     var text: String
     /// Độ tin cậy 0.0–1.0 của dòng này (từ Vision).
     var confidence: Double
+    /// G2 (tầng cứu, DESIGN-V4 §2.6): các bản đọc THAY THẾ của
+    /// đúng dòng này — Fragment.alternates của Vision
+    /// (topCandidates) cộng dòng tương ứng của các lượt đọc
+    /// ảnh khác, do ReadPipeline mang sang. Rỗng ở mọi đường
+    /// không có OCR (chữ đã lưu / lớp chữ PDF): khi rỗng, hồ
+    /// ứng viên KHÔNG sinh biến thể và hành vi của bộ đọc
+    /// không đổi một ly so với trước G2.
+    var alternates: [AltText] = []
 }
 
 // MARK: - Kết quả bóc tách 1 hoá đơn (bản nháp, chưa lưu)
@@ -422,7 +430,8 @@ enum ReceiptParser {
         // lineIndex phải khớp giữa mọi tầng của đường v4.
         let lines = input
             .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces),
-                           confidence: $0.confidence) }
+                           confidence: $0.confidence,
+                           alternates: $0.alternates) }
             .filter { !$0.text.isEmpty }
         var result = ParseResult()
         result.rawText = lines.map { $0.text }.joined(separator: "\n")

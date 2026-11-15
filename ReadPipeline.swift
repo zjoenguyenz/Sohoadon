@@ -132,7 +132,8 @@ enum ReadPipeline {
         let started = Date()
         let lines = rawLines
             .map { OCRLine(text: $0.text.trimmingCharacters(in: .whitespaces),
-                           confidence: $0.confidence) }
+                           confidence: $0.confidence,
+                           alternates: $0.alternates) }
             .filter { !$0.text.isEmpty }
 
         // GÓI V4-4: đường mặc định của app là trọng tài v4
@@ -307,7 +308,14 @@ enum ReadPipeline {
                     guard let firstHintIdx = region.hintIndices.first
                     else { continue }
                     let hint = hints[firstHintIdx]
-                    let fresh = reReader.recognizeRegion(hint, upscale: 2.0)
+                    // G2: vòng 0 = cách đọc gốc (phóng nội suy
+                    // ×2, engine chính); vòng 1 = cách đọc ĐA
+                    // DẠNG (biến thể 1 — pixel gốc + tăng cường
+                    // cục bộ + cấu hình engine khác, xem
+                    // finishImagePath). Trần vòng/vùng và thang
+                    // chấp nhận INT-V4-04 giữ nguyên.
+                    let fresh = reReader.recognizeRegion(
+                        hint, upscale: 2.0, variant: round)
                     if !fresh.isEmpty {
                         replacements.append((hint, fresh))
                         added += fresh.count
@@ -526,7 +534,43 @@ enum ReadPipeline {
         }
         guard let lo = indices.min(), let hi = indices.max()
         else { return nil }
-        return lo...hi
+        let blockRange = lo...hi
+
+        // G2 — gợi ý ROI MỨC DÒNG: khi thâm hụt chỉ rõ được
+        // (các) dòng thủ phạm, khoanh vùng đọc lại quanh đúng
+        // những dòng đó (±1 dòng đệm) thay vì cả khối — vùng
+        // nhỏ đọc lại chính xác hơn và rẻ hơn. Chỉ THU HẸP,
+        // không bao giờ nới; không xác định được dòng thủ
+        // phạm thì giữ nguyên khoảng khối như trước G2.
+        let culprits: [Int]
+        switch block {
+        case .items:
+            // Món không tiền (gãy) hoặc món chốt bằng biến thể
+            // hậu tố của token dính — hai dạng thâm hụt E1 có
+            // dòng thủ phạm rõ.
+            culprits = result.items.enumerated().compactMap { j, it in
+                guard let li = it.lineIndex, li >= 0, li < lines.count
+                else { return nil }
+                if it.amountCents == nil { return li }
+                if result.itemsProvenance["item[\(j)]"]?.detail
+                    .hasPrefix("suffixVariantOf") == true { return li }
+                return nil
+            }
+        case .totals:
+            // Dòng trong vùng tổng mang NHÃN/tiền-gãy mà không
+            // có token tiền hợp lệ nào — token của nó là thứ
+            // ROI phải đọc lại.
+            culprits = indices.filter { i in
+                SafeMoney.tokens(in: lines[i].text).isEmpty
+                    && (lines[i].text.contains { $0.isNumber }
+                        || lines[i].text.uppercased().contains("TOTAL")
+                        || lines[i].text.uppercased().contains("TAX"))
+            }
+        }
+        guard let clo = culprits.min(), let chi = culprits.max()
+        else { return blockRange }
+        let narrowed = max(lo, clo - 1)...min(hi, chi + 1)
+        return narrowed.isEmpty ? blockRange : narrowed
     }
 
     private static func arbiterBand(for range: ClosedRange<Int>?,
@@ -923,6 +967,64 @@ enum ReceiptReader {
         var stitchStatus: String? = nil
     }
 
+    /// G2 — THU HOẠCH ĐA-LƯỢT: với mỗi dòng của ứng viên
+    /// thắng, gom văn bản của các dòng tương ứng trong các
+    /// lượt ứng viên THUA thành alternate của dòng thắng.
+    /// Khớp theo hộp: IoU ≥ 0.5 (ngưỡng ráp dòng vẫn dùng);
+    /// không đạt IoU thì lấy dòng có tâm dọc gần nhất trong
+    /// 0.75 × chiều cao dòng thắng trung vị; ngoài ra bỏ.
+    /// Đây là hiện thực hoá số đo của TEAM4: ~44% token tiền
+    /// bị thương đã có giá trị ĐÚNG trong một lượt đọc khác
+    /// của cùng ảnh — trước G2 các lượt thua bị vứt cả dòng.
+    private static func harvestPassAlternates(
+        winner: CandidateRun, runs: [CandidateRun]) -> [Int: [AltText]] {
+        let winLines = winner.assembly.lines
+        guard !winLines.isEmpty else { return [:] }
+        let heights = winLines.map { Double($0.box.height) }.sorted()
+        let medianH = heights[heights.count / 2]
+        func iou(_ a: CGRect, _ b: CGRect) -> Double {
+            let inter = a.intersection(b)
+            if inter.isNull || inter.isEmpty { return 0 }
+            let union = Double(a.width * a.height + b.width * b.height
+                               - inter.width * inter.height)
+            guard union > 0 else { return 0 }
+            return Double(inter.width * inter.height) / union
+        }
+        var out: [Int: [AltText]] = [:]
+        for run in runs {
+            // Lượt thắng tự mang alternates của chính nó qua
+            // ráp dòng — chỉ thu hoạch từ các lượt THUA.
+            if run.step.kind == winner.step.kind
+                && run.step.transformDesc == winner.step.transformDesc {
+                continue
+            }
+            for loser in run.assembly.lines {
+                var target: Int? = nil
+                var bestIoU = 0.0
+                for (wi, wl) in winLines.enumerated() {
+                    let v = iou(loser.box, wl.box)
+                    if v > bestIoU { bestIoU = v; target = wi }
+                }
+                if bestIoU < 0.5 {
+                    target = nil
+                    var bestDy = Double.greatestFiniteMagnitude
+                    for (wi, wl) in winLines.enumerated() {
+                        let dy = abs(Double(loser.box.midY - wl.box.midY))
+                        if dy < bestDy { bestDy = dy; target = wi }
+                    }
+                    if bestDy > 0.75 * medianH { target = nil }
+                }
+                guard let ti = target else { continue }
+                let alt = AltText(text: loser.text,
+                                  confidence: loser.confidence)
+                if !out[ti, default: []].contains(alt) {
+                    out[ti, default: []].append(alt)
+                }
+            }
+        }
+        return out
+    }
+
     private static func finishImagePath(req: ReadRequest,
                                         pages: [CGImage],
                                         identity: DiagIdentity,
@@ -1057,18 +1159,51 @@ enum ReceiptReader {
         // là ảnh đã thật sự được đọc — cắt từ ảnh gốc khi thắng
         // là phái sinh sẽ lệch hệ toạ độ hộp dòng).
         let winnerImage = winner.image
-        let reReader = RegionReReader(qualityMap: qualityMap) { band, upscale in
+        let reReader = RegionReReader(qualityMap: qualityMap) { band, upscale, variant in
+            if variant >= 1 {
+                // G2 — cách đọc ĐA DẠNG (vòng ROI 2): cắt trên
+                // PIXEL GỐC (không phóng nội suy — nội suy làm
+                // mềm nét chữ nhiệt đã mờ), tăng cường TƯƠNG
+                // PHẢN CỤC BỘ trên chính crop (không đụng ảnh
+                // toàn khung), engine phụ với sàn chiều cao chữ
+                // thấp hơn engine chính. Đây là bằng chứng MỚI
+                // thật sự, không phải cùng một phép đọc lặp lại.
+                guard let crop = cropForROI(winnerImage, band: band,
+                                            upscale: 1.0)
+                else { return [] }
+                let enhanced = ciVariant(crop, kind: "enhancedContrast") ?? crop
+                let altEngine = ClassicTextEngine(minimumTextHeight: 0.01)
+                guard let frags = try? altEngine.recognize(in: enhanced,
+                                                           region: nil)
+                else { return [] }
+                return frags.map { OCRLine(text: $0.text,
+                                           confidence: $0.confidence,
+                                           alternates: $0.alternates) }
+            }
             guard let crop = cropForROI(winnerImage, band: band,
                                         upscale: upscale),
                   let frags = try? engine.recognize(in: crop,
                                                     region: nil)
             else { return [] }
             return frags.map { OCRLine(text: $0.text,
-                                       confidence: $0.confidence) }
+                                       confidence: $0.confidence,
+                                       alternates: $0.alternates) }
         }
 
-        let winLines = winner.assembly.lines.map {
-            OCRLine(text: $0.text, confidence: $0.confidence)
+        // G2: dòng thắng mang theo alternates của CHÍNH nó
+        // (topCandidates của Vision qua ráp dòng) CỘNG bản đọc
+        // của các lượt ứng viên thua khớp hộp với nó (thu hoạch
+        // đa-lượt bên dưới) — đây là nguồn nuôi hồ biến thể của
+        // trọng tài. Trần 8 alternate/dòng.
+        let passAlts = harvestPassAlternates(winner: winner, runs: runs)
+        let winLines = winner.assembly.lines.enumerated().map { idx, line in
+            var alts = line.alternates
+            for extra in passAlts[idx] ?? []
+            where !alts.contains(extra) && extra.text != line.text {
+                alts.append(extra)
+            }
+            return OCRLine(text: line.text, confidence: line.confidence,
+                           alternates: Array(alts.prefix(8)))
         }
         let winBoxes: [CGRect?] = winner.assembly.lines.map { $0.box }
         let outcome = ReadPipeline.run(lines: winLines,
