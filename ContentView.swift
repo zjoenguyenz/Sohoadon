@@ -6,9 +6,26 @@ import LocalAuthentication
 /// Khoá Face ID PHẢI fail-open: máy không có sinh trắc/mật mã, hoặc lỗi lạ
 /// -> mở app bình thường kèm thông báo, KHÔNG bao giờ khoá cứng anh ở ngoài
 /// và KHÔNG crash (bài học Test 0: đụng vào framework lạ lúc khởi động là chết app).
+///
+/// G3 (luật bền hoá trạng thái): màn khoá là LỚP PHỦ lên cây giao
+/// diện, KHÔNG còn là nút thay cây. Bản cũ dùng if/else THÁO toàn
+/// bộ TabShellView khỏi cây mỗi lần app vào nền -> mọi @State của
+/// cả 5 tab chết tại chỗ, tab về 0 — đúng triệu chứng "nó quay về
+/// home đầu tiên" của anh, chỉ cần chuyển app là mất, không cần
+/// giết app. Nay: cây chính dựng MỘT lần (sau lần mở khoá đầu
+/// tiên) rồi SỐNG MÃI; các chu kỳ khoá sau chỉ phủ màn khoá lên
+/// trên, mở khoá thì gỡ phủ — trạng thái các tab nguyên vẹn.
+/// Trước lần mở khoá đầu tiên cây CHƯA dựng: không nội dung nào
+/// (kể cả sheet khôi phục của ScanView) được hiện trước cổng
+/// khoá, giữ nguyên hợp đồng bảo mật của bản cũ.
 struct ContentView: View {
     @AppStorage("faceIDLockEnabled") private var lockEnabled = true
     @State private var unlocked = false
+    /// Đã dựng cây giao diện lần đầu hay chưa (sau mở khoá đầu
+    /// tiên, hoặc ngay từ đầu khi khoá tắt). Một khi đã true thì
+    /// KHÔNG bao giờ quay lại false trong phiên — đó là điều
+    /// kiện để khoá thành lớp phủ thay vì nút reset trạng thái.
+    @State private var treeMounted = false
     @State private var lockNote: String? = nil
     @Environment(\.scenePhase) private var scenePhase
     /// WP3 bước 2: file anh mở bằng "Mở bằng Sổ Hóa Đơn" / Share Sheet
@@ -18,18 +35,45 @@ struct ContentView: View {
     /// truyền xuống (không đọc file khi chưa qua cổng khoá).
     @State private var pendingImportURLs: [URL] = []
 
+    /// Binding truyền xuống cây giao diện, CỔNG theo trạng thái
+    /// khoá: đang khoá thì cây chỉ thấy danh sách rỗng (URL chờ
+    /// nguyên ở ContentView, không file nào bị đọc trước cổng
+    /// khoá — giữ hợp đồng WP3 bước 2); mở khoá thì danh sách
+    /// thật hiện ra và onChange ở TabShellView/ScanView tự hút
+    /// vào hàng chờ như cũ. Ghi (ScanView xoá sau khi hút) luôn
+    /// chuyển thẳng vào kho thật.
+    private var gatedImportURLs: Binding<[URL]> {
+        Binding(
+            get: { (lockEnabled && !unlocked) ? [] : pendingImportURLs },
+            set: { pendingImportURLs = $0 })
+    }
+
     var body: some View {
-        Group {
-            if !lockEnabled || unlocked {
-                TabShellView(lockNote: lockNote, pendingImportURLs: $pendingImportURLs)
-            } else {
+        ZStack {
+            if !lockEnabled || treeMounted {
+                TabShellView(lockNote: lockNote, pendingImportURLs: gatedImportURLs)
+            }
+            if lockEnabled && !unlocked {
+                // Lớp phủ khoá: nền ĐẶC toàn màn (không nhìn
+                // xuyên được nội dung bên dưới) + nằm trên cùng
+                // của ZStack nên chạm không lọt xuống cây chính.
                 lockScreen
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                    .ignoresSafeArea()
+                    .zIndex(1)
             }
         }
         .onOpenURL { url in
             pendingImportURLs.append(url)
         }
-        .onAppear { authenticateIfNeeded() }
+        .onAppear {
+            // Khoá đang tắt thì cây hiện ngay từ đầu — ghi nhận
+            // đã dựng để lần bật khoá sau đó (giữa phiên) cũng
+            // chỉ phủ lên, không tháo cây.
+            if !lockEnabled { treeMounted = true }
+            authenticateIfNeeded()
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background && lockEnabled {
                 unlocked = false
@@ -37,6 +81,12 @@ struct ContentView: View {
             if newPhase == .active && lockEnabled && !unlocked {
                 authenticateIfNeeded()
             }
+        }
+        .onChange(of: lockEnabled) { _, newValue in
+            // Anh bật khoá giữa phiên (ở Thẻ & Cài Đặt): đòi xác
+            // thực ngay cho khớp trạng thái, thay vì chờ chu kỳ
+            // nền lần tới.
+            if newValue { authenticateIfNeeded() }
         }
     }
 
@@ -83,6 +133,7 @@ struct ContentView: View {
             // Không có sinh trắc lẫn mật mã -> fail-open, không khoá người dùng ở ngoài.
             lockNote = "Máy chưa đặt Face ID/mật mã nên app mở không khoá. Anh có thể tắt khoá hẳn trong Thẻ & Cài Đặt."
             unlocked = true
+            treeMounted = true
             return
         }
         context.evaluatePolicy(.deviceOwnerAuthentication,
@@ -90,6 +141,10 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 if success {
                     unlocked = true
+                    // G3: từ khoảnh khắc này cây giao diện được
+                    // dựng và SỐNG MÃI trong phiên — các lần
+                    // khoá sau chỉ là lớp phủ (xem body).
+                    treeMounted = true
                     lockNote = nil
                 } else {
                     lockNote = "Chưa mở được — anh bấm nút dưới để thử lại (hoặc dùng mật mã máy)."
@@ -106,7 +161,12 @@ struct TabShellView: View {
     /// WP3 bước 2: hàng chờ file mở-từ-ngoài, truyền thẳng xuống ScanView.
     @Binding var pendingImportURLs: [URL]
     @Environment(\.modelContext) private var modelContext
-    @State private var selectedTab = 0
+    /// G3: vị trí tab theo @SceneStorage — sống qua việc hệ
+    /// thống thu hồi cảnh và qua khởi động lại, thay vì @State
+    /// chết theo chu kỳ khoá như bản cũ (một nửa triệu chứng
+    /// "về home đầu tiên"; nửa còn lại là cổng khoá tháo cây,
+    /// đã sửa ở ContentView).
+    @SceneStorage("glkeeper.selectedTab") private var selectedTab = 0
     @State private var seeded = false
 
     var body: some View {

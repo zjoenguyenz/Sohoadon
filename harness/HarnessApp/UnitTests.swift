@@ -32,6 +32,8 @@ enum HarnessUnitTests {
         }
 
         runPendingDraftTests(check)
+        runPendingBlockTests(check)
+        runReviewEditsTests(check)
         runCanReparseTests(check)
         runHasLoadableOriginalTests(check)
         runFlagsTests(check)
@@ -380,6 +382,192 @@ enum HarnessUnitTests {
         } else {
             check("PD25-ma-trang-thai-la-report-nil", false)
         }
+    }
+
+    // MARK: - A2. PendingBlockStore: vòng đời bản chụp bị chặn (G3)
+    //
+    // Vá sự cố thật 2026-11-15: tờ bị cổng phán .block thoát
+    // app là mất. Bộ này khoá hợp đồng của kho mới ở mức THUẦN
+    // tách được: round-trip từng trường (bản nháp lồng + kết
+    // quả cổng), hỏng -> nil + tự xoá + log, schema lạ -> nil,
+    // mã quyết định lạ -> qualityOutcome() nil (dựng lại
+    // toàn-hay-không). Phần giết-app thật + khung chặn hiện
+    // lại thuộc Gate D trên máy anh (đặc tả G1 §ma trận vòng
+    // đời, ca trạng thái bị chặn) — CI không bao phủ.
+
+    private static func makeBlockSnapshot() -> PendingBlockSnapshot {
+        let outcome = QualityOutcome(detected: ["blur", "glare"],
+                                     decision: .block,
+                                     failSafe: false,
+                                     consecutiveRejects: 1)
+        return PendingBlockSnapshot(
+            draftSnapshot: makeSnapshot(),
+            quality: outcome,
+            createdAt: Date(timeIntervalSince1970: 1_791_000_200))
+    }
+
+    private static func runPendingBlockTests(_ check: (String, Bool) -> Void) {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HarnessUnitTests-Block-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            check("PB00-dung-thu-muc-kiem", false)
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let snapshot = makeBlockSnapshot()
+        let fileURL = PendingBlockStore.fileURL(in: dir)
+
+        check("PB01-load-khi-chua-co-file-nil", PendingBlockStore.load(in: dir) == nil)
+
+        if let data = try? JSONEncoder().encode(snapshot),
+           let back = try? JSONDecoder().decode(PendingBlockSnapshot.self, from: data) {
+            check("PB02-codable-roundtrip-bang-nhau", back == snapshot)
+        } else {
+            check("PB02-codable-roundtrip-bang-nhau", false)
+        }
+
+        check("PB03-save-tra-true", PendingBlockStore.save(snapshot, in: dir))
+        let tmpLeft = FileManager.default.fileExists(
+            atPath: dir.appendingPathComponent(PendingBlockStore.fileName + ".tmp").path)
+        check("PB04-save-khong-de-file-tmp", !tmpLeft)
+        let loaded = PendingBlockStore.load(in: dir)
+        check("PB05-load-bang-snapshot-tung-truong", loaded == snapshot)
+        check("PB06-truong-quality-detected", loaded?.quality.detected == ["blur", "glare"])
+        check("PB07-truong-quality-decisionRaw", loaded?.quality.decisionRaw == "block")
+        check("PB08-truong-nhap-long",
+              loaded?.draft.imageFileName == "TEST-IMG.jpg"
+                && loaded?.draft.result.totalCents == 4598)
+
+        // Dựng lại kết quả cổng ở mức thuần: quyết định + các
+        // trường nguyên thuỷ khớp nguyên văn.
+        if let outcome = loaded?.qualityOutcome() {
+            check("PB09-restore-quality-outcome",
+                  outcome.decision == .block && outcome.detected == ["blur", "glare"]
+                    && outcome.failSafe == false && outcome.consecutiveRejects == 1)
+        } else {
+            check("PB09-restore-quality-outcome", false)
+        }
+
+        // Ghi đè: bản mới thắng.
+        var newer = snapshot
+        newer.quality = QualityOutcomeDTO(QualityOutcome(
+            detected: ["lowContrast"], decision: .block,
+            failSafe: false, consecutiveRejects: 2))
+        check("PB10-save-lan-2-tra-true", PendingBlockStore.save(newer, in: dir))
+        check("PB11-ghi-de-ban-moi-thang", PendingBlockStore.load(in: dir) == newer)
+
+        // Xoá: load -> nil; xoá lần nữa không crash.
+        PendingBlockStore.clear(in: dir)
+        check("PB12-load-sau-clear-nil", PendingBlockStore.load(in: dir) == nil)
+        PendingBlockStore.clear(in: dir)
+        check("PB13-clear-lan-2-khong-crash", true)
+
+        // File hỏng: load nil + file bị xoá + có dòng log.
+        _ = PendingBlockStore.save(snapshot, in: dir)
+        try? Data("không phải JSON {{{".utf8).write(to: fileURL)
+        check("PB14-load-file-hong-nil", PendingBlockStore.load(in: dir) == nil)
+        check("PB15-file-hong-bi-xoa", !FileManager.default.fileExists(atPath: fileURL.path))
+        let logText = (try? String(contentsOf: dir.appendingPathComponent(PendingBlockStore.logFileName),
+                                   encoding: .utf8)) ?? ""
+        check("PB16-log-ghi-ban-hong", logText.contains("Snapshot bị chặn hỏng"))
+
+        // Schema lạ: load nil + file bị xoá.
+        _ = PendingBlockStore.save(snapshot, in: dir)
+        if let data = try? Data(contentsOf: fileURL),
+           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            json["schemaVersion"] = 99
+            if let edited = try? JSONSerialization.data(withJSONObject: json) {
+                try? edited.write(to: fileURL)
+            }
+        }
+        check("PB17-load-schema-la-nil", PendingBlockStore.load(in: dir) == nil)
+        check("PB18-file-schema-la-bi-xoa", !FileManager.default.fileExists(atPath: fileURL.path))
+
+        // Mã quyết định lạ: DTO vẫn giải mã được (nó chỉ là
+        // chuỗi) nhưng dựng lại kết quả cổng phải trả nil —
+        // quyết định chặn sai nghĩa còn tệ hơn mất bản chụp.
+        var alien = snapshot
+        alien.quality.decisionRaw = "CHAN_KHONG_TON_TAI"
+        check("PB19-ma-quyet-dinh-la-outcome-nil", alien.qualityOutcome() == nil)
+    }
+
+    // MARK: - A3. Lớp sửa dở Kiểm Lại trong bản chụp nháp (G3)
+    //
+    // Khoá ba hợp đồng: (1) bản chụp KHÔNG lớp sửa (mặc định)
+    // round-trip với reviewEdits == nil; (2) bản chụp CÓ lớp
+    // sửa round-trip khớp từng trường của lớp phủ; (3) TƯƠNG
+    // THÍCH NGƯỢC v1: file schema 1 không có khoá reviewEdits
+    // (đúng định dạng bản 106 đang chạy trên máy anh) vẫn nạp
+    // được; schema trên trần hiện hành (3) bị từ chối + xoá.
+
+    private static func runReviewEditsTests(_ check: (String, Bool) -> Void) {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HarnessUnitTests-Edits-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            check("RE00-dung-thu-muc-kiem", false)
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let base = makeSnapshot()
+        let fileURL = PendingDraftStore.fileURL(in: dir)
+
+        // (1) Mặc định: không lớp sửa.
+        check("RE01-mac-dinh-khong-lop-sua", base.reviewEdits == nil)
+        check("RE02-save-ban-thuong", PendingDraftStore.save(base, in: dir))
+        check("RE03-load-ban-thuong-reviewEdits-nil",
+              PendingDraftStore.load(in: dir)?.reviewEdits == nil)
+
+        // (2) Có lớp sửa: khớp toàn bộ + chốt các trường chính.
+        var edited = base
+        edited.reviewEdits = ReviewEditsDTO(
+            vendorText: "Sam's Club Tulsa",
+            dateValue: Date(timeIntervalSince1970: 1_791_050_000),
+            subtotalText: "42.14", taxText: "3.84", totalText: "45.98",
+            kindRaw: "business", category: "Vật Tư",
+            purposeText: "Mua cho khách trong tiệm",
+            reasonText: "Theo thẻ •• 2586", suggestionApplied: true)
+        check("RE04-save-ban-co-lop-sua", PendingDraftStore.save(edited, in: dir))
+        let loadedEdited = PendingDraftStore.load(in: dir)
+        check("RE05-load-bang-tung-truong", loadedEdited == edited)
+        check("RE06-truong-vendorText", loadedEdited?.reviewEdits?.vendorText == "Sam's Club Tulsa")
+        check("RE07-truong-kindRaw", loadedEdited?.reviewEdits?.kindRaw == "business")
+        check("RE08-truong-purposeText",
+              loadedEdited?.reviewEdits?.purposeText == "Mua cho khách trong tiệm")
+        check("RE09-truong-suggestionApplied",
+              loadedEdited?.reviewEdits?.suggestionApplied == true)
+
+        // (3) Tương thích ngược v1: gỡ khoá reviewEdits + hạ
+        // schemaVersion về 1 -> vẫn nạp, lớp sửa nil, phần còn
+        // lại nguyên vẹn.
+        if let data = try? Data(contentsOf: fileURL),
+           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            json["schemaVersion"] = 1
+            json.removeValue(forKey: "reviewEdits")
+            if let v1Data = try? JSONSerialization.data(withJSONObject: json) {
+                try? v1Data.write(to: fileURL)
+            }
+        }
+        let loadedV1 = PendingDraftStore.load(in: dir)
+        check("RE10-file-v1-van-nap-duoc",
+              loadedV1 != nil && loadedV1?.reviewEdits == nil
+                && loadedV1?.result.totalCents == 4598)
+
+        // Schema trên trần (3): từ chối + xoá như mã lạ.
+        if let data = try? Data(contentsOf: fileURL),
+           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            json["schemaVersion"] = 3
+            if let v3Data = try? JSONSerialization.data(withJSONObject: json) {
+                try? v3Data.write(to: fileURL)
+            }
+        }
+        check("RE11-schema-3-bi-tu-choi", PendingDraftStore.load(in: dir) == nil)
+        check("RE12-file-schema-3-bi-xoa", !FileManager.default.fileExists(atPath: fileURL.path))
     }
 
     // MARK: - B. canReparse (khoá L-2026-11-13-17)

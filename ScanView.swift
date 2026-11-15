@@ -85,6 +85,11 @@ struct ScanView: View {
     /// thầm, không chụp snapshot P-DRAFT, không biến mất.
     @State private var blockedDraft: ScanDraft? = nil
     @State private var blockedQuality: QualityOutcome? = nil
+    /// G3: lớp sửa dở ở Kiểm Lại khôi phục từ bản chụp nháp
+    /// (PendingDraftSnapshot.reviewEdits) — chỉ đặt khi khôi
+    /// phục, truyền vào ReviewView để dựng lại các ô anh đã
+    /// sửa; bản nháp mới ra đời thì presentDraft xoá về nil.
+    @State private var restoredReviewEdits: ReviewEditsDTO? = nil
 
     private var cameraSupported: Bool {
         VNDocumentCameraViewController.isSupported
@@ -232,7 +237,15 @@ struct ScanView: View {
                           allowsMultipleSelection: true) { result in
                 switch result {
                 case .success(let urls):
-                    importQueue = urls
+                    // G3 (luật bền hoá): file từ bộ chọn Files là
+                    // URL bảo mật theo PHIÊN — tiến trình chết là
+                    // quyền truy cập chết theo. Sao NGAY vào thư
+                    // mục chờ của app (PendingImports) rồi mới xếp
+                    // hàng: hàng đợi từ đây là danh sách file CỦA
+                    // APP trên đĩa, sống qua giết app. Nối vào
+                    // hàng chờ sẵn có thay vì thay thế — thay thế
+                    // sẽ làm rơi lặng các file đang chờ trên đĩa.
+                    importQueue.append(contentsOf: stageExternalURLs(urls))
                     processNextImportedFile()
                 case .failure(let error):
                     errorText = "Không nạp được file: \(error.localizedDescription)"
@@ -246,8 +259,9 @@ struct ScanView: View {
                 // hợp kết thúc. Vuốt đóng sheet KHÔNG qua onDone:
                 // bản chụp còn nguyên trên đĩa để lần mở app/tab
                 // sau khôi phục lại đúng bản nháp này.
-                ReviewView(draft: d) {
+                ReviewView(draft: d, restoredEdits: restoredReviewEdits) {
                     PendingDraftStore.clear()
+                    restoredReviewEdits = nil
                     draft = nil
                 }
             }
@@ -259,6 +273,11 @@ struct ScanView: View {
             // Inbox phòng trường hợp hệ thống chép file vào trước khi
             // onOpenURL kịp chạy (khởi động lạnh).
             .onAppear {
+                // G3: khôi phục tờ BỊ CHẶN trước tiên — quyết
+                // định chặn chưa thi hành đứng trên mọi việc dở
+                // khác, và mọi đường đọc/hàng chờ đều đang bị nó
+                // canh sẵn nên không gì chen qua được.
+                restorePendingBlockIfNeeded()
                 // P-DRAFT (L-2026-11-13-14): khôi phục bản nháp chờ
                 // TRƯỚC — khi có draft, processNextImportedFile tự
                 // giữ hàng chờ nạp đứng chờ theo luật cũ, không có
@@ -266,8 +285,29 @@ struct ScanView: View {
                 restorePendingDraftIfNeeded()
                 consumeExternalImports()
                 sweepInbox()
+                sweepPendingImports()
             }
         }
+    }
+
+    /// G3: dựng lại ĐÚNG khung chặn của tờ bị cổng chất lượng
+    /// chặn ở lượt mở trước (sự cố 2026-11-15: thoát app là mất
+    /// tờ bị chặn). Bản chụp xuống đĩa ngay khi cổng phán .block
+    /// (xem runRead) nên khôi phục ở đây là đường chính thức,
+    /// không phải cứu hộ. Chỉ dựng khi đang rảnh tay; bản chụp
+    /// không ánh xạ lại được (mã lạ) -> xoá + log như snapshot
+    /// nháp, app mở bình thường.
+    private func restorePendingBlockIfNeeded() {
+        guard blockedDraft == nil, draft == nil, !isProcessing else { return }
+        guard let snapshot = PendingBlockStore.load() else { return }
+        guard let restored = snapshot.makeBlocked() else {
+            PendingBlockStore.discardCorrupt(
+                reason: "snapshot bị chặn không ánh xạ lại được thành trạng thái chặn")
+            return
+        }
+        blockedDraft = restored.draft
+        blockedQuality = restored.quality
+        statusText = "Đã khôi phục tờ bị cổng chất lượng chặn từ lần mở trước — anh quyết định ở khung cảnh báo bên dưới giúp."
     }
 
     /// P-DRAFT (L-2026-11-13-14): mở lại màn Kiểm Lại với bản nháp
@@ -277,23 +317,29 @@ struct ScanView: View {
     /// draft mới sẽ tự chụp snapshot mới đè lên. Snapshot hỏng:
     /// PendingDraftStore.load/discardCorrupt tự xoá + ghi log,
     /// hàm này trả về lặng, app mở bình thường.
+    /// G3: lớp sửa dở trong bản chụp (reviewEdits) đi kèm sang
+    /// ReviewView; tờ đang bị chặn thì nháp đứng chờ sau nó.
     private func restorePendingDraftIfNeeded() {
-        guard draft == nil, !isProcessing else { return }
+        guard draft == nil, blockedDraft == nil, !isProcessing else { return }
         guard let snapshot = PendingDraftStore.load() else { return }
         guard let restored = snapshot.makeDraft() else {
             PendingDraftStore.discardCorrupt(
                 reason: "snapshot không ánh xạ lại được thành ScanDraft")
             return
         }
+        restoredReviewEdits = snapshot.reviewEdits
         draft = restored
         statusText = "Đã khôi phục bản nháp chưa lưu từ lần mở trước — anh kiểm lại rồi bấm Lưu giúp."
     }
 
     /// Đổ URL từ onOpenURL vào hàng chờ nạp chung rồi xoá danh sách chờ —
     /// điểm nạp DUY NHẤT vẫn là processNextImportedFile/processImportedFile.
+    /// G3: URL mở-tại-chỗ cũng qua sao-chép bền như đường Files
+    /// (stageExternalURLs) — URL nằm sẵn trong Documents (hệ
+    /// thống chép vào Inbox) được giữ nguyên vì đã bền sẵn.
     private func consumeExternalImports() {
         guard !externalImportURLs.isEmpty else { return }
-        importQueue.append(contentsOf: externalImportURLs)
+        importQueue.append(contentsOf: stageExternalURLs(externalImportURLs))
         externalImportURLs = []
         processNextImportedFile()
     }
@@ -303,13 +349,84 @@ struct ScanView: View {
     /// chạy hoặc app bị giết giữa chừng) được nạp nốt ở đây; bản sao
     /// Inbox bị xoá ngay trong processImportedFile sau khi đọc xong
     /// dữ liệu, nên quét lại không nạp trùng.
+    /// G3: chỉ nối các file CHƯA có trong hàng chờ — onAppear
+    /// cháy mỗi lần tab Chụp hiện, quét lại mà nối trùng thì một
+    /// file chờ xử lý bị đọc hai lần.
     private func sweepInbox() {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         let inbox = docs.appendingPathComponent("Inbox", isDirectory: true)
         guard let files = try? FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil) else { return }
-        let stray = files.filter { !$0.hasDirectoryPath }
+        let stray = files.filter { !$0.hasDirectoryPath && !importQueue.contains($0) }
         guard !stray.isEmpty else { return }
         importQueue.append(contentsOf: stray)
+        processNextImportedFile()
+    }
+
+    // MARK: G3 — hàng chờ nạp bền (Documents/PendingImports)
+    //
+    // Thư mục này CHÍNH LÀ hàng đợi trên đĩa: file anh chọn từ
+    // Files / mở-tại-chỗ được sao vào đây NGAY khi tới (khi
+    // quyền truy cập bảo mật còn sống), xử lý xong từng file
+    // thì bản sao bị xoá trong processImportedFile. App chết
+    // giữa lô -> lần mở sau sweepPendingImports xếp lại đúng
+    // các file còn nằm đây, theo thứ tự thời gian sao vào.
+
+    /// Tên thư mục chờ — dùng chung cho điểm sao vào, điểm
+    /// quét lại và điểm xoá bản sao sau khi xử lý.
+    static let pendingImportsDirectoryName = "PendingImports"
+
+    private func pendingImportsDirectory() -> URL? {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+        let dir = docs.appendingPathComponent(Self.pendingImportsDirectoryName, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Sao các URL NGOÀI app vào thư mục chờ và trả URL của app;
+    /// URL đã nằm trong Documents của app (Inbox...) trả nguyên
+    /// — chúng bền sẵn, sao nữa chỉ sinh bản trùng. Sao hỏng
+    /// một file (hết dung lượng...) thì giữ URL gốc cho file đó:
+    /// lượt này vẫn xử lý được trong phiên như hành vi cũ, chỉ
+    /// là không bền qua giết app — không chặn cả lô vì một file.
+    private func stageExternalURLs(_ urls: [URL]) -> [URL] {
+        guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return urls }
+        let docsPath = docs.standardizedFileURL.path + "/"
+        return urls.map { url in
+            if url.standardizedFileURL.path.hasPrefix(docsPath) { return url }
+            guard let dir = pendingImportsDirectory() else { return url }
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            // Tiền tố mốc giây + mã ngẫu nhiên ngắn: tên duy
+            // nhất kể cả khi anh chọn trùng tên file hai lần,
+            // và thứ tự tên xấp xỉ thứ tự tới.
+            let stamp = Int(Date().timeIntervalSince1970)
+            let name = "\(stamp)-\(UUID().uuidString.prefix(8))-\(url.lastPathComponent)"
+            let dest = dir.appendingPathComponent(name)
+            do {
+                try FileManager.default.copyItem(at: url, to: dest)
+                return dest
+            } catch {
+                return url
+            }
+        }
+    }
+
+    /// Xếp lại các file còn trong thư mục chờ (lô nạp bị ngắt
+    /// bởi giết app / chu kỳ khoá ở lượt trước) vào hàng chờ
+    /// trong bộ nhớ, theo thời gian sao vào — chỉ nối file
+    /// chưa có trong hàng chờ, như sweepInbox.
+    private func sweepPendingImports() {
+        guard let dir = pendingImportsDirectory(),
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let stray = files.filter { !$0.hasDirectoryPath && !importQueue.contains($0) }
+        guard !stray.isEmpty else { return }
+        let ordered = stray.sorted { a, b in
+            let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            return da != db ? da < db : a.lastPathComponent < b.lastPathComponent
+        }
+        importQueue.append(contentsOf: ordered)
         processNextImportedFile()
     }
 
@@ -447,10 +564,23 @@ struct ScanView: View {
                 // vào Review và KHÔNG chụp snapshot P-DRAFT; nó
                 // nằm ở trạng thái bị chặn riêng cho tới khi anh
                 // quyết định (xem khung cảnh báo trong body).
-                if outcome.qualityOutcome?.decision == .block {
+                // G3 (luật bền hoá, vá sự cố 2026-11-15): quyết
+                // định chặn là QUYẾT ĐỊNH CHƯA THI HÀNH — trạng
+                // thái chặn XUỐNG ĐĨA NGAY KHI RA ĐỜI, cùng một
+                // khoảnh khắc dựng trạng thái trong bộ nhớ. Từ
+                // đây thoát app/giết app chỉ làm khung chặn hiện
+                // lại ở lần mở sau (restorePendingBlockIfNeeded),
+                // không còn đường mất tờ. Ghi hỏng thì nói thật
+                // trong dòng trạng thái như hợp đồng của
+                // presentDraft: anh biết mà quyết ngay, không
+                // lặng im quay về chế độ dễ mất.
+                if let quality = outcome.qualityOutcome, quality.decision == .block {
                     blockedDraft = newDraft
-                    blockedQuality = outcome.qualityOutcome
+                    blockedQuality = quality
                     statusText = "Một tờ đã bị cổng chất lượng chặn — anh quyết định ở khung cảnh báo bên dưới giúp."
+                    if !PendingBlockStore.save(PendingBlockSnapshot(draft: newDraft, quality: quality)) {
+                        statusText = (statusText ?? "") + " Chưa ghi được trạng thái chờ xuống máy — anh quyết định ngay ở khung bên dưới giúp, đừng rời app lâu."
+                    }
                     return
                 }
                 presentDraft(newDraft,
@@ -466,6 +596,10 @@ struct ScanView: View {
     /// thi hành.
     private func presentDraft(_ newDraft: ScanDraft, note: String?) {
         statusText = note
+        // G3: bản nháp MỚI ra đời thì không có lớp sửa dở khôi
+        // phục nào đi kèm — xoá dấu vết của bản nháp trước kẻo
+        // ReviewView dựng nhầm các ô sửa của tờ khác.
+        restoredReviewEdits = nil
         draft = newDraft
         // P-DRAFT (L-2026-11-13-14): chụp bản nháp xuống đĩa NGAY
         // khi nó được trình, TRƯỚC khi sheet Kiểm Lại hiện — từ
@@ -514,6 +648,9 @@ struct ScanView: View {
                     .multilineTextAlignment(.center)
                 HStack(spacing: 12) {
                     Button {
+                        // G3: quyết định ĐÃ thi hành (bỏ tờ này)
+                        // -> bản chụp bị chặn hết việc, xoá ngay.
+                        PendingBlockStore.clear()
                         blockedDraft = nil
                         blockedQuality = nil
                         statusText = nil
@@ -529,6 +666,11 @@ struct ScanView: View {
                     Button {
                         guard let d = blockedDraft,
                               let q = blockedQuality else { return }
+                        // G3: quyết định ĐÃ thi hành (đọc tiếp) ->
+                        // xoá bản chụp bị chặn; tờ từ đây sống
+                        // tiếp dưới hợp đồng P-DRAFT do
+                        // presentDraft chụp ngay sau đây.
+                        PendingBlockStore.clear()
                         blockedDraft = nil
                         blockedQuality = nil
                         presentDraft(d, note: blockedNote(q))
@@ -592,7 +734,11 @@ struct ScanView: View {
         // là lần mở sau quét Inbox sẽ nạp trùng tờ này. File mở-tại-chỗ
         // từ Files KHÔNG nằm trong Inbox -> tuyệt đối không đụng vào
         // file gốc của anh.
-        removeInboxCopyIfNeeded(url)
+        // G3: cùng luật cho bản sao ở thư mục chờ PendingImports
+        // (do stageExternalURLs sao vào) — dữ liệu đã vào bộ nhớ
+        // thì bản sao chờ hết việc; để sót là lần mở sau quét
+        // thư mục chờ sẽ nạp trùng tờ này.
+        removeAppStagedCopyIfNeeded(url)
         if url.pathExtension.lowercased() == "pdf" {
             processImportedPDF(data: data, sourceFileName: url.lastPathComponent)
         } else if let image = UIImage(data: data) {
@@ -603,12 +749,19 @@ struct ScanView: View {
         }
     }
 
-    /// Xoá `url` CHỈ khi nó nằm trong Documents/Inbox của chính app.
-    private func removeInboxCopyIfNeeded(_ url: URL) {
+    /// Xoá `url` CHỈ khi nó là bản sao CỦA APP: nằm trong
+    /// Documents/Inbox (hệ thống chép vào) hoặc Documents/
+    /// PendingImports (G3 sao vào lúc nhận file). File gốc của
+    /// anh ở Files/iCloud không bao giờ nằm ở hai thư mục này.
+    private func removeAppStagedCopyIfNeeded(_ url: URL) {
         guard let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-        let inboxPath = docs.appendingPathComponent("Inbox", isDirectory: true).standardizedFileURL.path
-        if url.standardizedFileURL.path.hasPrefix(inboxPath + "/") {
-            try? FileManager.default.removeItem(at: url)
+        let path = url.standardizedFileURL.path
+        for sub in ["Inbox", Self.pendingImportsDirectoryName] {
+            let dirPath = docs.appendingPathComponent(sub, isDirectory: true).standardizedFileURL.path
+            if path.hasPrefix(dirPath + "/") {
+                try? FileManager.default.removeItem(at: url)
+                return
+            }
         }
     }
 
@@ -760,6 +913,33 @@ extension PendingDraftSnapshot {
                          reconcileReport: restoredReport,
                          diagnosticsID: diagnosticsID,
                          diagnosticsWriteFailed: diagnosticsWriteFailed)
+    }
+}
+
+
+// MARK: - G3: ánh xạ trạng thái chặn <-> PendingBlockSnapshot
+//
+// Ánh xạ sống ở file này vì ScanDraft khai ở đây, cùng tiền lệ
+// của PendingDraftSnapshot ở trên; các DTO + kho lưu
+// (PendingDraft.swift) không phụ thuộc tầng UI.
+
+extension PendingBlockSnapshot {
+    /// Chụp từ trạng thái chặn đang sống trong bộ nhớ (gọi
+    /// ngay khi cổng phán .block ở runRead).
+    init(draft: ScanDraft, quality: QualityOutcome) {
+        self.init(draftSnapshot: PendingDraftSnapshot(draft: draft),
+                  quality: quality)
+    }
+
+    /// Dựng lại cặp (bản nháp, kết quả cổng) để hiện lại khung
+    /// chặn. Trả nil khi BẤT KỲ lớp nào chứa mã lạ (báo cáo đối
+    /// chiếu của bản nháp hoặc mã quyết định của cổng) — nơi
+    /// gọi xử như bản chụp hỏng (xoá + log), không dựng nửa vời
+    /// một quyết định chặn sai nghĩa.
+    func makeBlocked() -> (draft: ScanDraft, quality: QualityOutcome)? {
+        guard let restoredDraft = draft.makeDraft(),
+              let restoredQuality = qualityOutcome() else { return nil }
+        return (restoredDraft, restoredQuality)
     }
 }
 

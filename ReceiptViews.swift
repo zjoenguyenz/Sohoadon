@@ -160,7 +160,7 @@ struct BusinessPurposeField: View {
         "Mua cho nhân viên trong tiệm",
         "Mua cho khách và nhân viên",
         "Dùng cho hoạt động của tiệm",
-        "Mua nguyên liệu / hàng hoá cho tiệm",
+        "Mua nguyên liệu, hàng hoá cho tiệm",
     ]
 
     @State private var customMode = false
@@ -1330,8 +1330,26 @@ struct ReviewView: View {
     /// Giá trị ngày ban đầu (để nhận biết anh có sửa ngày hay
     /// không khi ngày là ngày tạm).
     private let dateDefault: Date
+    /// G3: tác vụ chống dội đang chờ ghi lớp sửa dở xuống đĩa
+    /// (xem scheduleReviewEditsSave) — huỷ mỗi khi có sửa mới,
+    /// và huỷ hẳn khi màn này đã kết thúc (finished).
+    @State private var editSaveTask: Task<Void, Never>? = nil
+    /// G3: màn Kiểm Lại đã kết thúc TƯỜNG MINH (lưu thành công
+    /// hoặc bấm Huỷ) — từ đây persistReviewEdits là cấm: bản
+    /// chụp nháp đã bị ScanView xoá ở onDone, ghi lại sẽ làm
+    /// sống lại một bản nháp đã xử lý xong.
+    @State private var finished = false
+    @Environment(\.scenePhase) private var scenePhase
 
-    init(draft: ScanDraft, onDone: @escaping () -> Void) {
+    /// G3: `restoredEdits` là lớp sửa dở khôi phục từ bản chụp
+    /// nháp (nil với bản nháp mới) — các ô dựng từ lớp này thay
+    /// vì kết quả đọc gốc, và suggestionApplied lấy đúng giá
+    /// trị đã lưu (trong thực tế luôn là true vì lớp sửa chỉ
+    /// được ghi sau khi gợi ý đã áp) để applySuggestionOnce
+    /// không ghi đè lựa chọn anh đã sửa (kiểm trùng vẫn chạy
+    /// lại ở attemptSave như thường).
+    init(draft: ScanDraft, restoredEdits: ReviewEditsDTO? = nil,
+         onDone: @escaping () -> Void) {
         self.draft = draft
         self.onDone = onDone
         let r = draft.result
@@ -1347,6 +1365,18 @@ struct ReviewView: View {
         _taxText = State(initialValue: r.taxes.isEmpty ? "" : centsToDollarsText(r.taxTotalCents))
         _totalText = State(initialValue: centsToDollarsText(r.totalCents))
         _selectedCategory = State(initialValue: Categories.defaultValue(for: .unknown))
+        if let edits = restoredEdits {
+            _vendorText = State(initialValue: edits.vendorText)
+            _dateValue = State(initialValue: edits.dateValue)
+            _subtotalText = State(initialValue: edits.subtotalText)
+            _taxText = State(initialValue: edits.taxText)
+            _totalText = State(initialValue: edits.totalText)
+            _selectedKind = State(initialValue: Classification(rawValue: edits.kindRaw) ?? .unknown)
+            _selectedCategory = State(initialValue: edits.category)
+            _purposeText = State(initialValue: edits.purposeText)
+            _reasonText = State(initialValue: edits.reasonText)
+            _suggestionApplied = State(initialValue: edits.suggestionApplied)
+        }
     }
 
     private var categoryOptions: [String] {
@@ -1628,7 +1658,15 @@ struct ReviewView: View {
                     .buttonStyle(PrimaryButtonStyle())
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     .listRowBackground(Color.clear)
-                    Button("Huỷ, không lưu") { onDone() }
+                    Button("Huỷ, không lưu") {
+                        // G3: kết thúc tường minh — cấm mọi lần
+                        // ghi lớp sửa dở từ đây (kể cả tác vụ
+                        // chống dội đang chờ), vì onDone xoá bản
+                        // chụp nháp ngay sau đây.
+                        finished = true
+                        editSaveTask?.cancel()
+                        onDone()
+                    }
                         .frame(maxWidth: .infinity)
                         .foregroundStyle(.secondary)
                 }
@@ -1637,6 +1675,28 @@ struct ReviewView: View {
             .navigationTitle("Kiểm Lại Hoá Đơn")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear { applySuggestionOnce() }
+            // G3 (luật bền hoá): MỌI thay đổi ở các ô sửa đều
+            // lên lịch ghi lớp sửa dở vào bản chụp nháp — chốt
+            // theo sự kiện rời rạc qua chống dội 0,6 giây yên
+            // lặng (không ghi theo từng ký tự), cộng một lần
+            // ghi ngay khi app vào nền. Từ đây sửa dở của anh
+            // sống trên đĩa cùng bản nháp, khôi phục là dựng
+            // lại đúng những gì anh đã sửa.
+            .onChange(of: vendorText) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: dateValue) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: subtotalText) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: taxText) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: totalText) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: selectedKind) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: selectedCategory) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: purposeText) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: reasonText) { _, _ in scheduleReviewEditsSave() }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .background {
+                    editSaveTask?.cancel()
+                    persistReviewEdits()
+                }
+            }
             .alert("Có vẻ hoá đơn này đã có trong sổ", isPresented: $showDuplicateAlert) {
                 Button("Vẫn lưu thêm") { save(ignoreDuplicate: true) }
                 Button("Huỷ, không lưu", role: .cancel) {}
@@ -1671,6 +1731,45 @@ struct ReviewView: View {
             .multilineTextAlignment(.trailing)
             .monospacedDigit()
             .frame(width: 110)
+    }
+
+    /// G3: lên lịch ghi lớp sửa dở — chống dội 0,6 giây: mỗi
+    /// thay đổi mới huỷ lần chờ trước, chỉ khi anh ngừng sửa
+    /// đủ lâu mới ghi đĩa một lần. Các sự kiện rời rạc (đổi
+    /// loại/mục bằng Picker, chọn ngày) cũng đi qua đường này
+    /// nên tự thành "chốt theo sự kiện" sau 0,6 giây; app vào
+    /// nền thì body ghi NGAY, không chờ hết giờ chống dội.
+    private func scheduleReviewEditsSave() {
+        guard !finished else { return }
+        editSaveTask?.cancel()
+        editSaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            persistReviewEdits()
+        }
+    }
+
+    /// G3: ghi lớp sửa dở hiện tại vào bản chụp nháp — bản
+    /// chụp dựng lại từ `draft` gốc (không đổi) cộng lớp phủ
+    /// là trạng thái các ô NGAY LÚC NÀY, ghi qua đúng kho
+    /// PendingDraftStore nguyên tử. Sau khi màn đã kết thúc
+    /// tường minh (finished) thì KHÔNG ghi nữa: bản chụp đã
+    /// bị xoá ở onDone, ghi lại là làm sống lại việc đã xong.
+    private func persistReviewEdits() {
+        guard !finished else { return }
+        var snapshot = PendingDraftSnapshot(draft: draft)
+        snapshot.reviewEdits = ReviewEditsDTO(
+            vendorText: vendorText,
+            dateValue: dateValue,
+            subtotalText: subtotalText,
+            taxText: taxText,
+            totalText: totalText,
+            kindRaw: selectedKind.rawValue,
+            category: selectedCategory,
+            purposeText: purposeText,
+            reasonText: reasonText,
+            suggestionApplied: suggestionApplied)
+        PendingDraftStore.save(snapshot)
     }
 
     private func applySuggestionOnce() {
@@ -1836,6 +1935,12 @@ struct ReviewView: View {
             saveFailed = true
             return
         }
+        // G3: lưu thành công = kết thúc tường minh — đóng cổng
+        // ghi lớp sửa dở TRƯỚC onDone (nơi ScanView xoá bản
+        // chụp), kẻo tác vụ chống dội đang chờ ghi lại bản chụp
+        // của một tờ đã lưu xong.
+        finished = true
+        editSaveTask?.cancel()
         onDone()
     }
 }

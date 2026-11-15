@@ -417,7 +417,11 @@ struct ReconcileReportDTO: Codable, Equatable {
 /// tại một thời điểm chỉ giữ một ScanDraft (sheet Kiểm Lại là
 /// modal) — bản nháp mới ra đời ghi đè bản chụp cũ.
 struct PendingDraftSnapshot: Codable, Equatable {
-    static let currentSchemaVersion = 1
+    // G3 (luật bền hoá trạng thái): v2 CỘNG THÊM lớp sửa dở ở
+    // màn Kiểm Lại (reviewEdits, tuỳ chọn) — v1 không có trường
+    // này vẫn nạp được (reviewEdits = nil), xem cổng schema ở
+    // PendingDraftStore.load. Ngoài khoảng 1...2 vẫn coi là lạ.
+    static let currentSchemaVersion = 2
 
     var schemaVersion: Int = PendingDraftSnapshot.currentSchemaVersion
     /// Thời điểm chụp (để chẩn đoán/log; không hiển thị cho anh).
@@ -435,6 +439,13 @@ struct PendingDraftSnapshot: Codable, Equatable {
     var reconcileReport: ReconcileReportDTO? = nil
     var diagnosticsID: String? = nil
     var diagnosticsWriteFailed: Bool = false
+    /// G3: lớp SỬA DỞ ở màn Kiểm Lại phủ lên bản chụp gốc —
+    /// nil khi anh chưa sửa gì (mọi bản chụp v1 và bản chụp
+    /// lúc nháp ra đời). ReviewView ghi lại trường này mỗi khi
+    /// anh sửa; khôi phục thì ReviewView dựng các ô từ lớp này
+    /// thay vì từ kết quả đọc gốc. Cộng thêm thuần tuý: KHÔNG
+    /// trường cũ nào đổi nghĩa.
+    var reviewEdits: ReviewEditsDTO? = nil
 
     init(result: ParseResult,
          imageFileName: String,
@@ -516,7 +527,10 @@ enum PendingDraftStore {
         do {
             let data = try Data(contentsOf: target)
             let snapshot = try JSONDecoder().decode(PendingDraftSnapshot.self, from: data)
-            guard snapshot.schemaVersion == PendingDraftSnapshot.currentSchemaVersion else {
+            // G3: chấp nhận cả v1 (chưa có reviewEdits — giải mã
+            // ra nil) lẫn v2 hiện hành; ngoài khoảng này là bản
+            // chụp của một thế hệ khác hẳn -> coi là hỏng như cũ.
+            guard (1...PendingDraftSnapshot.currentSchemaVersion).contains(snapshot.schemaVersion) else {
                 discardCorrupt(in: directory,
                                reason: "schemaVersion=\(snapshot.schemaVersion) không được hỗ trợ")
                 return nil
@@ -544,6 +558,194 @@ enum PendingDraftStore {
 
     /// Ghi nối một dòng log chẩn đoán. Mọi lỗi ghi log đều nuốt:
     /// log là đường phụ của đường phụ, không được gây hậu quả.
+    static func appendLog(_ message: String, in directory: URL = defaultDirectory) {
+        let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
+        let url = directory.appendingPathComponent(logFileName)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(line.utf8))
+        } else {
+            try? Data(line.utf8).write(to: url)
+        }
+    }
+}
+
+// MARK: - G3: lớp sửa dở ở màn Kiểm Lại (ReviewEditsDTO)
+//
+// Sự cố gốc (TEAM3 mục 1.2): bản chụp P-DRAFT chỉ chụp MỘT lần
+// lúc bản nháp ra đời; mọi sửa chữa của anh trong Kiểm Lại (tên
+// tiệm, ngày, số tiền, loại, mục, mục đích) chỉ sống ở @State
+// của ReviewView — khôi phục được bản nháp thì về trạng thái
+// NGUYÊN VẸN lúc đọc, công sửa mất sạch. DTO này là lớp phủ
+// sửa dở: ReviewView ghi nó vào CÙNG bản chụp nháp mỗi khi anh
+// sửa (chốt theo sự kiện rời rạc + chống dội, xem ReviewView),
+// khôi phục thì dựng các ô từ lớp phủ thay vì kết quả đọc gốc.
+//
+// Các trường giữ ĐÚNG DẠNG Ô NHẬP (chuỗi tiền chưa đổi đơn vị,
+// ngày dạng Date) để khôi phục là dựng lại y hệt những gì anh
+// đang nhìn — không qua đổi đơn vị hai chiều nào có thể lệch
+// xu. kindRaw là Classification.rawValue dạng chuỗi; mã lạ ở
+// tầng dựng (ReviewView) hạ về gợi ý mặc định như sourceType
+// của P-DRAFT, không đáng đánh đổi cả bản nháp vì một nhãn.
+
+struct ReviewEditsDTO: Codable, Equatable {
+    var vendorText: String
+    var dateValue: Date
+    var subtotalText: String
+    var taxText: String
+    var totalText: String
+    /// Classification.rawValue ("personal"/"business"/"unknown").
+    var kindRaw: String
+    var category: String
+    var purposeText: String
+    var reasonText: String
+    /// Đã áp gợi ý phân loại một lần hay chưa — khôi phục phải
+    /// giữ true để applySuggestionOnce KHÔNG chạy lại và ghi
+    /// đè lựa chọn anh đã sửa (kiểm trùng vẫn chạy ở attemptSave).
+    var suggestionApplied: Bool
+}
+
+// MARK: - G3: DTO cho QualityOutcome (CaptureIntake.swift)
+//
+// QualityOutcome không phải Codable (nó là kết quả sống của
+// cổng) — DTO lưu 4 trường nguyên thuỷ; decision qua rawValue
+// và ánh xạ ngược TRẢ NIL khi gặp mã lạ, đúng kỷ luật
+// toàn-hay-không của ReconcileReportDTO: quyết định chặn là
+// QUYẾT ĐỊNH CHƯA THI HÀNH, dựng sai nghĩa còn tệ hơn mất.
+
+struct QualityOutcomeDTO: Codable, Equatable {
+    var detected: [String]
+    var decisionRaw: String
+    var failSafe: Bool
+    var consecutiveRejects: Int
+
+    init(_ outcome: QualityOutcome) {
+        detected = outcome.detected
+        decisionRaw = outcome.decision.rawValue
+        failSafe = outcome.failSafe
+        consecutiveRejects = outcome.consecutiveRejects
+    }
+
+    func toOriginal() -> QualityOutcome? {
+        guard let decision = QualityDecision(rawValue: decisionRaw) else { return nil }
+        return QualityOutcome(detected: detected, decision: decision,
+                              failSafe: failSafe,
+                              consecutiveRejects: consecutiveRejects)
+    }
+}
+
+// MARK: - G3: bản chụp tờ BỊ CỔNG CHẤT LƯỢNG CHẶN (PendingBlock)
+//
+// Sự cố gốc (2026-11-15, O-V44-1 thành thiệt hại thật): tờ bị
+// cổng phán .block chỉ sống ở @State của ScanView (blockedDraft
+// / blockedQuality) và runRead CỐ Ý không chụp snapshot — anh
+// thoát app trước khi bấm "Vẫn đọc tờ này" là tờ biến mất khỏi
+// giao diện, không đường khôi phục (ảnh gốc + chẩn đoán còn
+// trên đĩa nhưng không màn hình nào trỏ tới). Theo luật bền
+// hoá G3, quyết định chặn phải XUỐNG ĐĨA NGAY KHI RA ĐỜI:
+// ScanView chụp bản này cùng khoảnh khắc dựng trạng thái chặn,
+// và dựng lại đúng khung chặn ở lần mở app sau cho tới khi anh
+// quyết một trong hai nút (cả hai nút đều xoá bản chụp).
+//
+// Bản chụp GỒM bản chụp nháp đầy đủ (PendingDraftSnapshot —
+// dùng lại toàn bộ DTO đã kiểm ở G1) + kết quả cổng. Ô duy
+// nhất như P-DRAFT: giao diện tại một thời điểm chỉ giữ một
+// tờ bị chặn (mọi đường đọc mới đều bị canh bởi blockedDraft).
+
+struct PendingBlockSnapshot: Codable, Equatable {
+    static let currentSchemaVersion = 1
+
+    var schemaVersion: Int = PendingBlockSnapshot.currentSchemaVersion
+    var createdAt: Date
+    var draft: PendingDraftSnapshot
+    var quality: QualityOutcomeDTO
+
+    init(draftSnapshot: PendingDraftSnapshot,
+         quality: QualityOutcome,
+         createdAt: Date = Date()) {
+        self.createdAt = createdAt
+        self.draft = draftSnapshot
+        self.quality = QualityOutcomeDTO(quality)
+    }
+
+    /// Kết quả cổng dựng lại từ DTO — nil khi mã quyết định lạ
+    /// (bản chụp của phiên bản khác): nơi gọi coi bản chụp là
+    /// hỏng. Tách thuần ở tầng này để harness kiểm được mà
+    /// không cần tầng UI (makeBlocked ở ScanView chỉ cộng thêm
+    /// bước dựng ScanDraft từ draft.makeDraft()).
+    func qualityOutcome() -> QualityOutcome? {
+        quality.toOriginal()
+    }
+}
+
+// MARK: - Kho lưu bản chụp bị chặn (Documents/PendingBlock.json)
+//
+// Cùng mẫu PendingDraftStore: ghi nguyên tử temp -> đổi tên,
+// hỏng/lạ -> xoá lặng + một dòng log (PendingBlock.log), không
+// bao giờ ném lỗi ra đường chính.
+
+enum PendingBlockStore {
+    static let fileName = "PendingBlock.json"
+    static let logFileName = "PendingBlock.log"
+
+    static var defaultDirectory: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    static func fileURL(in directory: URL) -> URL {
+        directory.appendingPathComponent(fileName)
+    }
+
+    @discardableResult
+    static func save(_ snapshot: PendingBlockSnapshot,
+                     in directory: URL = defaultDirectory) -> Bool {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(snapshot) else { return false }
+        let target = fileURL(in: directory)
+        let temp = directory.appendingPathComponent(fileName + ".tmp")
+        do {
+            try data.write(to: temp)
+            if FileManager.default.fileExists(atPath: target.path) {
+                _ = try FileManager.default.replaceItemAt(target, withItemAt: temp)
+            } else {
+                try FileManager.default.moveItem(at: temp, to: target)
+            }
+            return true
+        } catch {
+            try? FileManager.default.removeItem(at: temp)
+            return false
+        }
+    }
+
+    static func load(in directory: URL = defaultDirectory) -> PendingBlockSnapshot? {
+        let target = fileURL(in: directory)
+        guard FileManager.default.fileExists(atPath: target.path) else { return nil }
+        do {
+            let data = try Data(contentsOf: target)
+            let snapshot = try JSONDecoder().decode(PendingBlockSnapshot.self, from: data)
+            guard snapshot.schemaVersion == PendingBlockSnapshot.currentSchemaVersion else {
+                discardCorrupt(in: directory,
+                               reason: "schemaVersion=\(snapshot.schemaVersion) không được hỗ trợ")
+                return nil
+            }
+            return snapshot
+        } catch {
+            discardCorrupt(in: directory, reason: "không đọc được: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    static func clear(in directory: URL = defaultDirectory) {
+        try? FileManager.default.removeItem(at: fileURL(in: directory))
+    }
+
+    static func discardCorrupt(in directory: URL = defaultDirectory, reason: String) {
+        clear(in: directory)
+        appendLog("Snapshot bị chặn hỏng đã bị xoá: \(reason)", in: directory)
+    }
+
     static func appendLog(_ message: String, in directory: URL = defaultDirectory) {
         let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
         let url = directory.appendingPathComponent(logFileName)
