@@ -1,0 +1,54 @@
+CA TRỰC 14:40 CST 2026-11-15 — KIỂM CHỨNG TRỰC TIẾP LƯỢT MỐC G5 TRÊN GITHUB ACTIONS
+================================================================================
+Nguồn: đọc trực tiếp trang Actions của zjoenguyenz/Sohoadon qua trình duyệt
+có phiên, 14:41–14:45 CST 2026-11-15 (chỉ đọc; không kích/không chạy lại/
+không huỷ bất cứ run nào). Ca không sửa code, không dispatch CI, không build.
+
+1) BUILD-IPA RUN #120 — SUCCESS (đây là bản mốc của commit sửa G5)
+- Run: https://github.com/zjoenguyenz/Sohoadon/actions/runs/43756448250
+- Commit 80d5a0b (trang hiện 7 ký tự; khớp 80d5a0b4 trong WORK-STATE),
+  nhánh v3, kích bằng push 14:09 CST, SUCCESS, tổng 3m31s, job build 3m27s.
+- 2 artifact: SoHoaDon-V3-run120-2026-11-15 (1.43 MB) +
+  SoHoaDon-BENCH-V3-run120-2026-11-15 (22.1 MB).
+- Đối chiếu tại bàn trong ca này (sha256sum chạy lại):
+  app IPA   c4044055bd829d0a0a6d76bc3e82a1c96a34c19947195bd3d3b3f0b15ebdced1
+  bench IPA 112cc3f175af26f8d5268b6ea68c33260cf097248da41ee160384864cc86b615
+  — khớp số đã ghi trong nhật ký ngày 2026-11-15 (mục G5 bản mốc #120).
+  (Kiểm nhị phân của bản mốc do chat chính làm 14:09–14:15 — ca này
+  không nhận công, chỉ đối chiếu hash file tại bàn.)
+
+2) HARNESS RUN #37 — VẪN ĐANG CHẠY tại thời điểm kiểm (14:44 CST)
+- Run: https://github.com/zjoenguyenz/Sohoadon/actions/runs/43756035020
+  Job law-and-control: .../job/132940217716
+- Workflow "Harness — cổng tự chạy 10 lượt" (harness-ci.yml),
+  workflow_dispatch, nhánh v3 @ 50ccb29, bắt đầu 14:05 CST;
+  lúc 14:44 đã chạy 39m14s, trạng thái "In progress", chưa artifact.
+- ĐÃ XANH (đọc log trực tiếp):
+  * Cổng G1 unit tests: "UNITTESTS-DONE total=113 failed=0" +
+    "SURVIVED unittests".
+  * Cổng 1 control (fixture L-R01): "SURVIVED fixture" —
+    Costco subtotal=12548 tax=938 total=13486 items=20 sumItems=12548
+    card=2586.
+- ĐANG CHẠY: Cổng 2 — 43 ảnh × 10 set đúng đường app.
+  Log dòng 10947: "SET 6 DONE 43/43"; SET 7 đang chạy, ảnh cuối thấy
+  được là SYN-001-BLUR.jpg ở stage perspective-detect (dòng log 11643,
+  14:44 CST). Hai dòng kết quả SET 7 đọc trọn: C-003 (The Home Depot
+  9691/825/10516, arb=closed) + L-R04 (Walmart 5686/223/5909,
+  arb=closed). SET 1–5: không trích trực tiếp được dòng DONE trong
+  cửa sổ log đã nạp — việc run tới được SET 7 là bằng chứng các set
+  trước không làm run dừng; ca ghi rõ giới hạn này, không khẳng định
+  thay từng dòng DONE.
+- CHƯA BẮT ĐẦU (chưa có phán quyết): Cổng 2b roigate (chưa có
+  f2Rescued), Ma trận cấu hình phụ, Cổng 3 fuzz, Lưu bằng chứng.
+- Không thấy bước nào lỗi / không có dòng error nào tại thời điểm kiểm.
+
+TUYÊN BỐ TRUNG THỰC
+- Đã chứng minh: trạng thái #120 SUCCESS + hash 2 IPA tại bàn khớp sổ;
+  #37 còn sống và đang ở Cổng 2 SET 7/10 lúc 14:44, G1 113/0 SURVIVED,
+  control SURVIVED — bằng đọc trực tiếp Actions trong ca.
+- Chưa chứng minh: kết cục #37 (Cổng 2 trọn 10 set / 2b roigate /
+  ma trận / Cổng 3 fuzz) — G5 CHƯA ĐÓNG, chưa giao gì cho anh.
+- Chưa làm: không sửa code, không dispatch, không đẩy code v3/main.
+Bước tiếp theo giữ nguyên: chờ #37 chạy xong ở nhịp chat chính/Leader
+→ nếu xanh trọn mới kết luận G5 + giao mốc một lần; GATE100-v2 vẫn là
+bước chốt sau, cần phiên với anh.

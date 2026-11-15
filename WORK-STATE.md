@@ -3849,3 +3849,106 @@ rồi đẩy một lần, lượt CI trên code cuối là cổng Luật 3).
 - KẾT QUẢ 2 — MÔ PHỎNG CHẠY LẠI: `g2/sim/simulate_g2.py lane2` tại bàn: 34 ca, **32 IDENTICAL**, chỉ D-17 (khối tổng unclosed→closed, total 10516 bằng closureVariant) + D-18 (FLAGGED-LOSS→FULL-LEDGER, Σ 7694→9691, δE1 −1997→0) thay đổi; FULL 27→28/34, **0 ca thụt**; đầu ra khớp file đã lưu `lane2-output.txt` từng dòng nội dung. `key2`: 5 ca neo (SAMS-20260930, L-R01, L-R09, L-R03, L-R08) bất biến; L-R05 biến thể bị từ chối đúng luật (Σ=4400, δ1=−1275).
 - Tuyên bố trung thực — đã chứng minh: nguyên vẹn byte gói G2 trên v3 + delta mô phỏng khớp báo cáo gói, bằng đo trực tiếp trong ca; chưa chứng minh: Swift thật CHƯA chạy gói này (lỗi biên dịch/loại chỉ phán ở lượt streams xác nhận của Leader: unittests VT01–VT08 + streams 169), thu hoạch đa-lượt + ROI đa dạng VẪN CHƯA ĐO (Gate D/G5); chưa làm: không dispatch CI, không build-ipa, G3 chưa bắt đầu.
 - **Bước tiếp theo giữ nguyên: Leader kích ĐÚNG MỘT lượt streams xác nhận trên v3 @ gói G2 (unittests gồm VT01–VT08, kỳ vọng failed=0 + streams 169 died=0) → G2 ĐÓNG mới sang G3. Ca này không kêu anh cài/test gì.**
+- ĐẨY CUỐI CA 12:40: **THÀNH CÔNG** — đúng 1 lần, 2 file (WORK-STATE.md · g2/checks/ca-1240-g2-remote-recheck.txt), commit mới trên docs/planning: `51dafdac85da3665bae43396c2df34eabbe87359`. (Dòng này chỉ có tại bàn, sẽ đi theo lần đẩy của ca sau.)
+- 2026-11-15: G2 vòng sửa cổng #33 XONG tại bàn: commit
+  260e6343 (2 file). (1) ReadPipeline: ?.detail?.hasPrefix
+  (lỗi biên dịch #110); rà toàn diff e929322d không còn
+  mẫu tương tự. (2) VT05: lượt cứu khép thật nhưng bước
+  vật hoá ép món gãy = nil (Arbiter:1325) — sửa lấy
+  chosen thẳng; mô phỏng tại bàn: VT05 khép 1997/
+  closureVariant, VT06 vẫn bị từ chối. CHỜ Leader kích
+  lại lượt xác nhận (build-ipa + harness streams).
+- 2026-11-15 13:09 CST: G2 ĐÓNG. Lượt xác nhận lại:
+  harness #34 XANH — UNITTESTS 60/60 failed=0 (VT05
+  khép trên Swift thật), STREAMS 169 died=0;
+  build-ipa #111 (commit 260e6343) XANH. Nguyên
+  nhân 2 lỗi vòng đầu đã ghi trong G2-PACKAGE-
+  REPORT (thiếu ? ở ReadPipeline:555; ItemsArbiter
+  ép nil món gãy ở bước vật hoá). Còn treo đúng
+  như đã khai: ROI đa dạng chưa đo (Gate D/G5),
+  L-R05 chờ tầng ảnh trên máy. Sang G3.
+- 2026-11-15: G3 XONG ở mức gói — commit d3c08331 trên
+  v3 (5 file, blob 5/5 khớp remote). Nội dung: luật bền
+  hoá — PendingBlockStore (tờ bị chặn xuống đĩa ngay khi
+  cổng phán, khôi phục ở lần mở sau), lớp sửa dở Kiểm Lại
+  vào snapshot (schema v2, nạp được v1), hàng đợi nạp bền
+  qua PendingImports, khoá Face ID thành lớp phủ + tab
+  @SceneStorage, vá dấu phẩy mục đích 5. Test mới PB
+  19 + RE 12 (kỳ vọng unittests 91/91). Statics P4/P5/
+  S10 PASS. CHỜ Leader: build-ipa trên d3c08331 (cổng
+  bắt buộc vì đụng giao diện) + 1 lượt streams xác nhận.
+  Báo cáo: core-expert/G3-PACKAGE-REPORT.md.
+- 2026-11-15 13:26 CST: G3 ĐÓNG ngay lượt đầu:
+  build-ipa #112 (d3c08331) XANH; harness #35:
+  UNITTESTS 91/91 failed=0, STREAMS 169 died=0.
+  Luật bền hoá đã vào code: PendingBlockStore,
+  reviewEdits schema v2 (tương thích ngược v1),
+  Face ID lớp phủ + tab @SceneStorage, dấu phẩy
+  mục 5 đã sửa. Vòng đời thật chờ Gate D. Sang G4.
+- 2026-11-15 G4 (cổng chất lượng) ĐÃ ĐẨY: commit
+  768c2e19 trên v3 (cơ sở d3c08331). Hạ .block -> .warn
+  ở ScanView + blockEnabled=false trong dữ liệu ngưỡng;
+  đo trên vùng tờ (giấy/mực theo Otsu) + contrast theo
+  dải + blur chuẩn hoá factor^0.10; bộ đếm từ chối bền
+  (UserDefaults) đổi vai thành leo thang cảnh báo; ngưỡng
+  thành quality-thresholds.json (quality-gate-v4-
+  calibrated-2026-11-15: blur 0.008 / glare 0.88 /
+  contrast 0.12) — hiệu chuẩn tại bàn: cảnh báo oan
+  0/11 tờ khép sổ sạch (cổng cũ sẽ chặn 11/11). Test
+  mới QG01-22 -> kỳ vọng UNITTESTS total=113. Chờ
+  Leader kích lượt xác nhận (streams + build-ipa).
+- 2026-11-15 13:49 CST: G4 ĐÓNG: build-ipa #113
+  (768c2e19) XANH; harness #36: UNITTESTS 113/113
+  failed=0, STREAMS 169 died=0. ★ Nguyên nhân gốc
+  vụ chặn tờ mới 15/11 ĐÃ TÌM RA: ngưỡng mờ cũ
+  100.0 thuộc thang byte 0..255 trong khi số đo
+  trên lưới 0..1 — cổng cũ gắn cờ mờ 43/43 ảnh và
+  sẽ chặn 11/11 tờ khép sổ sạch. Ngưỡng hiệu
+  chuẩn mới (quality-gate-v4-calibrated): cảnh
+  báo oan 0/11 = 0% (ngân sách ≤2%); độ nhạy trên
+  ca đọc-không-khép 0/4 (hỏng ở tầng token — cổng
+  không thấy) nên .block GIỮ TẮT. Workflow đã bổ
+  sung chép quality-thresholds.json (02620e1 v3,
+  89c604e main). Sang G5 (gói cuối).
+
+- 2026-11-15 ~14:0x CST — G5 THI CÔNG XONG TẠI BÀN, ĐÃ ĐẨY,
+  CHỜ LƯỢT MỐC CỦA LEADER (báo cáo:
+  core-expert/G5-PACKAGE-REPORT.md). Mảng A 858c5167:
+  harness images chạy ReceiptReader/ReadPipeline thật (3 điểm
+  UIKit trong ReadPipeline bọc canImport, shim rút ruột),
+  cổng roigate hai-làn mới (khẳng định ROI>0 ở ca thâm hụt,
+  ≥1 ca F2 được cứu, delta ≥0 từng ca), bench-gt.json đóng
+  băng 43 ca (gtVersion bench-gt-2026-11-15-g5), workflow
+  nháp đổi 100→10 + bước roigate + matrix 1 set — LEADER
+  PHẢI CÀI VÀO .github/workflows TRÊN v3+main QUA TRÌNH
+  DUYỆT (bản nháp không nằm trong repo). Mảng B 6b07a035:
+  BenchSelfCheck.swift (Gate D đủ 4 phần theo đặc tả G1:
+  43 ảnh + SCORECARD + marker CRASHED; vòng đời một-lần-giết
+  B1/B2/B3, B-FACEID-TAB = KNOWN-GAP; replay .ocrdiag;
+  phân phối chất lượng + SC-L18/L17 tầng logic; xuất 1 JSON)
+  + BenchView nối giao diện + project.yml bench cộng
+  BenchSelfCheck/PendingDraft/ReceiptLogic/bench-gt.json.
+  Tĩnh P4/P5/S10 PASS toàn bộ; remote==local từng byte ở 2
+  file quyết định. CHƯA biên dịch/chạy thật — lượt mốc của
+  Leader: harness full (kỳ vọng unittests 113/0, images x10
+  SURVIVED, roigate SURVIVED f2Rescued>=1, matrix x1 ×4,
+  fuzz PASS) + build-ipa cùng commit 6b07a035 (kiểm nhị
+  phân theo BINARY-CHECK). Tiêu chí lõi-hoàn-thành: CI
+  chứng minh được (1) + (2); (3) một phần; (4)(5) chỉ
+  GATE100-v2 trên máy anh. G5 KHÔNG giao gì cho anh.
+- 2026-11-15 14:05 CST: G5 thi công xong (A: 858c5167,
+  B: 6b07a035). Workflow G5 đã cài v3 (50ccb29) +
+  main (51a316c). build-ipa #117 ĐỎ: lỗi cú pháp
+  BenchSelfCheck.swift:622 — infoDictionary? + xuống
+  dòng + [ bị Swift hiểu thành toán tử ba ngôi.
+  Leader tự sửa (object(forInfoDictionaryKey:)),
+  P4 PASS, đẩy 80d5a0b4. Lượt mốc harness #37
+  (job=full, trên 50ccb29) ĐANG CHẠY; build-ipa
+  của 80d5a0b4 tự kích theo lần đẩy sẽ là bản mốc.
+
+## CA TRỰC 14:40 CST 2026-11-15 — KIỂM CHỨNG TRỰC TIẾP LƯỢT MỐC G5: BUILD #120 SUCCESS ĐÃ XÁC NHẬN, HARNESS #37 VẪN ĐANG CHẠY Ở CỔNG 2 (SET 7/10)
+- Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 + D1–D7 21:44 ngày 2026-11-11; chương trình G1–G5 duyệt 11:38 ngày 2026-11-15; G1 ĐÓNG 12:07, G2 ĐÓNG 13:09, G3 ĐÓNG 13:26, G4 ĐÓNG 13:49; G5 thi công xong tại bàn 14:05, chờ lượt mốc của Leader). Ca quay lại luật chung, làm đúng MỘT bước tiếp theo: lấy phán quyết/trạng thái hiện tại của lượt mốc G5 bằng đọc trực tiếp GitHub Actions — ca không sửa code, không dispatch CI, không build, không giao bản mới. Sổ đầy đủ: `g5/checks/ca-1440-g5-milestone-recheck.txt`.
+- KẾT QUẢ 1 — BUILD-IPA #120 SUCCESS (bản mốc của commit sửa 80d5a0b4): run 43756448250, nhánh v3, kích bằng push 14:09 CST, SUCCESS 3m31s; 2 artifact (app 1.43 MB + bench 22.1 MB). Ca tự chạy lại sha256sum tại bàn: app `c4044055…` + bench `112cc3f1…` — khớp số nhật ký ngày (kiểm nhị phân bản mốc do chat chính làm 14:09–14:15, ca không nhận công).
+- KẾT QUẢ 2 — HARNESS #37 VẪN ĐANG CHẠY lúc kiểm 14:41–14:45 CST (run 43756035020, job law-and-control, v3 @ 50ccb29, bắt đầu 14:05, đã chạy 39m14s, chưa artifact): ĐÃ XANH — Cổng G1 unit tests "UNITTESTS-DONE total=113 failed=0 / SURVIVED unittests"; Cổng 1 control fixture L-R01 "SURVIVED fixture" (Costco 12548/938/13486). ĐANG CHẠY — Cổng 2 (43 ảnh × 10 set đúng đường app): log "SET 6 DONE 43/43", SET 7 đang ở SYN-001-BLUR (stage perspective-detect); 2 dòng SET 7 đọc trọn đều arb=closed (C-003 9691/825/10516 · L-R04 5686/223/5909). Giới hạn ghi rõ: cửa sổ log đã nạp không trích trực tiếp được dòng DONE của SET 1–5 — việc tới được SET 7 là bằng chứng chúng không làm run dừng, ca không khẳng định thay. CHƯA BẮT ĐẦU: Cổng 2b roigate (chưa có f2Rescued), ma trận, Cổng 3 fuzz. Không bước nào lỗi tại thời điểm kiểm.
+- Tuyên bố trung thực — đã chứng minh: trạng thái #120 + #37 kể trên bằng đọc trực tiếp Actions + hash tại bàn trong ca; chưa chứng minh: kết cục #37 — **G5 CHƯA ĐÓNG**, chưa giao gì cho anh; chưa làm: không sửa code, không dispatch, không đẩy code.
+- **Bước tiếp theo giữ nguyên: chờ harness #37 chạy xong ở nhịp chat chính/Leader → xanh trọn mới kết luận G5 và giao mốc một lần; GATE100-v2 (tờ niêm phong của anh) là bước chốt sau. Ca này không kêu anh cài/test gì.**
