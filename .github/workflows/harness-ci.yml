@@ -63,7 +63,7 @@ jobs:
             -derivedDataPath harness/dd build 2>&1 | tee build.log | tail -20
           BIN=$(find harness/dd/Build/Products -name SoHoaDonHarness -type f -not -path "*.dSYM*" | head -1)
           echo "BIN=$BIN" >> "$GITHUB_ENV"
-          cp vendors.json lexicon.json "$(dirname "$BIN")/"
+          cp vendors.json lexicon.json quality-thresholds.json "$(dirname "$BIN")/"
       - name: Probe (ngôn ngữ + dữ liệu nạp thật)
         run: |
           set -o pipefail
