@@ -1,0 +1,45 @@
+CA TRUC 18:40 CST 2026-11-14 — TAI XAC NHAN TRANG THAI CHO SAU CA 16:40
+Goi: GL-Keeper / So Hoa Don — cho anh xac nhan tren may ban #106
+
+CONG DONG BANG NGHIEN CUU CU: DA HET HIEU LUC
+- WORK-STATE ghi ro anh duyet huong 21:02 + D1-D7 21:44 ngay 2026-11-11;
+  Phuong an A 10:46, DESIGN-V4 + D-V4-1..4 10:52, muc chot V4-4 12:36,
+  AMD-V4-01 15:55 ngay 2026-11-13. V4-4 da giao run #103, L-21 o run #106.
+
+BANG CHUNG TRONG CA (doc truc tiep):
+1) Nhat ky ngay ~/memory/2026-11-14.md:
+   - Muc moi nhat ve test #106 van la dong 1493-1496: 3 diem test da xin anh
+     tren ban 106 "chua co ket qua — van mo" (P-DRAFT giet-app; to xau kich
+     hoat cong .block + bam "Van doc to nay"; nhin nhanh danh sach chon muc dich).
+   - Muc ca 16:40 o dong 1677 la muc ca truc GL-Keeper moi nhat trong nhat ky
+     truoc ca nay. Cac muc sau do trong file (Joe TV v2.0, tvOS, A53, mold,
+     iNails icon) khong co ghi nhan cai/test #106 nao.
+   - Ket luan: KHONG co bang chung ket qua cai/test #106 moi ke tu ca 16:40.
+
+2) Cay song ReceiptViews.swift (v3-phase4/app/ReceiptViews.swift:161-167):
+   - options van gom muc 5 dang dau "/":
+     "Mua nguyen lieu / hang hoa cho tiem"
+   - Sua chu muc 5 ("/" -> ",") VAN CHUA THI HANH, dung ke hoach gom vao
+     luot build ke tiep vi ly do khac — khong build rieng cho dau cau.
+
+3) downloads/:
+   - Van dung o IPA run #106: SoHoaDon-V3-run106-2026-11-14.ipa
+     (1.426.132 byte, Nov 14 12:43). Khong co IPA/test file moi sau ca 16:40.
+
+4) receipt-app/ files moi sau 16:40:
+   - Chi co WORK-STATE.md + cac file checks cua chinh cac ca truoc
+     (ca-1240, ca-1440, ca-1640). Khong co file kiem/test moi.
+
+TUYEN BO TRUNG THUC:
+- Da chung minh: trang thai cho khong doi ke tu ca 16:40 bang grep/doc truc tiep.
+- Chua chung minh: ket qua cai/test #106 tren may anh (chua co ghi nhan nao tai ban).
+- Chua lam: khong sua dong muc 5, khong build, khong dispatch CI, khong giao ban moi.
+  Cac diem test thiet bi van mo nguyen — P-DRAFT giet-app giua chung +
+  to dau qua cong chan .block (+ nhin nhanh danh sach chon muc dich).
+  Phase 2 van khoa cho toi GATE100-v2 + anh xac nhan tren may.
+
+BUOC TIEP THEO GIU NGUYEN:
+Cho anh xac nhan tren may (cai de #106 + cac diem test thiet bi dang mo).
+Khi co luot build ke tiep vi ly do khac, gom sua dung 1 dong
+ReceiptViews.swift:166 (dau "/" -> dau ",") vao cung luot.
+Ca nay khong keu anh cai/test gi them.
