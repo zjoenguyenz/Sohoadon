@@ -38,6 +38,7 @@ enum HarnessUnitTests {
         runHasLoadableOriginalTests(check)
         runFlagsTests(check)
         runVariantRescueTests(check)
+        runQualityGateTests(check)
         return lines
     }
 
@@ -679,5 +680,228 @@ enum HarnessUnitTests {
                 == ["Tổng các món ($1.00) khác subtotal ($5.00)",
                     missingPurposeFlagText,
                     missingOriginalImageFlagText])
+    }
+
+    // MARK: - G4: cổng chất lượng — ngưỡng dữ liệu, phân loại,
+    // bộ đếm bền + leo thang, vùng tờ, chuẩn hoá hạ mẫu
+    //
+    // Khoá các hợp đồng của gói G4 ở mức THUẦN tách được:
+    // (1) bộ ngưỡng hiệu chuẩn 2026-11-15 là DỮ LIỆU có phiên
+    // bản, mặc định blockEnabled = false (luật hạ .block ->
+    // .warn cho tới khi anh duyệt bật lại); giải mã JSON thiếu
+    // khoá rơi về đúng mặc định. (2) Phân loại biên đúng dấu
+    // bất đẳng thức chặt của evaluate: blur < min, glare >
+    // max, contrast < min — BẰNG ngưỡng thì không gắn cờ.
+    // (3) Máy .block còn nguyên cho tương lai (blockEnabled
+    // tiêm vào + 2 vấn đề -> .block) nhưng bộ mặc định chỉ
+    // .warn. (4) Bộ đếm từ chối liên tiếp BỀN qua các instance
+    // cổng khi dùng chung một kho đếm; chạm max thì LEO THANG
+    // (escalated, xét TRƯỚC quyết định chặn như fail-safe cũ)
+    // rồi đặt lại; lượt sạch đặt lại. (5) Vùng tờ trên lưới
+    // tổng hợp: hộp giấy thắng nền tối; nền trắng chói ngoài
+    // tờ không rò vào glare; lưới đều màu -> fallback khai
+    // rõ. (6) Chuẩn hoá blur theo factor^k đúng tỉ lệ.
+    // Phần đo trên ảnh thật + phân phối hiệu chuẩn nằm ở
+    // g4/calibration/ (gương Python cùng thuật toán); ca tờ
+    // mới bị chặn oan 2026-11-15 kiểm ở Gate D trên máy anh.
+
+    private static func qSignals(blur: Double = 1.0,
+                                 glare: Double = 0.0,
+                                 contrast: Double = 0.30) -> QualitySignals {
+        QualitySignals(blurVariance: blur, glareFraction: glare,
+                       localContrast: contrast)
+    }
+
+    private static func runQualityGateTests(
+        _ check: (String, Bool) -> Void) {
+
+        // (1) Bộ ngưỡng mặc định = bộ hiệu chuẩn đã chốt.
+        let d = QualityThresholds()
+        check("QG01-nguong-mac-dinh-la-bo-hieu-chuan",
+              d.dataVersion == "quality-gate-v4-calibrated-2026-11-15"
+                && d.warnEnabled && !d.blockEnabled
+                && d.blurMin == 0.008 && d.glareMax == 0.88
+                && d.contrastMin == 0.12 && d.maxConsecutiveRejects == 3
+                && d.blurScaleExponent == 0.10)
+        let cur = QualityThresholds.current()
+        check("QG02-current-khong-bat-block",
+              !cur.blockEnabled && cur.blurMin == 0.008
+                && cur.dataVersion == QualityThresholds.compiledDataVersion)
+        let fullJSON = """
+        {"dataVersion":"quality-gate-v4-calibrated-2026-11-15",
+         "warnEnabled":true,"blockEnabled":false,"blurMin":0.008,
+         "glareMax":0.88,"contrastMin":0.12,
+         "maxConsecutiveRejects":3,"blurScaleExponent":0.10}
+        """
+        if let decoded = try? JSONDecoder().decode(
+            QualityThresholds.self, from: Data(fullJSON.utf8)) {
+            check("QG03-giai-ma-json-day-du",
+                  decoded.blurMin == 0.008 && decoded.glareMax == 0.88
+                    && decoded.contrastMin == 0.12
+                    && !decoded.blockEnabled)
+        } else {
+            check("QG03-giai-ma-json-day-du", false)
+        }
+        if let partial = try? JSONDecoder().decode(
+            QualityThresholds.self, from: Data("{}".utf8)) {
+            check("QG04-giai-ma-json-thieu-khoa-ve-mac-dinh",
+                  partial.blurMin == 0.008 && partial.glareMax == 0.88
+                    && !partial.blockEnabled)
+        } else {
+            check("QG04-giai-ma-json-thieu-khoa-ve-mac-dinh", false)
+        }
+
+        // (2) Phân loại cơ bản.
+        let gate1 = QualityGate(counterStore: InMemoryQualityRejectCounter())
+        let clean = gate1.evaluate(qSignals())
+        check("QG05-sach-pass", clean.decision == .pass
+              && clean.detected.isEmpty && !clean.escalated
+              && clean.consecutiveRejects == 0)
+        let oneBad = gate1.evaluate(qSignals(blur: 0.004))
+        check("QG06-mot-van-de-warn", oneBad.decision == .warn
+              && oneBad.detected == ["blur"] && !oneBad.escalated)
+
+        // (3) Hai vấn đề: mặc định .warn; tiêm blockEnabled thì .block.
+        let gate2 = QualityGate(counterStore: InMemoryQualityRejectCounter())
+        let twoBad = gate2.evaluate(qSignals(blur: 0.004, glare: 0.95))
+        check("QG07-hai-van-de-mac-dinh-warn-khong-block",
+              twoBad.decision == .warn
+                && twoBad.detected == ["blur", "glare"])
+        var blockTh = QualityThresholds()
+        blockTh.blockEnabled = true
+        let gate3 = QualityGate(thresholds: blockTh,
+                                counterStore: InMemoryQualityRejectCounter())
+        let blocked = gate3.evaluate(qSignals(blur: 0.004, glare: 0.95))
+        check("QG08-bat-blockEnabled-thi-block",
+              blocked.decision == .block
+                && blocked.detected == ["blur", "glare"])
+
+        // Biên: bằng ngưỡng = không cờ; qua ngưỡng một li = cả ba cờ.
+        let gate4 = QualityGate(counterStore: InMemoryQualityRejectCounter())
+        let atEdge = gate4.evaluate(qSignals(blur: 0.008, glare: 0.88,
+                                             contrast: 0.12))
+        check("QG09-dung-nguong-khong-co", atEdge.decision == .pass
+              && atEdge.detected.isEmpty)
+        let pastEdge = gate4.evaluate(qSignals(blur: 0.0079, glare: 0.8801,
+                                               contrast: 0.1199))
+        check("QG10-qua-nguong-co-ca-ba",
+              pastEdge.detected == ["blur", "glare", "lowContrast"]
+                && pastEdge.decision == .warn)
+
+        // (4) Bộ đếm bền + leo thang.
+        let shared = InMemoryQualityRejectCounter()
+        let r1 = QualityGate(counterStore: shared)
+            .evaluate(qSignals(blur: 0.004))
+        let r2 = QualityGate(counterStore: shared)
+            .evaluate(qSignals(blur: 0.004))
+        check("QG11-dem-ben-qua-instance", r1.consecutiveRejects == 1
+              && r2.consecutiveRejects == 2 && !r2.escalated
+              && shared.loadCount() == 2)
+        let r3 = QualityGate(counterStore: shared)
+            .evaluate(qSignals(blur: 0.004))
+        check("QG12-luot-3-leo-thang-va-dat-lai",
+              r3.escalated && r3.decision == .warn && !r3.failSafe
+                && r3.consecutiveRejects == 3 && shared.loadCount() == 0)
+        let r4 = QualityGate(counterStore: shared)
+            .evaluate(qSignals(blur: 0.004))
+        check("QG13-sau-leo-thang-dem-lai-tu-1",
+              r4.consecutiveRejects == 1 && !r4.escalated)
+        let store2 = InMemoryQualityRejectCounter(2)
+        _ = QualityGate(counterStore: store2).evaluate(qSignals())
+        check("QG14-luot-sach-dat-lai-dem", store2.loadCount() == 0)
+        var blockTh2 = QualityThresholds()
+        blockTh2.blockEnabled = true
+        let esc = QualityGate(thresholds: blockTh2,
+                              counterStore: InMemoryQualityRejectCounter(2))
+            .evaluate(qSignals(blur: 0.004, glare: 0.95))
+        check("QG15-leo-thang-truoc-block", esc.escalated
+              && esc.decision == .warn)
+
+        // (5) Vùng tờ trên lưới tổng hợp 100x100: nền tối 0.15,
+        // giấy x 20..<80, y 10..<90 sáng 0.95, mực 0.05 trong giấy.
+        var samples = [Double](repeating: 0.15, count: 100 * 100)
+        for y in 10..<90 {
+            for x in 20..<80 {
+                samples[y * 100 + x] = 0.95
+            }
+        }
+        for y in stride(from: 15, to: 90, by: 5) {
+            for x in stride(from: 25, to: 80, by: 5) {
+                samples[y * 100 + x] = 0.05
+            }
+        }
+        let grid = LuminanceGrid(width: 100, height: 100, samples: samples)
+        let region = grid.documentRegion()
+        check("QG16-vung-to-la-hop-giay", !region.fallback
+              && region.x0 <= 20 && region.x1 >= 80
+              && region.y0 <= 10 && region.y1 >= 90
+              && region.x0 > 0 && region.x1 < 100)
+        // Cùng tờ, nền ngoài đổi thành trắng chói 1.0: glare
+        // trong vùng phải vẫn 0 (nền không rò vào phép đo).
+        var samplesB = samples
+        for y in 0..<100 {
+            for x in 0..<100 where !(x >= 20 && x < 80 && y >= 10 && y < 90) {
+                samplesB[y * 100 + x] = 1.0
+            }
+        }
+        let gridB = LuminanceGrid(width: 100, height: 100, samples: samplesB)
+        let sigA = grid.signals()
+        let sigB = gridB.signals()
+        // A: vùng = hộp giấy, glare đúng 0. B: giấy ~cả khung
+        // nên vùng lấy theo hộp MỰC trong tờ; lề nới 8% kéo
+        // theo vài hàng nền trắng sát mép tờ (~0.04) — vẫn
+        // thấp hơn hẳn mức 0.52 nếu đo toàn khung như bản cũ.
+        check("QG17-nen-ngoai-khong-ro-vao-glare",
+              !sigA.regionFallback && sigA.glareFraction == 0
+                && !sigB.regionFallback && sigB.glareFraction < 0.05)
+        // Lưới đều màu: không ngưỡng Otsu, không vùng — fallback.
+        let flat = LuminanceGrid(width: 20, height: 20,
+                                 samples: [Double](repeating: 0.5,
+                                                   count: 20 * 20))
+        check("QG18-luoi-deu-mau-fallback",
+              flat.documentRegion().fallback && flat.signals().regionFallback)
+
+        // (6) Chuẩn hoá hạ mẫu: cùng lưới, factor 2 -> blur x2 khi k=1.
+        var checker = [Double]()
+        for y in 0..<40 {
+            for x in 0..<40 {
+                checker.append((x + y) % 2 == 0 ? 0.0 : 1.0)
+            }
+        }
+        var normTh = QualityThresholds()
+        normTh.blurScaleExponent = 1.0
+        let plain = LuminanceGrid(width: 40, height: 40, samples: checker)
+        let scaled = LuminanceGrid(width: 40, height: 40, samples: checker,
+                                   sourcePixelWidth: 80,
+                                   sourcePixelHeight: 80)
+        let blurPlain = plain.signals(thresholds: normTh).blurVariance
+        let blurScaled = scaled.signals(thresholds: normTh).blurVariance
+        check("QG19-chuan-hoa-factor-k",
+              blurPlain > 0 && abs(blurScaled - 2 * blurPlain) < 0.000001)
+        check("QG20-factor-suy-tu-kich-thuoc-goc",
+              plain.downsampleFactor == 1 && scaled.downsampleFactor == 2)
+
+        // (7) DTO: escalated đi vòng tròn; JSON cũ không có
+        // khoá escalated giải mã ra false (tương thích G3).
+        let escOutcome = QualityOutcome(detected: ["blur"], decision: .warn,
+                                        failSafe: false, consecutiveRejects: 3,
+                                        escalated: true)
+        let dto = QualityOutcomeDTO(escOutcome)
+        check("QG21-dto-escalated-vong-tron",
+              dto.escalated == true
+                && dto.toOriginal()?.escalated == true)
+        let legacyJSON = """
+        {"detected":["blur"],"decisionRaw":"warn","failSafe":false,
+         "consecutiveRejects":2}
+        """
+        if let legacy = try? JSONDecoder().decode(
+            QualityOutcomeDTO.self, from: Data(legacyJSON.utf8)) {
+            check("QG22-dto-json-cu-escalated-false",
+                  legacy.escalated == nil
+                    && legacy.toOriginal()?.escalated == false
+                    && legacy.toOriginal()?.decision == .warn)
+        } else {
+            check("QG22-dto-json-cu-escalated-false", false)
+        }
     }
 }

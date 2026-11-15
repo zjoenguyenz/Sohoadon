@@ -257,24 +257,113 @@ private extension CGPoint {
 // MARK: - Cổng chất lượng 3 quyết định + QualityMap có vị trí
 
 struct QualitySignals {
-    var blurVariance: Double    // phương sai Laplacian vùng tờ
-    var glareFraction: Double   // tỉ lệ điểm ảnh cháy sáng
-    var localContrast: Double   // độ lệch chuẩn độ sáng cục bộ
+    var blurVariance: Double    // phương sai Laplacian vùng tờ (ĐÃ chuẩn hoá)
+    var glareFraction: Double   // tỉ lệ điểm ảnh cháy sáng TRONG vùng tờ
+    var localContrast: Double   // trung bình độ lệch chuẩn theo dải ngang, vùng tờ
+    /// G4: true khi vùng tờ không xác định được (ảnh đều màu /
+    /// mực ngoài miền hợp lệ) và phép đo lùi về TOÀN KHUNG —
+    /// ghi ra để số đo không giả vờ là đo-trên-vùng khi không phải.
+    var regionFallback: Bool = false
 }
 
+/// G4 — NGƯỠNG CỔNG = DỮ LIỆU CÓ PHIÊN BẢN (quality-thresholds.json
+/// kèm bundle; nạp hỏng/vắng mặt -> bản `fallback` biên dịch sẵn
+/// mang ĐÚNG cùng bộ số, nên hành vi không đổi theo môi trường).
+/// Thay bộ hằng giữ chỗ của Pha 2 (blurMin 100.0 "CHỜ ĐO ở Pha
+/// 2b", glareMax 0.05, contrastMin 0.25) — phiên hiệu chuẩn
+/// 2026-11-15 (g4/calibration/) đã chỉ ra hai lỗi của bộ cũ:
+/// (1) LỆCH THANG ĐƠN VỊ: 100.0 chỉ hợp thang mẫu BYTE 0..255
+/// (phương sai lớn hơn thang 0..1 đúng 255^2 lần) trong khi
+/// LuminanceGrid nạp mẫu theo thang 0..1 — trên corpus 43 ảnh,
+/// cổng cũ gắn cờ mờ cho 43/43 và sẽ CHẶN 11/11 tờ khép sổ sạch;
+/// đó là gốc đo của vụ chặn oan tờ mới tinh ngày 2026-11-15.
+/// (2) Số chưa từng qua một phiên đo nào (M-5 chưa từng chạy).
+/// Bộ số dưới đây đo trên 43 ảnh BenchImages, nhãn = kết quả
+/// đóng sổ E1/E2/E3 thật của bộ đọc v4 (làn luồng DEVICE-A0,
+/// run #30): cảnh báo oan trên 11 tờ khép sổ sạch = 0/11 (0%,
+/// trong ngân sách <= 2% anh duyệt). Đơn vị blurMin: phương sai
+/// Laplacian trên mẫu 0..1, đo trong vùng tờ, ĐÃ nhân hệ số
+/// chuẩn hoá factor^blurScaleExponent.
 struct QualityThresholds {
+    /// Phiên bản bộ số đang biên dịch trong code — PHẢI khớp
+    /// dataVersion trong quality-thresholds.json; lệch nhau là
+    /// lỗi đóng gói, bản fallback vẫn thắng theo bộ số này.
+    static let compiledDataVersion = "quality-gate-v4-calibrated-2026-11-15"
+
+    var dataVersion = QualityThresholds.compiledDataVersion
     var warnEnabled = true
-    // GÓI V4-4 (D-V4-2): MẶC ĐỊNH BẬT — §3.1(b) của DESIGN-FINAL
-    // cho .block là một quyết định THẬT của cổng; bản v3 để tắt
-    // nên .block không bao giờ xuất hiện. Từ gói này, ảnh có từ
-    // 2 vấn đề nặng trở lên (mờ/chói/tương phản thấp) bị CHẶN ở
-    // trạng thái giao diện riêng của ScanView — không đọc thầm,
-    // không biến mất — và anh có nút "Vẫn đọc tờ này" tường minh.
-    var blockEnabled = true
-    var blurMin = 100.0         // mặc định CHỜ ĐO ở Pha 2b
-    var glareMax = 0.05
-    var contrastMin = 0.25
+    // G4 (luật anh duyệt trong chương trình G1–G5): .block HẠ
+    // XUỐNG .warn cho tới khi có số hiệu chuẩn đạt ngân sách
+    // chặn oan <= 2% VÀ anh duyệt bật lại. Bộ số hiệu chuẩn
+    // 2026-11-15 đạt ngân sách CẢNH BÁO oan 0% nhưng độ nhạy
+    // trên các ca đọc-không-khép là 0/4 (các ca đó hỏng ở tầng
+    // token/in ấn, cổng chất lượng chụp không nhìn thấy) —
+    // chưa đủ tư cách chặn cứng, nên blockEnabled giữ false.
+    // (Lịch sử: V4-4/D-V4-2 từng bật true trên ngưỡng giữ chỗ.)
+    var blockEnabled = false
+    var blurMin = 0.008         // min lớp TỐT đo được 0.0132, lề x0.6
+    var glareMax = 0.88         // max lớp TỐT đo được 0.79, lề +0.09
+    var contrastMin = 0.12      // min lớp TỐT đo được 0.174, lề x0.69
     var maxConsecutiveRejects = 3
+    /// Số mũ chuẩn hoá hạ mẫu: blur = blurThô x factor^k,
+    /// factor = cạnh dài ảnh gốc / cạnh dài lưới (>= 1). Đo
+    /// hồi quy log-log trên 12 ảnh thật x 5 mức hạ mẫu
+    /// (g4/calibration): k các ca -0.84..0.46, trung vị 0.10 —
+    /// chữ nhiệt gần hai mức sáng nên phương sai Laplacian gần
+    /// như không phụ thuộc tỉ lệ hạ mẫu trong miền factor
+    /// 2..27 của corpus; k = 0.10 là giá trị ĐO ĐƯỢC, không
+    /// phải hằng lý thuyết. Gate D trên máy anh sẽ đo lại.
+    var blurScaleExponent = 0.10
+
+    /// Bộ số nạp từ quality-thresholds.json trong bundle; nil
+    /// khi file vắng/hỏng/sai phiên bản (harness CLI trước khi
+    /// workflow chép file cạnh binary cũng rơi vào nhánh này).
+    private static let bundled: QualityThresholds? = {
+        guard let url = Bundle.main.url(forResource: "quality-thresholds",
+                                        withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode(QualityThresholds.self,
+                                                      from: data),
+              decoded.dataVersion == QualityThresholds.compiledDataVersion
+        else { return nil }
+        return decoded
+    }()
+
+    /// Ngưỡng hiệu lực hiện hành: dữ liệu bundle khi nạp được,
+    /// ngược lại bản biên dịch sẵn (cùng bộ số theo luật trên).
+    static func current() -> QualityThresholds {
+        bundled ?? QualityThresholds()
+    }
+}
+
+extension QualityThresholds: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case dataVersion, warnEnabled, blockEnabled, blurMin,
+             glareMax, contrastMin, maxConsecutiveRejects,
+             blurScaleExponent
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        dataVersion = try c.decodeIfPresent(String.self,
+                        forKey: .dataVersion) ?? dataVersion
+        warnEnabled = try c.decodeIfPresent(Bool.self,
+                        forKey: .warnEnabled) ?? warnEnabled
+        blockEnabled = try c.decodeIfPresent(Bool.self,
+                        forKey: .blockEnabled) ?? blockEnabled
+        blurMin = try c.decodeIfPresent(Double.self,
+                        forKey: .blurMin) ?? blurMin
+        glareMax = try c.decodeIfPresent(Double.self,
+                        forKey: .glareMax) ?? glareMax
+        contrastMin = try c.decodeIfPresent(Double.self,
+                        forKey: .contrastMin) ?? contrastMin
+        maxConsecutiveRejects = try c.decodeIfPresent(Int.self,
+                        forKey: .maxConsecutiveRejects)
+            ?? maxConsecutiveRejects
+        blurScaleExponent = try c.decodeIfPresent(Double.self,
+                        forKey: .blurScaleExponent) ?? blurScaleExponent
+    }
 }
 
 enum QualityDecision: String {
@@ -284,27 +373,77 @@ enum QualityDecision: String {
 struct QualityOutcome {
     var detected: [String]
     var decision: QualityDecision
+    /// Di sản tiền-G4: fail-safe cũ (cho qua lặng sau 3 lần từ
+    /// chối liên tiếp). Từ G4 vai trò đó đổi thành LEO THANG
+    /// CẢNH BÁO (trường `escalated`) — trường này giữ cho DTO
+    /// (QualityOutcomeDTO) tương thích, luôn false ở kết quả mới.
     var failSafe: Bool
     var consecutiveRejects: Int
+    /// G4: true khi đây là lượt có-vấn-đề thứ
+    /// maxConsecutiveRejects liên tiếp — cảnh báo được LEO
+    /// THANG (chữ mạnh hơn ở ScanView) và bộ đếm đặt lại.
+    var escalated: Bool = false
+}
+
+/// Kho đếm lượt từ chối liên tiếp của cổng — G4: bộ đếm phải
+/// BỀN QUA CÁC LƯỢT ĐỌC. Lỗi đã kết tội ở bản cũ: từ V4-4 mỗi
+/// lần đọc tạo một QualityGate MỚI và evaluate chỉ được gọi 1
+/// lần cho mỗi instance, nên bộ đếm trong bộ nhớ không bao giờ
+/// tới 3 — chốt chống-khoá là MÃ CHẾT. Nay bộ đếm sống ở một
+/// kho dùng chung tiêm vào cổng: bản app dùng kho bền
+/// UserDefaults; test tiêm kho bộ nhớ để cô lập.
+protocol QualityRejectCounterStore: AnyObject {
+    func loadCount() -> Int
+    func saveCount(_ value: Int)
+}
+
+/// Kho đếm trong bộ nhớ — cho test (harness) và nơi cần cô lập.
+final class InMemoryQualityRejectCounter: QualityRejectCounterStore {
+    private var value: Int
+    init(_ initial: Int = 0) { value = initial }
+    func loadCount() -> Int { value }
+    func saveCount(_ newValue: Int) { value = newValue }
+}
+
+/// Kho đếm bền cho app: UserDefaults, khoá có phiên bản.
+final class UserDefaultsQualityRejectCounter: QualityRejectCounterStore {
+    static let shared = UserDefaultsQualityRejectCounter()
+    static let key = "glkeeper.qualityGate.consecutiveRejects.v1"
+    func loadCount() -> Int {
+        UserDefaults.standard.integer(forKey: Self.key)
+    }
+    func saveCount(_ newValue: Int) {
+        UserDefaults.standard.set(newValue, forKey: Self.key)
+    }
 }
 
 /// Máy trạng thái cổng — phát hiện luôn chạy; cảnh báo/chặn là
-/// hai quyết định riêng; fail-safe cho qua sau
-/// maxConsecutiveRejects lần từ chối liên tiếp của CÙNG một tờ
-/// (bộ đếm đặt lại khi có lượt qua sạch). Gương: QualityGate
-/// trong capture_mirror.py (kiểm QG-*).
-/// GÓI V4-4 (D-V4-2, sửa A2-05): mỗi lần đọc MỘT tờ dùng MỘT
-/// instance riêng do tầng gọi tạo mới — instance KHÔNG còn sống
-/// qua các tờ của cả phiên. Thuật toán evaluate không đổi; vai
-/// trò chống-khoá ở tầng app do hành động ghi đè tường minh
-/// "Vẫn đọc tờ này" ở trạng thái bị chặn của ScanView đảm nhận.
+/// hai quyết định riêng. Gương: QualityGate trong
+/// capture_mirror.py (kiểm QG-*).
+/// G4 — VAI TRÒ MỚI CỦA CHỐT CHỐNG-KHOÁ: bộ đếm lượt có-vấn-đề
+/// LIÊN TIẾP nay bền qua các lượt đọc (kho tiêm ở trên). Khi
+/// bộ đếm chạm maxConsecutiveRejects, cổng KHÔNG cho qua lặng
+/// như fail-safe cũ và KHÔNG chặn cứng hơn: nó LEO THANG cảnh
+/// báo (escalated = true — ScanView dùng chữ mạnh hơn, nhắc
+/// chụp lại) rồi đặt bộ đếm về 0. Lý do đổi vai: ở chế độ chỉ
+/// .warn, "cho qua lặng" sẽ nuốt mất tín hiệu duy nhất cổng có
+/// (sự lặp lại của ảnh kém), còn chặn cứng thì chưa đủ tư cách
+/// hiệu chuẩn (xem QualityThresholds). Lượt sạch (.pass) đặt
+/// bộ đếm về 0 như cũ.
 final class QualityGate {
-    static let policyID = "quality-gate-v3-p2"
+    static var policyID: String {
+        QualityThresholds.current().dataVersion
+    }
     var thresholds: QualityThresholds
-    private(set) var consecutiveRejects = 0
+    private let counterStore: QualityRejectCounterStore
+    private(set) var consecutiveRejects: Int
 
-    init(thresholds: QualityThresholds = QualityThresholds()) {
+    init(thresholds: QualityThresholds = .current(),
+         counterStore: QualityRejectCounterStore
+            = UserDefaultsQualityRejectCounter.shared) {
         self.thresholds = thresholds
+        self.counterStore = counterStore
+        self.consecutiveRejects = counterStore.loadCount()
     }
 
     func evaluate(_ s: QualitySignals) -> QualityOutcome {
@@ -317,17 +456,27 @@ final class QualityGate {
             detected.append("lowContrast")
         }
         if detected.isEmpty {
+            counterStore.saveCount(0)
             consecutiveRejects = 0
             return QualityOutcome(detected: [], decision: .pass,
                                   failSafe: false, consecutiveRejects: 0)
         }
-        consecutiveRejects += 1
-        if consecutiveRejects >= thresholds.maxConsecutiveRejects {
-            let n = consecutiveRejects
+        let n = counterStore.loadCount() + 1
+        if n >= thresholds.maxConsecutiveRejects {
+            // LEO THANG (kế nhiệm fail-safe cũ — cùng vị trí
+            // xét trước quyết định chặn như bản cũ): cảnh báo
+            // mạnh hơn thay vì cho qua lặng; bộ đếm đặt lại để
+            // không leo thang vô hạn trên cùng một chuỗi.
+            counterStore.saveCount(0)
             consecutiveRejects = 0
-            return QualityOutcome(detected: detected, decision: .pass,
-                                  failSafe: true, consecutiveRejects: n)
+            let decision: QualityDecision
+                = thresholds.warnEnabled ? .warn : .pass
+            return QualityOutcome(detected: detected, decision: decision,
+                                  failSafe: false, consecutiveRejects: n,
+                                  escalated: true)
         }
+        counterStore.saveCount(n)
+        consecutiveRejects = n
         let severe = detected.count >= 2
         let decision: QualityDecision
         if thresholds.blockEnabled && severe {
@@ -339,7 +488,7 @@ final class QualityGate {
         }
         return QualityOutcome(detected: detected, decision: decision,
                               failSafe: false,
-                              consecutiveRejects: consecutiveRejects)
+                              consecutiveRejects: n)
     }
 }
 
@@ -351,6 +500,20 @@ struct LuminanceGrid {
     var width: Int
     var height: Int
     var samples: [Double]       // 0..1, row-major từ trên
+    /// G4: kích thước pixel của ẢNH GỐC trước hạ mẫu (0 = không
+    /// rõ — lưới dựng tay trong test): hệ số hạ mẫu suy từ đây.
+    var sourcePixelWidth: Int = 0
+    var sourcePixelHeight: Int = 0
+
+    /// Hệ số hạ mẫu: cạnh dài ảnh gốc / cạnh dài lưới, sàn 1.
+    /// Đây là "kích thước/khổ tờ" mà blur thô phải chuẩn hoá
+    /// theo — xem blurScaleExponent ở QualityThresholds.
+    var downsampleFactor: Double {
+        let src = max(sourcePixelWidth, sourcePixelHeight)
+        let grid = max(width, height)
+        guard src > 0, grid > 0 else { return 1 }
+        return max(1, Double(src) / Double(grid))
+    }
 
     /// TRAP-FIX A2-01 (rà soát vòng 2, 2026-11-13): chuẩn hoá
     /// một toạ độ hộp về miền an toàn [-1, 2] TRƯỚC mọi phép
@@ -421,17 +584,190 @@ struct LuminanceGrid {
             / Double(laps.count)
     }
 
-    func signals() -> QualitySignals {
-        let whole = CGRect(x: 0, y: 0, width: 1, height: 1)
-        let px = sampleRect(whole)
+    /// G4: VÙNG TỜ trên lưới, suy từ chính lưới sáng theo
+    /// ngưỡng Otsu, hai ưu tiên:
+    ///   1. Mặt GIẤY (điểm SÁNG hơn ngưỡng): giấy là mảng sáng
+    ///      liên tục của tờ; hộp bao của nó là hộp của chính tờ
+    ///      (mực nằm trong đó tự nhiên). Dùng khi tỉ lệ giấy
+    ///      trong [5%, 98%] và hộp >= 8x8 điểm lưới.
+    ///   2. Mặt MỰC (điểm TỐI hơn ngưỡng): cho ảnh số/ảnh chụp
+    ///      nền cũng trắng (giấy chiếm ~cả khung, ưu tiên 1
+    ///      trượt): hộp bao chữ. Dùng khi tỉ lệ mực trong
+    ///      [0.05%, 50%] và hộp >= 8x8.
+    /// Cả hai đều nới lề 8% mỗi phía. Lùi về TOÀN KHUNG
+    /// (fallback = true, khai rõ trong
+    /// QualitySignals.regionFallback) khi lưới rỗng/hỏng bất
+    /// biến, ngưỡng Otsu thoái hoá (<= 0 hoặc >= 255 — ảnh một
+    /// màu), hoặc cả hai mặt đều ngoài miền hợp lệ. Đây là xấp
+    /// xỉ an toàn nhất có được ở tầng lưới mà không cần thêm
+    /// một lượt Vision, và nó loại nền/bàn khỏi phép đo — lỗi
+    /// đo (a) đã kết tội ở bản cũ (đo toàn khung gồm cả phong
+    /// cảnh ngoài tờ). Số kiểm chứng trên corpus ở
+    /// g4/calibration/ (gương Python cùng thuật toán).
+    func documentRegion() -> (x0: Int, y0: Int, x1: Int, y1: Int,
+                              fallback: Bool) {
+        let whole = (x0: 0, y0: 0, x1: width, y1: height, fallback: true)
+        guard samples.count == width * height, width > 0, height > 0
+        else { return whole }
+        // Byte đã kẹp TRƯỚC khi đổi Double->Int (kỷ luật A2-01:
+        // mẫu không hữu hạn tính là 0, không trap).
+        func byteOf(_ v: Double) -> Int {
+            v.isFinite ? min(255, max(0, Int((v * 255).rounded()))) : 0
+        }
+        var hist = [Int](repeating: 0, count: 256)
+        for v in samples { hist[byteOf(v)] += 1 }
+        let total = Double(samples.count)
+        var sumAll = 0.0
+        for i in 0..<256 { sumAll += Double(i) * Double(hist[i]) }
+        // Otsu: cực đại phương sai GIỮA hai lớp sáng/tối.
+        var sumB = 0.0, wB = 0.0, best = -1.0, threshold = 0
+        for i in 0..<256 {
+            wB += Double(hist[i])
+            if wB == 0 { continue }
+            let wF = total - wB
+            if wF == 0 { break }
+            sumB += Double(i) * Double(hist[i])
+            let mB = sumB / wB
+            let mF = (sumAll - sumB) / wF
+            let between = wB * wF * (mB - mF) * (mB - mF)
+            if between > best { best = between; threshold = i }
+        }
+        guard threshold > 0, threshold < 255 else { return whole }
+        // Hộp bao [x0,x1) x [y0,y1) của một phía của ngưỡng
+        // (bright = mặt giấy, !bright = mặt mực) + số điểm.
+        // Hai phía bù nhau không hở: giấy là byte > ngưỡng,
+        // mực là byte <= ngưỡng (ngưỡng Otsu là bin TRÊN CÙNG
+        // của lớp tối — dùng < sẽ đánh rơi đúng bin đó).
+        func boundingBox(bright: Bool)
+            -> (x0: Int, y0: Int, x1: Int, y1: Int, count: Int) {
+            var minX = width, minY = height, maxX = -1, maxY = -1
+            var count = 0
+            for y in 0..<height {
+                for x in 0..<width {
+                    let b = byteOf(samples[y * width + x])
+                    if bright ? b > threshold : b <= threshold {
+                        count += 1
+                        if x < minX { minX = x }
+                        if x > maxX { maxX = x }
+                        if y < minY { minY = y }
+                        if y > maxY { maxY = y }
+                    }
+                }
+            }
+            if count == 0 { return (0, 0, 0, 0, 0) }
+            return (minX, minY, maxX + 1, maxY + 1, count)
+        }
+        func expanded(_ b: (x0: Int, y0: Int, x1: Int, y1: Int,
+                            count: Int))
+            -> (x0: Int, y0: Int, x1: Int, y1: Int, fallback: Bool) {
+            let boxW = b.x1 - b.x0, boxH = b.y1 - b.y0
+            let mx = max(2, Int((0.08 * Double(boxW)).rounded()))
+            let my = max(2, Int((0.08 * Double(boxH)).rounded()))
+            return (max(0, b.x0 - mx), max(0, b.y0 - my),
+                    min(width, b.x1 + mx), min(height, b.y1 + my),
+                    false)
+        }
+        let paper = boundingBox(bright: true)
+        let paperFraction = Double(paper.count) / total
+        if paperFraction >= 0.05, paperFraction <= 0.98,
+           paper.x1 - paper.x0 >= 8, paper.y1 - paper.y0 >= 8 {
+            return expanded(paper)
+        }
+        let ink = boundingBox(bright: false)
+        let inkFraction = Double(ink.count) / total
+        if inkFraction >= 0.0005, inkFraction <= 0.50,
+           ink.x1 - ink.x0 >= 8, ink.y1 - ink.y0 >= 8 {
+            return expanded(ink)
+        }
+        return whole
+    }
+
+    /// Mẫu trong hộp lưới [x0,x1) x [y0,y1) (toạ độ lưới).
+    private func gridSamples(x0: Int, y0: Int, x1: Int, y1: Int)
+        -> [Double] {
+        guard samples.count == width * height else { return [] }
+        var out: [Double] = []
+        for y in y0..<y1 {
+            for x in x0..<x1 {
+                out.append(samples[y * width + x])
+            }
+        }
+        return out
+    }
+
+    /// Phương sai Laplacian trên phần trong (lùi 1px) của hộp
+    /// lưới — cùng toán với laplacianVariance(_ box:) nhưng
+    /// theo toạ độ lưới nguyên, không qua đổi hệ chuẩn hoá
+    /// (đường hộp-Chữ-nhật của QualityMap giữ nguyên như cũ).
+    private func laplacianVarianceInGrid(x0: Int, y0: Int,
+                                         x1: Int, y1: Int) -> Double {
+        guard samples.count == width * height,
+              x1 - x0 >= 3, y1 - y0 >= 3 else { return 0 }
+        var laps: [Double] = []
+        for y in (y0 + 1)..<(y1 - 1) {
+            for x in (x0 + 1)..<(x1 - 1) {
+                let c = samples[y * width + x]
+                let l = samples[(y - 1) * width + x]
+                    + samples[(y + 1) * width + x]
+                    + samples[y * width + x - 1]
+                    + samples[y * width + x + 1] - 4 * c
+                laps.append(l)
+            }
+        }
+        if laps.isEmpty { return 0 }
+        let mean = laps.reduce(0, +) / Double(laps.count)
+        return laps.reduce(0) { $0 + ($1 - mean) * ($1 - mean) }
+            / Double(laps.count)
+    }
+
+    /// G4: tín hiệu cổng đo TRÊN VÙNG TỜ (documentRegion) thay
+    /// vì toàn khung như bản cũ. Ba thay đổi so với bản cũ:
+    /// (a) glare/contrast/blur đều tính trong vùng tờ — nền/bàn
+    /// ngoài tờ không còn kéo số của tờ; (b) blur được CHUẨN
+    /// HOÁ theo hệ số hạ mẫu: blur = blurThô x factor^k với
+    /// k = blurScaleExponent của bộ ngưỡng (đo được ở phiên
+    /// hiệu chuẩn 2026-11-15 — chữ hai mức sáng làm phương sai
+    /// Laplacian gần như không đổi theo tỉ lệ hạ mẫu, k nhỏ);
+    /// (c) localContrast thành tương phản cục bộ THẬT: trung
+    /// bình độ lệch chuẩn của tối đa 8 dải ngang trong vùng
+    /// (bản cũ là std toàn khung dù mang tên "local").
+    func signals(thresholds: QualityThresholds = .current())
+        -> QualitySignals {
+        let region = documentRegion()
+        let px = gridSamples(x0: region.x0, y0: region.y0,
+                             x1: region.x1, y1: region.y1)
         let glare = px.isEmpty ? 0
             : Double(px.filter { $0 >= 0.97 }.count) / Double(px.count)
-        let mean = px.isEmpty ? 0 : px.reduce(0, +) / Double(px.count)
-        let sd = px.isEmpty ? 0 : sqrt(px.reduce(0) {
-            $0 + ($1 - mean) * ($1 - mean)
-        } / Double(px.count))
-        return QualitySignals(blurVariance: laplacianVariance(whole),
-                              glareFraction: glare, localContrast: sd)
+        let regionHeight = region.y1 - region.y0
+        let bandCount = max(1, min(8, regionHeight))
+        var bandSds: [Double] = []
+        if regionHeight > 0 {
+            for i in 0..<bandCount {
+                let ya = region.y0 + i * regionHeight / bandCount
+                let yb = region.y0 + (i + 1) * regionHeight / bandCount
+                if yb <= ya { continue }
+                let band = gridSamples(x0: region.x0, y0: ya,
+                                       x1: region.x1, y1: yb)
+                if band.isEmpty { continue }
+                let mean = band.reduce(0, +) / Double(band.count)
+                let sd = sqrt(band.reduce(0) {
+                    $0 + ($1 - mean) * ($1 - mean)
+                } / Double(band.count))
+                bandSds.append(sd)
+            }
+        }
+        let contrast = bandSds.isEmpty ? 0
+            : bandSds.reduce(0, +) / Double(bandSds.count)
+        let blurRaw = laplacianVarianceInGrid(x0: region.x0,
+                                              y0: region.y0,
+                                              x1: region.x1,
+                                              y1: region.y1)
+        let blur = blurRaw * pow(downsampleFactor,
+                                 thresholds.blurScaleExponent)
+        return QualitySignals(blurVariance: blur,
+                              glareFraction: glare,
+                              localContrast: contrast,
+                              regionFallback: region.fallback)
     }
 
     /// Điểm vùng cho QualityMap: ánh xạ độ nét Laplacian sang
@@ -492,7 +828,11 @@ struct LuminanceGrid {
                     / 255.0
             }
         }
-        return LuminanceGrid(width: w, height: h, samples: samples)
+        // G4: ghi kích thước GỐC để downsampleFactor của lưới
+        // suy được hệ số hạ mẫu thật (chuẩn hoá blur ở signals).
+        return LuminanceGrid(width: w, height: h, samples: samples,
+                             sourcePixelWidth: image.width,
+                             sourcePixelHeight: image.height)
     }
 }
 

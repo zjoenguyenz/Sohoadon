@@ -79,10 +79,14 @@ struct ScanView: View {
     @State private var importQueue: [URL] = []
     /// GÓI V4-4 (D-V4-2, sửa A2-05): cổng chất lượng theo TỪNG TỜ —
     /// mỗi lần đọc tạo một QualityGate MỚI (xem các điểm gọi
-    /// runRead), không còn instance sống cho cả phiên. Tờ bị cổng
-    /// chặn (.block) được giữ ở hai trạng thái riêng dưới đây và
-    /// hiện khung quyết định riêng trong body: không mở Review
-    /// thầm, không chụp snapshot P-DRAFT, không biến mất.
+    /// runRead), không còn instance sống cho cả phiên.
+    /// G4: từ bản này cổng KHÔNG còn chặn tờ mới đọc — quyết
+    /// định .block (nếu bộ ngưỡng tương lai bật lại) chỉ ghi
+    /// nhận nội bộ, tờ vẫn vào Kiểm Lại kèm cảnh báo mạnh (xem
+    /// runRead). Hai trạng thái chặn dưới đây CHỈ còn phục vụ
+    /// bản chụp bị chặn do bản TRƯỚC G4 ghi xuống đĩa
+    /// (PendingBlockStore — khôi phục ở restorePendingBlockIfNeeded
+    /// để tờ của sự cố 2026-11-15 không mất đường quyết định).
     @State private var blockedDraft: ScanDraft? = nil
     @State private var blockedQuality: QualityOutcome? = nil
     /// G3: lớp sửa dở ở Kiểm Lại khôi phục từ bản chụp nháp
@@ -560,29 +564,23 @@ struct ScanView: View {
                     reconcileReport: outcome.report,
                     diagnosticsID: outcome.diagnosticsID,
                     diagnosticsWriteFailed: outcome.diagnosticsWriteFailed)
-                // GÓI V4-4 (D-V4-2): cổng phán .block => tờ KHÔNG
-                // vào Review và KHÔNG chụp snapshot P-DRAFT; nó
-                // nằm ở trạng thái bị chặn riêng cho tới khi anh
-                // quyết định (xem khung cảnh báo trong body).
-                // G3 (luật bền hoá, vá sự cố 2026-11-15): quyết
-                // định chặn là QUYẾT ĐỊNH CHƯA THI HÀNH — trạng
-                // thái chặn XUỐNG ĐĨA NGAY KHI RA ĐỜI, cùng một
-                // khoảnh khắc dựng trạng thái trong bộ nhớ. Từ
-                // đây thoát app/giết app chỉ làm khung chặn hiện
-                // lại ở lần mở sau (restorePendingBlockIfNeeded),
-                // không còn đường mất tờ. Ghi hỏng thì nói thật
-                // trong dòng trạng thái như hợp đồng của
-                // presentDraft: anh biết mà quyết ngay, không
-                // lặng im quay về chế độ dễ mất.
-                if let quality = outcome.qualityOutcome, quality.decision == .block {
-                    blockedDraft = newDraft
-                    blockedQuality = quality
-                    statusText = "Một tờ đã bị cổng chất lượng chặn — anh quyết định ở khung cảnh báo bên dưới giúp."
-                    if !PendingBlockStore.save(PendingBlockSnapshot(draft: newDraft, quality: quality)) {
-                        statusText = (statusText ?? "") + " Chưa ghi được trạng thái chờ xuống máy — anh quyết định ngay ở khung bên dưới giúp, đừng rời app lâu."
-                    }
-                    return
-                }
+                // G4 (hạ .block -> .warn ở TẦNG HÀNH VI): cổng
+                // KHÔNG còn giữ tờ nào lại. Bộ ngưỡng hiệu
+                // chuẩn 2026-11-15 đặt blockEnabled = false nên
+                // quyết định .block vốn không sinh ra; nhưng kể
+                // cả khi một bộ ngưỡng tương lai bật lại, tầng
+                // này cũng KHÔNG dựng trạng thái chặn cho tờ mới
+                // đọc: quyết định .block chỉ còn là ghi nhận nội
+                // bộ (cờ quality-block trong hồ sơ chẩn đoán do
+                // ReadPipeline ghi), tờ đi thẳng vào Kiểm Lại
+                // qua presentDraft với dòng cảnh báo mạnh nhất
+                // của qualityNote, và hợp đồng P-DRAFT chụp bản
+                // nháp như mọi tờ khác — không còn đường nào để
+                // một quyết định của cổng làm tờ biến mất khỏi
+                // luồng của anh (sự cố 2026-11-15). Khung chặn +
+                // PendingBlockStore giữ nguyên CHỈ để khôi phục
+                // bản chụp do bản trước G4 đã ghi (xem
+                // restorePendingBlockIfNeeded).
                 presentDraft(newDraft,
                              note: qualityNote(outcome.qualityOutcome))
             }
@@ -635,6 +633,9 @@ struct ScanView: View {
     /// (processNextImportedFile canh blockedDraft), không tờ
     /// nào chen qua mặt. Tách khỏi body vì ngân sách kiểm tra
     /// kiểu của trình biên dịch (run #99).
+    /// G4: khung này CHỈ còn hiện cho bản chụp bị chặn khôi
+    /// phục từ đĩa (bản trước G4 ghi) — tờ mới đọc không bao
+    /// giờ vào đây nữa (xem runRead).
     @ViewBuilder
     private var blockedBanner: some View {
         if blockedDraft != nil, let quality = blockedQuality {
@@ -690,11 +691,20 @@ struct ScanView: View {
         }
     }
 
-    /// Dòng nhắc chất lượng lúc chụp cho quyết định .warn.
-    /// Quyết định .block KHÔNG đi qua đây — nó có trạng thái
-    /// giao diện riêng (GÓI V4-4 / D-V4-2).
+    /// Dòng nhắc chất lượng lúc chụp. G4: MỌI quyết định khác
+    /// .pass đều đi qua đây — kể cả .block (từ bản này chỉ là
+    /// ghi nhận nội bộ, tờ vẫn vào Kiểm Lại, xem runRead) và
+    /// cảnh báo LEO THANG khi nhiều tờ liên tiếp cùng kém
+    /// (QualityGate.escalated): chữ mạnh dần theo mức, nhưng
+    /// tờ luôn đi tiếp, không gì bị giữ lại.
     private func qualityNote(_ outcome: QualityOutcome?) -> String? {
-        guard let outcome, outcome.decision == .warn else { return nil }
+        guard let outcome, outcome.decision != .pass else { return nil }
+        if outcome.decision == .block {
+            return "Ảnh \(qualityIssueText(outcome)) — cổng chất lượng đánh giá tờ này rất kém, nhưng bản này chỉ cảnh báo chứ không chặn: anh kiểm tra kỹ từng số ở màn sau giúp."
+        }
+        if outcome.escalated {
+            return "Ảnh \(qualityIssueText(outcome)) — đây là tờ thứ \(outcome.consecutiveRejects) liên tiếp ảnh chưa đạt: anh kiểm tra kỹ các số ở màn sau giúp, và nếu chụp lại được thì đủ sáng, tránh chói, giữ máy yên."
+        }
         return "Ảnh \(qualityIssueText(outcome)) — anh kiểm tra kỹ các số ở màn sau giúp."
     }
 

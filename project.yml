@@ -53,6 +53,7 @@ targets:
       # --- Dữ liệu bundle của M7 (tiệm) + DomainCorrection ---
       - vendors.json
       - lexicon.json
+      - quality-thresholds.json
       # --- Icon app (GL-Keeper, 2026-11-13) ---
       - Assets.xcassets
     settings:
@@ -119,6 +120,7 @@ targets:
       - ReadPipeline.swift
       - vendors.json
       - lexicon.json
+      - quality-thresholds.json
       - BenchImages/C-003.jpg
       - BenchImages/L-R01.jpg
       - BenchImages/L-R02.jpg

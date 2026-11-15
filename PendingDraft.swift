@@ -609,7 +609,9 @@ struct ReviewEditsDTO: Codable, Equatable {
 // MARK: - G3: DTO cho QualityOutcome (CaptureIntake.swift)
 //
 // QualityOutcome không phải Codable (nó là kết quả sống của
-// cổng) — DTO lưu 4 trường nguyên thuỷ; decision qua rawValue
+// cổng) — DTO lưu 4 trường nguyên thuỷ (+ cờ leo thang
+// Optional từ G4, xem QualityOutcomeDTO.escalated); decision
+// qua rawValue
 // và ánh xạ ngược TRẢ NIL khi gặp mã lạ, đúng kỷ luật
 // toàn-hay-không của ReconcileReportDTO: quyết định chặn là
 // QUYẾT ĐỊNH CHƯA THI HÀNH, dựng sai nghĩa còn tệ hơn mất.
@@ -619,19 +621,27 @@ struct QualityOutcomeDTO: Codable, Equatable {
     var decisionRaw: String
     var failSafe: Bool
     var consecutiveRejects: Int
+    /// G4: cờ leo thang cảnh báo — Optional CÓ CHỦ ĐÍCH: bản
+    /// chụp do bản TRƯỚC G4 ghi không có khoá này -> giải mã
+    /// ra nil -> toOriginal hiểu là false; bản TRƯỚC G4 đọc
+    /// bản chụp MỚI thì khoá lạ bị Codable bỏ qua. Tương thích
+    /// hai chiều, schema của PendingBlockSnapshot giữ nguyên 1.
+    var escalated: Bool? = nil
 
     init(_ outcome: QualityOutcome) {
         detected = outcome.detected
         decisionRaw = outcome.decision.rawValue
         failSafe = outcome.failSafe
         consecutiveRejects = outcome.consecutiveRejects
+        escalated = outcome.escalated
     }
 
     func toOriginal() -> QualityOutcome? {
         guard let decision = QualityDecision(rawValue: decisionRaw) else { return nil }
         return QualityOutcome(detected: detected, decision: decision,
                               failSafe: failSafe,
-                              consecutiveRejects: consecutiveRejects)
+                              consecutiveRejects: consecutiveRejects,
+                              escalated: escalated ?? false)
     }
 }
 
