@@ -397,20 +397,13 @@ func suggestClassification(cardLast4: String?, cardBrand: String?, tails: [CardT
 }
 
 // MARK: - Định dạng tiền
-
-/// 21680 -> "$216.80"
-func formatMoney(cents: Int) -> String {
-    let formatter = NumberFormatter()
-    formatter.numberStyle = .currency
-    formatter.currencyCode = "USD"
-    formatter.locale = Locale(identifier: "en_US")
-    return formatter.string(from: NSNumber(value: Double(cents) / 100.0)) ?? "$0.00"
-}
-
-func formatMoney(optionalCents cents: Int?) -> String {
-    guard let cents = cents else { return "—" }
-    return formatMoney(cents: cents)
-}
+//
+// G1: formatMoney(cents:) + formatMoney(optionalCents:) đã
+// chuyển NGUYÊN VĂN sang ReceiptLogic.swift (thuần Foundation —
+// Models.swift dính SwiftData/UIKit nên không vào được harness,
+// mà bộ sinh cờ ở ReceiptLogic cần formatMoney để harness kiểm
+// được bằng Swift thật). Cùng module nên mọi điểm gọi cũ không
+// đổi.
 
 /// "216.80" -> 21680 ; không đọc được -> nil
 func dollarsTextToCents(_ text: String) -> Int? {

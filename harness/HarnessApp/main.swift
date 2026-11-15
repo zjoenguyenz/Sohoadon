@@ -40,6 +40,12 @@ import Vision
 //       Bẫy đột biến trên luồng fixture: MỖI đột biến chạy như
 //       MỘT process riêng (CI lặp lời gọi) để trap không giết
 //       driver. In "SURVIVED <id>" ở cuối nếu parse trở về.
+//   unittests
+//       G1: test logic thuần (ReceiptLogic) + vòng đời kho
+//       nháp (PendingDraftStore) bằng Swift thật — xem
+//       UnitTests.swift. In UNITTEST PASS/FAIL từng ca +
+//       UNITTESTS-DONE; thoát 1 nếu có FAIL, khép bằng
+//       "SURVIVED unittests" khi sạch.
 //
 // Mọi chế độ chạm parse đều in dòng cuối "SURVIVED ..." — CI
 // grep dòng này; thiếu nó + mã thoát/signal != 0 = tái hiện.
@@ -476,6 +482,26 @@ case "probe":
     print("vendors dataVersion = \(VendorData.shared.dataVersion)")
     print("lexicon version = \(DomainCorrector.lexiconVersion)")
     print("SURVIVED probe")
+
+case "unittests":
+    // G1 (cổng kiểm chứng thật): test LOGIC THUẦN + VÒNG ĐỜI
+    // bằng Swift thật — PendingDraftStore (save/load/hỏng/
+    // schema lạ/xoá) và ReceiptLogic (canReparse / hasLoadable
+    // Original / flags). Bộ test ở UnitTests.swift (cùng thư
+    // mục HarnessApp). Không chạm đường đọc nên không cần
+    // requireDataLoaded (không phụ thuộc vendors/lexicon).
+    // In từng dòng UNITTEST PASS/FAIL + UNITTESTS-DONE; có
+    // FAIL -> thoát 1 để bước CI đỏ. Khép bằng SURVIVED như
+    // mọi chế độ khác.
+    let results = HarnessUnitTests.runAll()
+    var failedCount = 0
+    for line in results {
+        print(line)
+        if line.hasPrefix("UNITTEST FAIL") { failedCount += 1 }
+    }
+    print("UNITTESTS-DONE total=\(results.count) failed=\(failedCount)")
+    if failedCount > 0 { exit(1) }
+    print("SURVIVED unittests")
 
 case "fixture":
     guard args.count >= 2 else { fail("fixture cần đường dẫn file") }

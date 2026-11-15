@@ -143,11 +143,8 @@ func provenanceCaption(_ provenance: FieldProvenance) -> String? {
     }
 }
 
-/// L-2026-11-13-20: chữ cờ "thiếu mục đích" dùng chung giữa hàm
-/// sinh cờ và màn Chi Tiết — màn Chi Tiết nhận ra đúng cờ này để
-/// gắn Ô NHẬP MỤC ĐÍCH ngay dưới cảnh báo (cờ tự phục vụ), thay
-/// vì bắt anh tự tìm ô nhập ở mục Phân loại phía dưới.
-let missingPurposeFlagText = "Thiếu mục đích business — sở thuế hay soi điểm này"
+/// (missingPurposeFlagText đã chuyển sang ReceiptLogic.swift ở
+/// gói G1 — cùng module nên điểm dùng ở dưới không đổi.)
 
 /// L-2026-11-13-21 — SỬA DỨT KHOÁT theo lệnh anh ("Sao phải
 /// ghi chữ khi hệ thống cho chọn rồi"): mục đích business là
@@ -208,41 +205,39 @@ struct BusinessPurposeField: View {
 /// (WP2/WP3 — vd file PDF nguyên byte) qua allOriginalImageFileNames:
 /// chỉ cần MỘT file còn tải được là bằng chứng còn. ImageStore.load với
 /// tên .pdf tự render trang 1 nên PDF gốc cũng tính là còn bằng chứng.
+///
+/// G1: thân logic "chỉ cần một file tải được" đã tách sang
+/// ReceiptLogic.hasLoadableOriginal (ReceiptLogic.swift, thuần
+/// Foundation) để harness kiểm bằng Swift thật; hàm này chỉ còn
+/// là tầng bọc cấp hàm nạp thật của app.
 func receiptHasOriginalImage(_ receipt: Receipt) -> Bool {
-    receipt.allOriginalImageFileNames.contains { ImageStore.load(fileName: $0) != nil }
+    ReceiptLogic.hasLoadableOriginal(
+        fileNames: receipt.allOriginalImageFileNames,
+        isLoadable: { ImageStore.load(fileName: $0) != nil })
 }
 
+/// G1: thân bộ cờ đã tách sang ReceiptLogic.flags (ReceiptLogic
+/// .swift, thuần Foundation, harness kiểm bằng Swift thật). Tầng
+/// bọc này trích đúng các trường bản gốc đã đọc: subtotalCents,
+/// amountCents từng dòng, totalCents, taxCents (KHÔNG đổi sang
+/// taxTotalCents), classification, businessPurpose, và kết quả
+/// receiptHasOriginalImage — thứ tự sinh cờ giữ nguyên ở tầng
+/// thuần.
 func receiptFlags(_ receipt: Receipt) -> [String] {
-    var flags: [String] = []
-    if let subtotal = receipt.subtotalCents, !receipt.items.isEmpty {
-        let sum = receipt.items.reduce(0) { $0 + ($1.amountCents ?? 0) }
-        if abs(sum - subtotal) > 2 {
-            flags.append("Tổng các món (\(formatMoney(cents: sum))) khác subtotal (\(formatMoney(cents: subtotal)))")
-        }
+    let kind: ReceiptKindTag
+    switch receipt.classification {
+    case .personal: kind = .personal
+    case .business: kind = .business
+    case .unknown: kind = .unknown
     }
-    if let subtotal = receipt.subtotalCents, let total = receipt.totalCents {
-        let tax = receipt.taxCents ?? 0
-        if abs(subtotal + tax - total) > 2 {
-            flags.append("Subtotal + thuế khác tổng tiền")
-        }
-    }
-    if receipt.totalCents == nil {
-        flags.append("Thiếu tổng tiền")
-    }
-    if receipt.classification == .business && receipt.businessPurpose.trimmingCharacters(in: .whitespaces).isEmpty {
-        flags.append(missingPurposeFlagText)
-    }
-    if receipt.classification == .unknown {
-        flags.append("Chưa phân loại Cá nhân / Business")
-    }
-    // IMGFIX: ảnh gốc là bằng chứng BẮT BUỘC (trình accountant) — tờ
-    // không còn file gốc nào tải được phải kêu thành cờ trong khu
-    // "Cần kiểm lại", không được im lặng như trước (bài học tờ Home
-    // Depot 2026-11-10: số đã đúng hết mà ảnh gốc mất không ai hay).
-    if !receiptHasOriginalImage(receipt) {
-        flags.append("Thiếu ảnh gốc — cần gắn lại để đủ bằng chứng")
-    }
-    return flags
+    return ReceiptLogic.flags(for: ReceiptFlagInput(
+        subtotalCents: receipt.subtotalCents,
+        itemAmountCents: receipt.items.map { $0.amountCents },
+        totalCents: receipt.totalCents,
+        taxCents: receipt.taxCents,
+        kind: kind,
+        businessPurpose: receipt.businessPurpose,
+        hasOriginalImage: receiptHasOriginalImage(receipt)))
 }
 
 // MARK: - Dòng hoá đơn trong danh sách
@@ -497,7 +492,9 @@ struct ReceiptDetailView: View {
         // lại chỉ bấm được 1 lần" (anh báo 2026-11-13). Đọc lại
         // nay là đường sửa số đứng (Điều 2 B2): còn văn bản đã
         // lưu là còn bấm được, không cổng thế hệ/trạng thái nữa.
-        !receipt.ocrRawText.isEmpty
+        // G1: điều kiện thuần đã tách sang ReceiptLogic.canReparse
+        // để harness kiểm bằng Swift thật (khoá ca L-17).
+        ReceiptLogic.canReparse(ocrRawText: receipt.ocrRawText)
     }
 
     var body: some View {

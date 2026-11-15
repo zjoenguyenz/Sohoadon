@@ -25,6 +25,12 @@ targets:
       # chỉ target app (tầng UI dùng); bench không nạp file này.
       - PendingDraft.swift
       - ReceiptViews.swift
+      # G1: logic điều kiện thuần tách khỏi ReceiptViews (chỉ
+      # Foundation) — target app dùng qua tầng bọc; harness cũng
+      # biên dịch file này để chạy cổng unittests bằng Swift thật.
+      # Chỉ target chính: bench không cần (không file bench nào
+      # gọi các hàm này).
+      - ReceiptLogic.swift
       - CardsView.swift
       - DesignSystem.swift
       # --- Tập module đường đọc v3 (Pha 0-3, dùng CHUNG với

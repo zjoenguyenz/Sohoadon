@@ -44,6 +44,17 @@ targets:
       - ../ItemCandidates.swift
       - ../Reconcile.swift
       - ../RegionReReader.swift
+      # G1 (cổng kiểm chứng thật): hai file tầng app THUẦN
+      # Foundation vào harness để chế độ `unittests` chạy test
+      # vòng đời + logic điều kiện bằng Swift thật:
+      # - PendingDraft.swift: DTO + PendingDraftStore — chỉ cần
+      #   các kiểu của Parser/Reconcile/ReadDiagnostics (đã có
+      #   ở trên), không dính UI/SwiftData.
+      # - ReceiptLogic.swift: logic điều kiện thuần tách khỏi
+      #   ReceiptViews (canReparse / receiptFlags /
+      #   receiptHasOriginalImage) + formatMoney.
+      - ../PendingDraft.swift
+      - ../ReceiptLogic.swift
       # --- Driver + shim của harness (thư mục này):
       - HarnessApp
       # KHÔNG VÀO (và vì sao):
