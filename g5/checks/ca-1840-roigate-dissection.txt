@@ -1,0 +1,146 @@
+CA TRỰC 18:40 CST 2026-11-15 — MỔ 4 CA roiAssertFail CỦA HARNESS #37 (CỔNG 2B ROIGATE)
+================================================================================
+Việc của ca: đúng MỘT bước tiếp theo của ca 16:40 — mổ 4 ca
+roiAssertFailures=4 từ artifact harness-evidence-37 -> phân loại
+gốc -> kiến nghị quyết sửa tầng ROI hay sửa khẳng định cổng.
+Ca KHÔNG sửa code, KHÔNG dispatch CI, KHÔNG build, KHÔNG giao bản.
+
+1) NGUỒN BẰNG CHỨNG (đọc trực tiếp trong ca)
+- Artifact harness-evidence-37 tải về nguyên vẹn:
+  browser-download-20261116T004953...-harness-evidence-37.zip,
+  sha256 ba54384f74760ba26b53f49ef0f0062ee0ce35a5e39818153cc7cad9ec218f5b
+  — KHỚP digest ghi trên trang run #37 (43756035020).
+  Trong artifact: roigate.log (43 dòng ROIGATE-CASE) + images.log
+  (43 ảnh x 10 set) + streams/*.stream.json (dump SET 1 từng ảnh).
+  Bản sao bằng chứng đã lưu: g5/checks/evidence-37/ (roigate.log +
+  stream.json của đúng 4 ca dưới đây).
+- LƯU Ý SỬA SỔ: trích xuất qua giao diện web log ở đầu ca cho
+  appDeficit SAI ở 3 ca WR (dollartree 400 / starbucks 100000 /
+  traderjoes 100000). roigate.log trong artifact (đã kiểm sha) là
+  nguồn sơ cấp đúng: các số của nó khớp TUYỆT ĐỐI với phép tính
+  laneMetric trên kết quả parse của images.log cùng job (xem mục
+  2). Mọi số dưới đây lấy từ artifact, không dùng bản web-view.
+
+2) BỐN CA ROI-MISSING — SỐ ĐO NGUYÊN VĂN (roigate.log)
+- L-R09.jpg          f2=yes legacy 0/200000  app 0/200000  roiRounds=0
+- WR-dollartree-1.jpg f2=no  legacy 1/400     app 1/100     roiRounds=0
+- WR-starbucks-1.jpg  f2=no  legacy 0/200000  app 1/4080    roiRounds=0
+- WR-traderjoes-1.jpg f2=no  legacy 0/200000  app 1/6       roiRounds=0
+  (dạng: closed/deficit; cả 4 đều deltaOK=true, regressions=0)
+
+3) KẾT QUẢ PARSE CỦA LÀN APP (images.log 10/10 set + dump SET 1 —
+   khớp số roigate ở cả 4 ca theo laneMetric)
+- L-R09: vendor=Walmart, subtotal=nil, tax=0, total=nil, items=0,
+  arb=unclosed. Dòng ráp của ứng viên thắng CHỈ có 15 dòng phần
+  CHÂN hoá đơn (CASH BACK / CHANGE DUE / Walmart+...) — toàn bộ
+  khối món + khối tổng KHÔNG có trong dòng ráp. 10/10 set giống hệt.
+- WR-dollartree-1: subtotal=100, tax=0, total=100, items=0,
+  arb=closed. Dòng ráp SẠCH và ĐẦY ĐỦ 22 dòng, gồm đúng:
+  "Sub Total $5. 00", "SALES TAX $0 25", "Total $5 25" và 5 dòng
+  món giá 1.00 (GT: subtotal 500, thuế 25, total 525). Parse vẫn
+  cho items=0 và khép thoái hoá 100+0=100.
+- WR-starbucks-1: subtotal=4080, tax=227, total=4307, items=0,
+  arb=closed — khối tổng ĐÚNG GT tuyệt đối (4080 / 87+140 / 4307).
+  Dòng ráp của ứng viên thắng chỉ là MẢNH vùng tổng (17 dòng:
+  "40.80", "0.87", "1.40", "Cneck Closed 43.07", "Change Due
+  23.17"...) — không dòng món, không nhãn SUBTOTAL/TAX/TOTAL.
+- WR-traderjoes-1: SET 1 — subtotal=4, tax=18600, total=18606,
+  items=0, arb=closed (khép thoái hoá: 4+18600≈18606 lệch 2 xu);
+  dòng ráp chỉ 9 dòng rác gộp từ 27 mảnh (GT: 75 dòng món,
+  subtotal 17395, total 18606). SET 2–10 của CÙNG job đổi hẳn
+  (25 mảnh, arb=unclosed, không neo nào) — bất định giữa các lượt
+  chạy là có thật ở ca này, ghi nhận riêng.
+
+4) CƠ CHẾ ROI-MISSING — ĐÃ CHỨNG MINH BẰNG CODE + DỮ LIỆU
+Điểm chung cả 4 ca: làn app có items=0.
+- ReadPipeline.runArbiter (g5/app/ReadPipeline.swift, bản tại bàn
+  byte-trùng v3-phase4/app): vòng ROI chỉ bắt đầu khi
+  arbiterRegionHints sinh hint -> RegionReReader.targetRegions
+  dựng được band -> reReader trả dòng. roiRounds chỉ được GHI
+  sau khi có replacements; gãy ở bất kỳ mắt nào trước đó đều để
+  roiRounds=0.
+- arbiterRegionHints: (a) thâm hụt E1 |d1|>2 xu -> hint KHỐI MÓN;
+  (b) status ambiguous/budgetExceeded -> hint khối tổng;
+  (c) status unclosed -> hint khối tổng (trừ khi regionHint là
+  items-block). deficitE1 của ItemsArbiter = Σmón - đích subtotal.
+- arbiterBlockRange: khoảng dòng của hint KHỐI MÓN = lineIndex
+  của các MÓN trong kết quả parse; khoảng của hint KHỐI TỔNG =
+  các dòng chứa chữ SUBTOTAL/TOTAL/TAX. Thiếu cả hai đầu -> range
+  nil -> arbiterBand nil -> targetRegions BỎ hint (seed nil,
+  hint.band nil) -> regions rỗng -> vòng ROI không mở.
+Áp vào từng ca (trên kết quả images-mode, khớp roigate):
+- dollartree + starbucks + traderjoes (SET 1): status closed,
+  Σmón=0, subtotal có -> d1 = -100 / -4080 / -4, |d1|>2 -> hint
+  khối món. Nhưng items RỖNG -> khoảng món nil -> hint không có
+  hình học -> ROI không chạy. (traderjoes |d1|=4 chỉ vừa qua
+  ngưỡng dung sai 2 xu.)
+- L-R09: status unclosed -> hint khối tổng. Nhưng dòng ráp không
+  có dòng nào chứa SUBTOTAL/TOTAL/TAX (khối tổng không được đọc)
+  -> khoảng tổng nil -> hint không hình học -> ROI không chạy.
+KẾT LUẬN CƠ CHẾ: ROI chỉ nhắm được vào khối mà parser ĐÃ đọc
+được một phần; khi dạng hỏng là "MẤT TRỌN MỘT KHỐI" (0 món /
+không nhãn tổng), hint suy ra từ chính khối mất đó nên không có
+toạ độ — ROI mù theo cấu trúc, roiRounds=0 theo thiết kế hiện
+hành, không phải ROI chạy rồi cứu hụt.
+
+5) PHÁT HIỆN PHỤ (ghi nhận, không thuộc quyết ở mục 6)
+- Dollartree là ca đáng lo nhất ở tầng PARSE (không phải ROI):
+  dòng OCR sạch, đủ cả nhãn lẫn 5 món, mà parseV4 cho items=0 +
+  khép thoái hoá 100/100. Suy luận (GẮN NHÃN suy luận, khớp mọi
+  con số): token tiền có khoảng trắng bên trong ("$5. 00",
+  "$5 25", "$0 25") không thành token 500/525/25 được, nên neo
+  tiền sạch duy nhất còn lại cho trọng tài là các token 1.00 của
+  dòng món -> khép 100+0=100. Cần Leader kiểm chứng bằng luồng
+  chữ của ca này trước khi kết luận cơ chế token.
+- Starbucks: trọng tài khối tổng khép ĐÚNG GT từ các số không
+  nhãn — điểm mạnh có bằng chứng; phần hỏng nằm ở ứng viên thắng
+  chỉ là mảnh vùng tổng (khối món mất từ tầng ứng viên/ráp dòng).
+- L-R09 thuộc tập F2 với kỳ vọng "tạm tính mất chữ số đầu",
+  nhưng hỏng thực tế nặng hơn nhiều: ứng viên thắng chỉ còn
+  chân hoá đơn. f2Rescued=5 không gồm ca này.
+- Bất định chạy: traderjoes đổi kết quả giữa SET 1 và SET 2–10
+  trong cùng job images (27->25 mảnh, closed->unclosed).
+
+6) QUYẾT KIẾN NGHỊ (phần "quyết" của bước này — trình Leader)
+SỬA TẦNG ROI, KHÔNG SỬA KHẲNG ĐỊNH CỔNG. Lý do:
+(a) Cổng khẳng định "ca thâm hụt thì ROI phải chạy hoặc được
+    cứu" đã làm đúng việc: nó bắt được một điểm mù cấu trúc có
+    thật ở 4/43 ca (9,3%). Miễn trừ 4 ca này = đổi tiêu chí đã
+    duyệt để giấu lỗi — việc đổi tiêu chí thuộc quyền anh, và
+    bằng chứng ở đây không biện minh cho nó.
+(b) Hướng sửa khoanh được, không phạm AMD-V4-01 (ROI là tầng
+    THU BẰNG CHỨNG, không nặn số): khi hint có lineRange/band
+    nil, dựng BAND DỰ PHÒNG thay vì bỏ hint — hint khối món mà
+    không có món: vùng thân hoá đơn (giữa đầu trang và khối
+    tổng nếu xác định được, không thì toàn khung); hint khối
+    tổng mà không có dòng nhãn: dải dưới của khung. Có band dự
+    phòng thì ít nhất 1 vòng ROI chạy thật ở mọi ca thâm hụt.
+(c) Kèm theo (đề xuất cho gói sửa, không phải điều kiện): ghi
+    lý do gãy vòng vào chẩn đoán (roiBreakReason: no-hint /
+    hint-no-geometry / crop-empty / deadline) — hiện roiRounds=0
+    trộn cả ba nguyên nhân, ca này phải mổ artifact + code mới
+    phân định được.
+(d) Dollartree cần một tuyến kiểm riêng ở tầng parse/token
+    (mục 5) do Leader quyết — không gộp vào gói ROI này.
+Sau gói sửa ROI: mới kích lại lượt mốc G5 (đúng luật gom lượt).
+G5 VẪN CHƯA ĐÓNG; GATE100-v2 vẫn là bước chốt sau, cần phiên
+với anh. Ca này không kêu anh cài/test gì.
+
+TUYÊN BỐ TRUNG THỰC
+- Đã chứng minh: danh tính + số đo 4 ca từ artifact đã kiểm sha;
+  kết quả parse làn app của 4 ca từ images.log 10 set + dump
+  SET 1 (khớp roigate qua laneMetric ở cả 4); cơ chế gãy
+  hint-không-hình-học bằng đọc trực tiếp code tại bàn
+  (ReadPipeline arbiterRegionHints/arbiterBlockRange/
+  arbiterBand + RegionReReader.targetRegions) áp lên đúng dữ
+  liệu đó; bất định của traderjoes giữa các set.
+- Chưa chứng minh: kết quả parse bên trong lượt roigate RIÊNG
+  của traderjoes (lượt đó không có dump; suy từ images SET 1
+  khớp số deficit=6 — khớp tuyệt đối nhưng vẫn là suy luận);
+  cơ chế token "$5. 00" của dollartree (suy luận gắn nhãn ở
+  mục 5, chưa chạy luồng chữ kiểm chứng); điểm gãy crop-empty/
+  deadline KHÔNG xảy ra ở 4 ca này chỉ được loại trừ theo cơ
+  chế hình học ở trên (hint bị bỏ trước khi tới crop), không
+  có log vòng ROI riêng để đối chiếu.
+- Chưa làm: không sửa code, không dispatch CI, không build,
+  không giao bản mới.
