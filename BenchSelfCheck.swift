@@ -580,6 +580,28 @@ enum BenchSelfCheck {
     /// tiêu chí cứng §8 của đặc tả (KNOWN-GAP ở B-FACEID-TAB
     /// không chặn PASS vì BenchShell về nguyên tắc không có
     /// cổng khoá — đã khai trong chính mục đó).
+    /// L-2026-11-16-23: JSONSerialization NÉM NGOẠI LỆ ObjC (không
+    /// phải Swift error, try? KHÔNG bắt được) khi gặp Double NaN/∞ —
+    /// crash ngay nút Xuất file trên máy anh 2026-11-16. Các tín hiệu
+    /// chất lượng (blur/glare/contrast) là Double tính từ ảnh thật,
+    /// NaN tới được qua phép chia mẫu rỗng. Hàm này duyệt đệ quy toàn
+    /// bộ cây kết quả: số không hữu hạn -> chuỗi "non-finite" (giữ
+    /// bằng chứng trong chính file xuất ra), còn lại giữ nguyên.
+    private static func jsonSafe(_ value: Any) -> Any {
+        switch value {
+        case let d as Double:
+            return d.isFinite ? d : "non-finite"
+        case let f as Float:
+            return f.isFinite ? f : "non-finite"
+        case let dict as [String: Any]:
+            return dict.mapValues { jsonSafe($0) }
+        case let arr as [Any]:
+            return arr.map { jsonSafe($0) }
+        default:
+            return value
+        }
+    }
+
     static func writeFinalResult(deviceModel: String,
                                  osVersion: String) -> URL? {
         let p = loadProgress()
@@ -665,7 +687,7 @@ enum BenchSelfCheck {
             "firstFailures": failures,
         ]
         guard let data = try? JSONSerialization.data(
-            withJSONObject: root,
+            withJSONObject: jsonSafe(root),
             options: [.prettyPrinted, .sortedKeys]) else { return nil }
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
