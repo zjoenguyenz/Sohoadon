@@ -500,7 +500,8 @@ enum ReadPipeline {
             hints.append(ReconcileRegionHint(
                 block: block, reason: reason, priority: priority,
                 deltaCents: delta, lineRange: range,
-                band: arbiterBand(for: range, lineBoxes: lineBoxes)))
+                band: arbiterBand(for: range, lineBoxes: lineBoxes)
+                    ?? arbiterFallbackBand(block: block)))
         }
         if let d1 = result.arbiterDeficitE1,
            abs(d1) > ItemsArbiter.e1ToleranceCents {
@@ -581,6 +582,38 @@ enum ReadPipeline {
         else { return blockRange }
         let narrowed = max(lo, clo - 1)...min(hi, chi + 1)
         return narrowed.isEmpty ? blockRange : narrowed
+    }
+
+    /// G5-ROIFIX (gói sửa sau harness #37, mổ ở ca 18:40
+    /// 2026-11-15): BAND DỰ PHÒNG khi hint KHÔNG có hình học —
+    /// range nil (mất trọn khối: 0 món / không dòng nhãn tổng)
+    /// hoặc mọi hộp dòng của range đều nil. Trước gói này band
+    /// nil => RegionReReader.targetRegions bỏ hint => vòng ROI
+    /// không bao giờ mở ở đúng các ca hỏng nặng nhất (4 ca
+    /// roiAssertFail của #37: L-R09, WR-dollartree-1,
+    /// WR-starbucks-1, WR-traderjoes-1, cả 4 đều roiRounds=0).
+    /// Hình học dự phòng theo SỐ ĐO, không theo cảm tính:
+    /// - Khối món: TOÀN KHUNG. Phương án "vùng thân trên khối
+    ///   tổng" bị loại bằng bằng chứng: khoảng khối tổng dựng
+    ///   từ dòng chứa chữ TOTAL bị ô nhiễm bởi dòng tiêu đề cột
+    ///   ("DESCRIPTION CTY PRICE TOTAL", WR-dollartree-1 dòng 5)
+    ///   nên thân suy ra có thể nằm SAI phía của khối món thật.
+    /// - Khối tổng: dải từ đáy khung tới y=0,9. Trên 41 luồng
+    ///   đóng băng run31, khối tổng có ymax cao nhất 0,822
+    ///   (WR-walgreens-1) — mọi dải hẹp hơn (0,6/0,75) đều có ca
+    ///   hụt; 0,9 chứa trọn 41/41 khối tổng đã đo và chỉ loại
+    ///   dải đầu trang, nơi khối tổng chưa từng xuất hiện.
+    /// ROI là tầng THU BẰNG CHỨNG (đọc lại ảnh), không nặn số —
+    /// không phạm AMD-V4-01; kết quả vòng vẫn qua thang chấp
+    /// nhận arbiterIsBetter như mọi vòng ROI khác.
+    private static func arbiterFallbackBand(
+        block: ReconcileRegionHint.Block) -> CGRect {
+        switch block {
+        case .items:
+            return CGRect(x: 0, y: 0, width: 1, height: 1)
+        case .totals:
+            return CGRect(x: 0, y: 0, width: 1, height: 0.9)
+        }
     }
 
     private static func arbiterBand(for range: ClosedRange<Int>?,
