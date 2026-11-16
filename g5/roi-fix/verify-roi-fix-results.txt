@@ -1,0 +1,18 @@
+PASS  file gốc g5/app không bị đụng (md5 c511322f…)  
+PASS  bản vá khác bản gốc  
+PASS  ngoặc nhọn cân bằng ở cả hai bản  gốc 272/272 vá 274/274
+PASS  diff chỉ nằm trong 2 vùng cho phép (điểm gọi + hàm mới)  35 dòng thay đổi, ngoài vùng: []
+PASS  hàm arbiterFallbackBand: đúng 1 định nghĩa + 1 điểm gọi  
+PASS  L-R09: logic HIỆN HÀNH cho band nil (tái hiện roiRounds=0)  items=0 range=None
+PASS  L-R09: logic ĐÃ VÁ cho band dự phòng hợp lệ  band=(0.0, 0.0, 1.0, 0.9)
+PASS  WR-dollartree-1: logic HIỆN HÀNH cho band nil (tái hiện roiRounds=0)  items=0 range=None
+PASS  WR-dollartree-1: logic ĐÃ VÁ cho band dự phòng hợp lệ  band=(0.0, 0.0, 1.0, 1.0)
+PASS  WR-starbucks-1: logic HIỆN HÀNH cho band nil (tái hiện roiRounds=0)  items=0 range=None
+PASS  WR-starbucks-1: logic ĐÃ VÁ cho band dự phòng hợp lệ  band=(0.0, 0.0, 1.0, 1.0)
+PASS  WR-traderjoes-1: logic HIỆN HÀNH cho band nil (tái hiện roiRounds=0)  items=0 range=None
+PASS  WR-traderjoes-1: logic ĐÃ VÁ cho band dự phòng hợp lệ  band=(0.0, 0.0, 1.0, 1.0)
+PASS  dải tổng dự phòng [0, 0.9] chứa trọn khối tổng đã đo  41/41 luồng run31 có khối tổng
+PASS  ca có range thật: band dự phòng KHÔNG được dùng (không hồi quy)  41/41 ca có range
+PASS  L-R09 run31: khối tổng thật nằm trong dải dự phòng  khối tổng run31 y=(0.3750000001768644, 0.4719827584438252)
+
+TỔNG: 16/16 PASS
