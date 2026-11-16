@@ -1,0 +1,55 @@
+CA TRỰC 00:40 CST 2026-11-16 — KIỂM CHỨNG TỪ XA BƯỚC LEADER CÒN TREO:
+GÓI G5-ROIFIX CHƯA ĐƯỢC ÁP LÊN v3, CHƯA CÓ LƯỢT MỐC G5 MỚI
+================================================================================
+Ngữ cảnh: ca 22:40 CST 2026-11-15 đã rà gói G5-ROIFIX ĐẠT cổng nội bộ;
+bước tiếp theo thuộc Leader/chat chính: áp g5/roi-fix/ReadPipeline.swift
+vào cây app (đúng 1 file) → kích LẠI MỘT lượt mốc G5 (harness full +
+build-ipa cùng commit) → đọc phán quyết roigate mới.
+Ca này làm đúng MỘT bước: kiểm chứng trực tiếp từ xa xem bước đó đã
+thi hành chưa. Ca không áp code, không đẩy code v3/main, không dispatch
+CI, không build, không giao bản mới.
+
+BẰNG CHỨNG (đọc trực tiếp GitHub trong ca, 00:41–00:47 CST 2026-11-16):
+1) Đầu nhánh v3: commit 80d5a0b4200aa554a70b8533b90d0d2c941f7dc1
+   ("G5 fix: ternary-ambiguity syntax in BenchSelfCheck identity…",
+   2026-11-15T20:09:26Z = 14:09 CST) — KHÔNG đổi kể từ trước ca 20:40.
+2) Đầu nhánh main: commit 51a316c4742b4e738c4e67a008468c300cf4d76c
+   ("G5: harness-ci 10 luot + roigate", 2026-11-15T20:04:26Z) — không đổi.
+3) ReadPipeline.swift trên v3 @ 80d5a0b4: blob SHA
+   163abcdfd9fe338c9e397d1d203ca1983ed788e4.
+   Đối chiếu tại bàn bằng git-blob-sha1 (sha1("blob <len>\0"+nội dung)):
+   - g5/app/ReadPipeline.swift (bản GỐC, 86.041 byte, md5 c511322f…)
+     → blob 163abcdf… = KHỚP TRỌN blob trên v3.
+   - g5/roi-fix/ReadPipeline.swift (bản VÁ ROIFIX, 88.032 byte)
+     → blob e45cb9aa9965229e2a3dbd4337c06d13b11e0d52 = KHÁC blob trên v3.
+   → File trên v3 vẫn là bản gốc CHƯA có arbiterFallbackBand.
+   (Hỗ trợ thêm: search_code "arbiterFallbackBand repo:…/Sohoadon"
+   trả total_count=0 — chỉ là bằng chứng phụ, kết luận chính dựa vào blob.)
+4) Trang Actions của repo (đọc 00:42 CST): lượt chạy MỚI NHẤT vẫn là
+   của 2026-11-15 — build-ipa của commit G5 fix (run #120, 3m31s) và
+   harness #37 (1h5m8s, Failure ở Cổng 2b). KHÔNG có harness/build nào
+   mới hơn; trang run #37 vẫn Failure, artifact harness-evidence-37
+   186 KB sha256 ba54384f… (khớp sổ ca 16:40).
+5) Đầu nhánh docs/planning: 9f0ad540ce5fa98ea332c46ae326c1d1f876c97f
+   = đúng commit đẩy cuối ca 22:40 — không ca nào khác đã đẩy kể từ đó.
+
+KẾT LUẬN: Bước Leader (áp ROIFIX + kích lại lượt mốc G5) CHƯA thi hành
+tính đến 00:47 CST 2026-11-16. G5 CHƯA ĐÓNG. Không có gì mới để đọc
+phán quyết. Việc này KHÔNG phải hỏng 2 ca liên tiếp của cùng một việc
+do ca trực làm — đây là bước chờ Leader/chat chính theo đúng phân vai
+đã ghi ở các ca 20:40/22:40 (ca trực không tự đẩy code).
+
+TUYÊN BỐ TRUNG THỰC
+- Đã chứng minh: các mục 1–5 trên bằng đọc trực tiếp GitHub (connector
+  list_commits/get_file_contents/search_code + trang Actions) và
+  đối chiếu blob tại bàn trong ca.
+- Chưa chứng minh: không có gì về hành vi bản vá trên đường ảnh thật —
+  roiRounds/f2Rescued/regressions vẫn chỉ phán được ở lượt mốc G5
+  chạy lại (chưa tồn tại).
+- Chưa làm: không áp code, không dispatch, không sửa dòng nào;
+  roiBreakReason + tuyến token dollartree vẫn ngoài gói, chờ Leader.
+Bước tiếp theo giữ nguyên: Leader/chat chính áp
+g5/roi-fix/ReadPipeline.swift vào cây app (đúng 1 file) → kích LẠI
+MỘT lượt mốc G5 (harness full + build-ipa cùng commit) → đọc phán
+quyết roigate mới. GATE100-v2 vẫn là bước chốt sau, cần phiên với anh.
+Ca này không kêu anh cài/test gì.
