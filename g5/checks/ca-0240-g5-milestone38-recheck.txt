@@ -1,0 +1,59 @@
+CA TRỰC 02:40 CST 2026-11-16 — KIỂM CHỨNG TRỰC TIẾP LƯỢT MỐC G5 CHẠY LẠI: HARNESS #38 SUCCESS + BUILD-IPA #121 SUCCESS (cùng commit 7a1ee32)
+================================================================================
+Nguồn: đọc trực tiếp trang Actions công khai của zjoenguyenz/Sohoadon
+(repo đã public) trong ca 02:40–02:48 CST 2026-11-16 (chỉ đọc; không kích/
+không chạy lại/không huỷ bất cứ run nào). Ca không sửa code, không dispatch
+CI, không build, không giao bản mới.
+Cổng đóng băng nghiên cứu cũ: ĐÃ HẾT HIỆU LỰC (anh duyệt hướng 21:02 +
+D1–D7 21:44 ngày 2026-11-11; chương trình G1–G5 duyệt 11:38 ngày
+2026-11-15; G1–G4 ĐÃ ĐÓNG; G5 lượt mốc #37 FAIL ở Cổng 2b
+roiAssertFailures=4; gói G5-ROIFIX đã qua cổng nội bộ ca 22:40 15/11;
+Leader đã áp ROIFIX commit 7a1ee328 và kích lại lượt mốc lúc 00:57 CST
+16/11 — ghi ở cuối WORK-STATE). Việc của ca này = đúng bước tiếp theo:
+lấy phán quyết của lượt mốc chạy lại đó.
+
+1) HARNESS #38 — COMPLETED / SUCCESS
+- Run: https://github.com/zjoenguyenz/Sohoadon/actions/runs/43820391938
+- Workflow "Harness — cổng tự chạy 10 lượt" (harness-ci.yml),
+  workflow_dispatch (job=full), nhánh v3 @ 7a1ee32, kích 06:57 UTC
+  (= 00:57 CST) 2026-11-16, tổng thời lượng 1h36m27s (kết thúc ~02:33 CST).
+- Artifact: "harness-evidence-38", 208 KB, sha256
+  c68de651d03998a978bbb302404b90e46944063aa7300a81e7ff70ecfd7ca9be.
+- Annotations: chỉ 1 warning (Node.js 20 deprecated) + 1 notice (hàng chờ
+  macOS) — không lỗi thêm.
+
+2) BUILD-IPA #121 — COMPLETED / SUCCESS
+- Run: https://github.com/zjoenguyenz/Sohoadon/actions/runs/43820334323
+- build-ipa.yml, kích bằng push của chính commit 7a1ee32 trên v3,
+  06:57 UTC, SUCCESS, 3m04s.
+- Artifact: SoHoaDon-V3-run121-2026-11-16 (1.43 MB, sha256
+  806ba5c86f68f0f88bd478ccc4c7572ec3721ad6e3e5cd3194976ffa1f0a70d6) +
+  SoHoaDon-BENCH-V3-run121-2026-11-16 (22.1 MB, sha256
+  a33471d99054516f2095057447260ee154030abaed639416b7e17ba6d074e807).
+
+3) SUY LUẬN GẮN NHÃN (cơ chế cổng, đọc từ chính file workflow của run):
+harness-ci.yml job=full chạy TUẦN TỰ các bước có chốt grep: unittests
+(grep "SURVIVED unittests") → Cổng 1 fixture (grep "SURVIVED fixture") →
+Cổng 2 images x10 (grep "SURVIVED images x10") → Cổng 2b roigate (grep
+"SURVIVED roigate") → ma trận 4 tổ hợp (grep từng tổ hợp) → Cổng 3 fuzz
+(! grep "^DIED"). Job kết thúc SUCCESS nghĩa là MỌI chốt grep đó đều đạt
+— đặc biệt Cổng 2b roigate NAY ĐÃ QUA, trái ngược #37 (FAIL,
+roiAssertFailures=4). Đây là suy luận từ cơ chế workflow + trạng thái
+SUCCESS đọc trực tiếp, KHÔNG phải đọc từng dòng log.
+
+TUYÊN BỐ TRUNG THỰC
+- Đã chứng minh: trạng thái SUCCESS + thời lượng + artifact/digest của
+  #38 và #121, cùng commit 7a1ee32, bằng đọc trực tiếp Actions trong ca;
+  cơ chế chốt grep của workflow đọc từ file workflow của chính run.
+- Chưa chứng minh: SỐ ĐO CHI TIẾT trong log của #38 (UNITTESTS total/
+  failed, roiAssertFailures/f2Rescued/regressions cụ thể, số ca fuzz) —
+  trang log job nạp lỗi 1 lần trong ca và không thử lại; muốn có số
+  chính xác phải mổ artifact harness-evidence-38 (việc của Leader).
+  GATE100-v2 trên máy anh chưa chạy.
+- Chưa làm: không sửa code, không dispatch, không đẩy code v3/main,
+  không giao bản mới cho anh.
+KẾT LUẬN CA: tiêu chí CI của lượt mốc G5 nay ĐÃ ĐẠT ở mức trạng thái run
+(harness full SUCCESS + build-ipa SUCCESS cùng commit). Bước tiếp theo:
+Leader/chat chính tuyên bố đóng G5 chính thức (kèm mổ số roigate từ
+harness-evidence-38 nếu cần) → GATE100-v2 (tờ niêm phong của anh) là
+cổng chốt cuối trước mọi giao bản. Ca này không kêu anh cài/test gì.
