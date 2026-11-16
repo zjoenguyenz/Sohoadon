@@ -129,16 +129,41 @@ enum BenchSelfCheck {
         selfCheckDirectory.appendingPathComponent("current-image.txt")
     }
 
+    /// L-2026-11-16-24 (làm lại sau crash Gate D, bằng chứng
+    /// .ips 15:32 16/11): cặp coder an toàn cho MỌI file JSON
+    /// của bản tự kiểm. Số không hữu hạn (NaN/∞ từ phép đo chất
+    /// lượng, vd blur = blurRaw x pow(hệ số, số mũ dữ liệu)) được
+    /// ghi thành chuỗi và đọc lại đúng giá trị — bộ mã hoá mặc
+    /// định cũ ném lỗi trong try? làm saveProgress nuốt lặng lẽ
+    /// (mất entry + marker bị xoá oan), còn đường xuất file cũ
+    /// qua JSONSerialization thì văng ngoại lệ ObjC không bắt
+    /// được. Từ nay: không JSON trần, không [String: Any].
+    private static func safeEncoder() -> JSONEncoder {
+        let e = JSONEncoder()
+        e.nonConformingFloatEncodingStrategy = .convertToString(
+            positiveInfinity: "+inf", negativeInfinity: "-inf",
+            nan: "nan")
+        return e
+    }
+
+    private static func safeDecoder() -> JSONDecoder {
+        let d = JSONDecoder()
+        d.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: "+inf", negativeInfinity: "-inf",
+            nan: "nan")
+        return d
+    }
+
     static func loadProgress() -> Progress {
         guard let data = try? Data(contentsOf: progressURL),
-              let p = try? JSONDecoder().decode(Progress.self,
+              let p = try? safeDecoder().decode(Progress.self,
                                                  from: data)
         else { return Progress() }
         return p
     }
 
     static func saveProgress(_ p: Progress) {
-        guard let data = try? JSONEncoder().encode(p) else { return }
+        guard let data = try? safeEncoder().encode(p) else { return }
         try? data.write(to: progressURL, options: [.atomic])
     }
 
@@ -548,60 +573,128 @@ enum BenchSelfCheck {
         return sorted[max(0, min(idx, sorted.count - 1))]
     }
 
-    private static func entryDict(_ e: Entry) -> [String: Any] {
-        var d: [String: Any] = [
-            "file": e.file,
-            "parserVersion": e.parserVersion,
-            "arbiterStatus": e.arbiterStatus,
-            "blocks": e.blocks,
-            "taxes": e.taxes,
-            "itemsCount": e.itemsCount,
-            "roiRounds": e.roiRounds,
-            "roiAccepted": e.roiAccepted,
-            "qualityDecision": e.qualityDecision,
-            "qualitySignals": ["blur": e.blur, "glare": e.glare,
-                               "contrast": e.contrast],
-            "elapsedMs": e.elapsedMs,
-            "scoreClass": e.scoreClass,
-            "wrongFields": e.wrongFields,
-        ]
-        if let v = e.vendor { d["vendor"] = v }
-        if let v = e.dateText { d["date"] = v }
-        if let v = e.subtotal { d["subtotal"] = v }
-        if let v = e.total { d["total"] = v }
-        if let v = e.sumItems { d["sumItems"] = v }
-        if let v = e.sold { d["sold"] = v }
-        if let v = e.card { d["card"] = v }
-        if let v = e.diagnosticsID { d["diagnosticsID"] = v }
-        return d
-    }
+    // MARK: - Mô hình kết quả có kiểu chặt (LÀM LẠI L-24)
 
-    /// Dựng + ghi file kết quả; trả URL file. verdict theo
-    /// tiêu chí cứng §8 của đặc tả (KNOWN-GAP ở B-FACEID-TAB
-    /// không chặn PASS vì BenchShell về nguyên tắc không có
-    /// cổng khoá — đã khai trong chính mục đó).
-    /// L-2026-11-16-23: JSONSerialization NÉM NGOẠI LỆ ObjC (không
-    /// phải Swift error, try? KHÔNG bắt được) khi gặp Double NaN/∞ —
-    /// crash ngay nút Xuất file trên máy anh 2026-11-16. Các tín hiệu
-    /// chất lượng (blur/glare/contrast) là Double tính từ ảnh thật,
-    /// NaN tới được qua phép chia mẫu rỗng. Hàm này duyệt đệ quy toàn
-    /// bộ cây kết quả: số không hữu hạn -> chuỗi "non-finite" (giữ
-    /// bằng chứng trong chính file xuất ra), còn lại giữ nguyên.
-    private static func jsonSafe(_ value: Any) -> Any {
-        switch value {
-        case let d as Double:
-            return d.isFinite ? d : "non-finite"
-        case let f as Float:
-            return f.isFinite ? f : "non-finite"
-        case let dict as [String: Any]:
-            return dict.mapValues { jsonSafe($0) }
-        case let arr as [Any]:
-            return arr.map { jsonSafe($0) }
-        default:
-            return value
+    /// Kết quả tự kiểm dạng Codable (đặc tả §7, cùng khoá như
+    /// bản cũ) — thay toàn bộ cây [String: Any] + entryDict +
+    /// jsonSafe + JSONSerialization. Mọi giá trị đều là kiểu
+    /// Swift khai báo trước nên cây không thể chứa đối tượng
+    /// bất hợp lệ; số đo không hữu hạn đi qua safeEncoder
+    /// thành chuỗi bằng chứng. Ngoại lệ ObjC của
+    /// _writeJSONValue hết đường tồn tại trong file này.
+    struct FinalResult: Codable {
+        struct Identity: Codable {
+            var parserVersion: String
+            var appBuild: String
+            var deviceModel: String
+            var osVersion: String
+            var startedAt: String
+            var finishedAt: String
+            var gtVersion: String
         }
+        struct Signals: Codable {
+            var blur: Double
+            var glare: Double
+            var contrast: Double
+        }
+        struct EntryOut: Codable {
+            var file: String
+            var parserVersion: String
+            var arbiterStatus: String
+            var blocks: [String]
+            var taxes: [Int]
+            var itemsCount: Int
+            var roiRounds: Int
+            var roiAccepted: Int
+            var qualityDecision: String
+            var qualitySignals: Signals
+            var elapsedMs: Int
+            var scoreClass: String
+            var wrongFields: [String]
+            var vendor: String?
+            var date: String?
+            var subtotal: Int?
+            var total: Int?
+            var sumItems: Int?
+            var sold: Int?
+            var card: String?
+            var diagnosticsID: String?
+        }
+        struct Elapsed: Codable {
+            var p50: Int
+            var p95: Int
+            var max: Int
+        }
+        struct PartAOut: Codable {
+            var entries: [EntryOut]
+            var counts: [String: Int]
+            var elapsedMs: Elapsed
+        }
+        struct PartBOut: Codable {
+            var id: String
+            var expected: String
+            var actual: String
+            var verdict: String
+            var diffs: [String]
+        }
+        struct PartCOut: Codable {
+            var file: String
+            var oldParserVersion: String
+            var newParserVersion: String
+            var oldDiagnosticsID: String
+            var diffs: [String]
+        }
+        struct Stats: Codable {
+            var min: Double
+            var p50: Double
+            var max: Double
+            var nonFiniteCount: Int
+        }
+        struct QualityDistribution: Codable {
+            var decisions: [String: Int]
+            var blur: Stats?
+            var glare: Stats?
+            var contrast: Stats?
+        }
+        struct LogicOut: Codable {
+            var verdict: String
+            var method: String
+        }
+        struct PartDOut: Codable {
+            var qualityDistribution: QualityDistribution
+            var scL18: LogicOut
+            var scL17: LogicOut
+        }
+        var identity: Identity
+        var partA: PartAOut
+        var partB: [PartBOut]
+        var partC: [PartCOut]
+        var partD: PartDOut
+        var verdict: String
+        var firstFailures: [String]
     }
 
+    /// Thống kê trên các giá trị HỮU HẠN (sắp xếp có NaN phá
+    /// thứ tự nghiêm ngặt của sort); số ca không hữu hạn được
+    /// đếm riêng thành bằng chứng thay vì nuốt lặng.
+    private static func makeStats(
+        _ values: [Double]) -> FinalResult.Stats? {
+        guard !values.isEmpty else { return nil }
+        let finite = values.filter { $0.isFinite }.sorted()
+        let nonFinite = values.count - finite.count
+        guard !finite.isEmpty else {
+            return FinalResult.Stats(min: 0, p50: 0, max: 0,
+                                     nonFiniteCount: nonFinite)
+        }
+        return FinalResult.Stats(min: finite.first ?? 0,
+                                 p50: finite[finite.count / 2],
+                                 max: finite.last ?? 0,
+                                 nonFiniteCount: nonFinite)
+    }
+
+    /// Dựng + ghi file kết quả; trả URL file. Verdict theo
+    /// tiêu chí cứng §8 của đặc tả (KNOWN-GAP ở B-FACEID-TAB
+    /// không chặn PASS — đã khai trong chính mục đó).
     static func writeFinalResult(deviceModel: String,
                                  osVersion: String) -> URL? {
         let p = loadProgress()
@@ -614,13 +707,6 @@ enum BenchSelfCheck {
         var decisionCounts: [String: Int] = [:]
         for e in entries {
             decisionCounts[e.qualityDecision, default: 0] += 1
-        }
-        func stats(_ values: [Double]) -> [String: Any] {
-            guard !values.isEmpty else { return [:] }
-            let s = values.sorted()
-            return ["min": s.first ?? 0,
-                    "p50": s[s.count / 2],
-                    "max": s.last ?? 0]
         }
         // Verdict §8.
         var failures: [String] = []
@@ -638,57 +724,79 @@ enum BenchSelfCheck {
         if !logic.scL18Pass { failures.append("partD: SC-L18 FAIL") }
         if !logic.scL17Pass { failures.append("partD: SC-L17 FAIL") }
         let iso = ISO8601DateFormatter()
-        let root: [String: Any] = [
-            "identity": [
-                "parserVersion": ReadCoreVersion.parserVersion,
-                "appBuild": (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "?",
-                "deviceModel": deviceModel,
-                "osVersion": osVersion,
-                "startedAt": p.startedAt,
-                "finishedAt": iso.string(from: Date()),
-                "gtVersion": loadGT()?.gtVersion ?? "unloaded",
-            ],
-            "partA": [
-                "entries": entries.map { entryDict($0) },
-                "counts": counts,
-                "elapsedMs": ["p50": percentile(elapsed, 0.50),
-                              "p95": percentile(elapsed, 0.95),
-                              "max": elapsed.last ?? 0],
-            ],
-            "partB": p.partB.map {
-                ["id": $0.id, "expected": $0.expected,
-                 "actual": $0.actual, "verdict": $0.verdict,
-                 "diffs": $0.diffs]
+        let result = FinalResult(
+            identity: FinalResult.Identity(
+                parserVersion: ReadCoreVersion.parserVersion,
+                appBuild: (Bundle.main.object(
+                    forInfoDictionaryKey: "CFBundleVersion")
+                    as? String) ?? "?",
+                deviceModel: deviceModel,
+                osVersion: osVersion,
+                startedAt: p.startedAt,
+                finishedAt: iso.string(from: Date()),
+                gtVersion: loadGT()?.gtVersion ?? "unloaded"),
+            partA: FinalResult.PartAOut(
+                entries: entries.map { e in
+                    FinalResult.EntryOut(
+                        file: e.file,
+                        parserVersion: e.parserVersion,
+                        arbiterStatus: e.arbiterStatus,
+                        blocks: e.blocks,
+                        taxes: e.taxes,
+                        itemsCount: e.itemsCount,
+                        roiRounds: e.roiRounds,
+                        roiAccepted: e.roiAccepted,
+                        qualityDecision: e.qualityDecision,
+                        qualitySignals: FinalResult.Signals(
+                            blur: e.blur, glare: e.glare,
+                            contrast: e.contrast),
+                        elapsedMs: e.elapsedMs,
+                        scoreClass: e.scoreClass,
+                        wrongFields: e.wrongFields,
+                        vendor: e.vendor, date: e.dateText,
+                        subtotal: e.subtotal, total: e.total,
+                        sumItems: e.sumItems, sold: e.sold,
+                        card: e.card,
+                        diagnosticsID: e.diagnosticsID)
+                },
+                counts: counts,
+                elapsedMs: FinalResult.Elapsed(
+                    p50: percentile(elapsed, 0.50),
+                    p95: percentile(elapsed, 0.95),
+                    max: elapsed.last ?? 0)),
+            partB: p.partB.map {
+                FinalResult.PartBOut(
+                    id: $0.id, expected: $0.expected,
+                    actual: $0.actual, verdict: $0.verdict,
+                    diffs: $0.diffs)
             },
-            "partC": p.partC.map {
-                ["file": $0.file,
-                 "oldParserVersion": $0.oldParserVersion,
-                 "newParserVersion": $0.newParserVersion,
-                 "oldDiagnosticsID": $0.oldDiagnosticsID,
-                 "diffs": $0.diffs]
+            partC: p.partC.map {
+                FinalResult.PartCOut(
+                    file: $0.file,
+                    oldParserVersion: $0.oldParserVersion,
+                    newParserVersion: $0.newParserVersion,
+                    oldDiagnosticsID: $0.oldDiagnosticsID,
+                    diffs: $0.diffs)
             },
-            "partD": [
-                "qualityDistribution": [
-                    "decisions": decisionCounts,
-                    "blur": stats(entries.map { $0.blur }),
-                    "glare": stats(entries.map { $0.glare }),
-                    "contrast": stats(entries.map { $0.contrast }),
-                ],
-                "scL18": [
-                    "verdict": logic.scL18Pass ? "PASS" : "FAIL",
-                    "method": "logic-downstream (ReceiptLogic.flags tren ban ghi da cam ket muc dich B) — co che commit day du song trong ReceiptDetailView, ngoai target bench",
-                ],
-                "scL17": [
-                    "verdict": logic.scL17Pass ? "PASS" : "FAIL",
-                    "method": "ReceiptLogic.canReparse chi phu thuoc ocrRawText",
-                ],
-            ],
-            "verdict": failures.isEmpty ? "PASS" : "FAIL",
-            "firstFailures": failures,
-        ]
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: jsonSafe(root),
-            options: [.prettyPrinted, .sortedKeys]) else { return nil }
+            partD: FinalResult.PartDOut(
+                qualityDistribution: FinalResult.QualityDistribution(
+                    decisions: decisionCounts,
+                    blur: makeStats(entries.map { $0.blur }),
+                    glare: makeStats(entries.map { $0.glare }),
+                    contrast: makeStats(entries.map { $0.contrast })),
+                scL18: FinalResult.LogicOut(
+                    verdict: logic.scL18Pass ? "PASS" : "FAIL",
+                    method: "logic-downstream (ReceiptLogic.flags tren ban ghi da cam ket muc dich B) — co che commit day du song trong ReceiptDetailView, ngoai target bench"),
+                scL17: FinalResult.LogicOut(
+                    verdict: logic.scL17Pass ? "PASS" : "FAIL",
+                    method: "ReceiptLogic.canReparse chi phu thuoc ocrRawText")),
+            verdict: failures.isEmpty ? "PASS" : "FAIL",
+            firstFailures: failures)
+        let encoder = safeEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(result) else {
+            return nil
+        }
         let stamp = DateFormatter()
         stamp.locale = Locale(identifier: "en_US_POSIX")
         stamp.dateFormat = "yyyyMMdd-HHmm"
