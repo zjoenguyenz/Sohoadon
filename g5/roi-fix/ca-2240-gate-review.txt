@@ -1,0 +1,53 @@
+CA TRỰC 22:40 CST 2026-11-15 — RÀ CỔNG NỘI BỘ GÓI G5-ROIFIX (bước tiếp theo của ca 20:40)
+Vai: kiểm độc lập như Leader ở cổng nội bộ. Ca KHÔNG áp code vào cây app,
+KHÔNG đẩy code lên main, KHÔNG dispatch CI, KHÔNG build, KHÔNG giao bản cho anh.
+
+PHÁN QUYẾT: GÓI ĐẠT CỔNG NỘI BỘ — sẵn sàng để Leader/chat chính áp vào cây app
+và kích LẠI MỘT lượt mốc G5. G5 VẪN CHƯA ĐÓNG.
+
+ĐÃ CHỨNG MINH (đo/đọc trực tiếp trong ca, không dùng lời sổ gói):
+1. Chạy lại verify_roi_fix.py tại bàn: 16/16 PASS, exit 0 — khớp từng mục
+   với verify-roi-fix-results.txt đã lưu và ROI-FIX-LEDGER.md.
+2. Diff độc lập (diff -u g5/app vs g5/roi-fix): đúng +34/−1, chỉ 2 vùng
+   (điểm gọi appendHint + hàm arbiterFallbackBand mới). Ngoặc vá 274/274;
+   byte điều khiển trong file vá = 0; md5 file vá 71f80b36…; file gốc
+   g5/app KHÔNG bị đụng (md5 c511322f…) và byte-trùng cây sống
+   v3-phase4/app/ReadPipeline.swift (cùng md5).
+3. Tính biên dịch theo cấu trúc: ReconcileRegionHint.Block
+   (v3-phase4/app/Reconcile.swift:108-110) có ĐÚNG 2 case .items/.totals
+   → switch trong hàm mới là exhaustive, không cần default; ký hiệu tham
+   chiếu (arbiterBand, ReconcileRegionHint) đều tồn tại trong chính file.
+4. Hệ toạ độ ĐÚNG: cropForROI (ReadPipeline.swift:1558) ghi rõ band là
+   toạ độ Vision gốc dưới-trái chuẩn hoá, rect.y = (1 − band.maxY)·h.
+   → dải tổng (0,0,1,0.9) = 90% từ ĐÁY khung, loại 10% đầu trang — khớp
+   comment trong code + số đo run31 (khối tổng ymax cao nhất 0,822;
+   dải chứa 41/41). Khối món toàn khung (0,0,1,1) hiển nhiên chứa trọn.
+5. Đường tiêu thụ THẬT mở được vòng: runArbiter gọi
+   targetRegions(hints, lineBoxes:) — seed lấy band(for:range) trước,
+   nil thì rơi xuống hint.band (RegionReReader.targetRegions); đường
+   recognizeRegion 1-hint dùng thẳng hint.band. Cả 4 ca #37 đều range nil
+   (mất trọn khối) → trước vá hint.band nil nên bị bỏ; sau vá hint.band
+   là band dự phòng ở CẢ HAI đường gọi. roigate.log trong evidence-37
+   (đã kiểm sha ở ca 16:40/18:40) có đúng 4 dòng ROI-MISSING, cả 4
+   roiRounds=0: L-R09 · WR-dollartree-1 · WR-starbucks-1 · WR-traderjoes-1.
+6. An toàn chấp nhận giữ nguyên: kết quả vòng ROI vẫn qua
+   arbiterIsBetter (hoà → từ chối + dừng vòng); trần vòng/vùng + trần
+   mềm 4 giây trong runArbiter không đổi; ROI là đọc-lại-ảnh (thu bằng
+   chứng), không nặn số — không phạm AMD-V4-01. Ca có band thật không
+   hồi quy theo cấu trúc: dự phòng chỉ qua toán tử ?? khi arbiterBand
+   nil (verifier: 41/41 ca có range thật không dùng dự phòng).
+
+CHƯA CHỨNG MINH:
+- Bản vá CHƯA biên dịch (không swiftc tại bàn) và CHƯA chạy đường ảnh
+  thật: roiRounds thật ≥1 ở 4 ca, f2Rescued, regressions=0 chỉ phán ở
+  lượt mốc G5 chạy lại trên CI do Leader kích.
+- roiBreakReason (§6(c) sổ mổ) và tuyến token dollartree ("$5. 00")
+  nằm ngoài gói theo thiết kế — vẫn để Leader quyết riêng.
+
+CHƯA LÀM: không áp code vào g5/app/v3-phase4, không đẩy code, không
+dispatch, không build, không giao gì cho anh. GATE100-v2 vẫn là bước
+chốt sau, cần phiên với anh.
+
+BƯỚC TIẾP THEO: Leader/chat chính áp g5/roi-fix/ReadPipeline.swift vào
+cây app (đúng 1 file) → kích LẠI MỘT lượt mốc G5 (harness full +
+build-ipa cùng commit) → đọc phán quyết roigate mới.
