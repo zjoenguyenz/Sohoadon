@@ -89,7 +89,7 @@ struct RateCandidate {
 /// nên "TAX1", "TAX 1", "Tax 1" là cùng một họ — v3 chết ở đúng
 /// chỗ này (mẫu `TAX\s+(\d)` đòi khoảng trắng).
 struct LineLabel {
-    var family: String        // SUBTOTAL | TOTAL | TAX | TENDER | CHANGE | NONE
+    var family: String        // SUBTOTAL | TOTAL | TAX | TENDER | CHANGE | TAXSUM | GIFTCERT | PROMO | NONE
     var rank: Int?            // TAX1 → 1
     var labelOnly: Bool       // dòng chỉ có nhãn, không token tiền
 }
@@ -101,6 +101,20 @@ enum CandidateFactory {
     // (?!\d) sau \d{2} chặn token ma từ suất (3.9170) và số dài.
     private static let moneyRegex: NSRegularExpression? =
         try? NSRegularExpression(pattern: #"(\d[\d,]*\.\d{2})(?!\d)(-)?"#)
+
+    // Mẫu token tiền GÃY KHOẢNG TRẮNG (hồ sơ Gate D, ca
+    // WR-dollartree-1): một khoảng trắng xẻ đôi token tại biên
+    // thập phân — dạng chấm "5. 00" (mọi dòng) và dạng trần
+    // "5 25" / "0 25" (CHỈ dòng mang nhãn khối tổng: ngoài
+    // ngữ cảnh nhãn, cặp <số nguyên> + <2 số> quá dễ là số
+    // lượng đứng cạnh giá). (?<![\d.]) chặn khớp đứng giữa
+    // một số thập phân khác; (?![\d.]) chặn phần lẻ dính một
+    // phần thập phân phía sau ("1 25.00" là số lượng + giá
+    // 25.00, không phải 1.25).
+    private static let spaceDotMoneyRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(?<![\d.])(\d[\d,]*)\.\s(\d{2})(?![\d.])"#)
+    private static let spaceBareMoneyRegex: NSRegularExpression? =
+        try? NSRegularExpression(pattern: #"(?<![\d.])(\d[\d,]*)\s(\d{2})(?![\d.])"#)
 
     // Suất: 1–3 số nguyên + 3–4 số lẻ (8.5170, 4.0170), hoặc
     // 2–4 số lẻ kèm dấu % (10.05%, 8.517% — dạng 3 số lẻ + %
@@ -182,6 +196,20 @@ enum CandidateFactory {
             || squashed.contains("BALANCEDUE") {
             return make("TOTAL")
         }
+        // Họ GIFTCERT / PROMO (hồ sơ Gate D, ca WR-bestbuy-1):
+        // dòng chứng từ quà tặng ("GIFT CERT", "FREE GIFT
+        // CARD") và dòng khuyến mãi/trả giá ("PRICE MATCH",
+        // "PROMO") không phải dòng món, cũng không phải neo
+        // tổng. Đặt SAU họ TOTAL để các dòng tổng hợp đã mang
+        // họ cũ (vd "TOTAL GIFT CARD VALUE") giữ nguyên hành
+        // vi tầng tổng; tầng món loại CỨNG cả hai họ này
+        // (ItemLineClassifier.excludedFamilies).
+        if squashed.contains("GIFTCERT") || squashed.contains("GIFTCARD") {
+            return make("GIFTCERT")
+        }
+        if squashed.contains("PROMO") || squashed.contains("PRICEMATCH") {
+            return make("PROMO")
+        }
         return make("NONE")
     }
 
@@ -244,6 +272,8 @@ enum CandidateFactory {
             case "TAX": lineRoles = [MoneyRole.tax]
             case "TENDER": lineRoles = [MoneyRole.tender]
             case "CHANGE": lineRoles = [MoneyRole.change]
+            case "GIFTCERT": lineRoles = [MoneyRole.tender]
+            case "PROMO": lineRoles = [MoneyRole.promo]
             case "TAXSUM": lineRoles = []
             default:
                 lineRoles = [MoneyRole.subtotal, MoneyRole.tax, MoneyRole.total,
@@ -298,6 +328,28 @@ enum CandidateFactory {
                 var variantCount = 0
                 for alt in line.alternates {
                     if variantCount >= 6 { break }
+                    // THỪA KẾ NGỮ CẢNH TENDER (hồ sơ Gate D, ca
+                    // L-R09 — nghi cơ chế D): alternate là bản
+                    // đọc của một LƯỢT KHÁC; nếu chính văn bản
+                    // alternate mang họ cứng TENDER / CHANGE /
+                    // TAXSUM (vd dòng "TOTAL DEBIT PURCHASE
+                    // 92.24" của lượt thua ráp vào dòng chủ
+                    // TOTAL), token biến thể phải GIỮ họ đó —
+                    // không được mượn vai trò của dòng chủ rồi
+                    // thành ứng viên tổng/thuế thường ở mọi bể.
+                    // Luật chỉ THU HẸP: họ cứng của alternate
+                    // thắng; ngoài ra giữ nguyên vai trò dòng
+                    // chủ, không bao giờ nới rộng.
+                    let altFamily = labelFamily(
+                        of: alt.text, hasMoney: true,
+                        vendorVariants: vendorVariants).family
+                    let altRoles: Set<String>
+                    switch altFamily {
+                    case "TENDER": altRoles = [MoneyRole.tender]
+                    case "CHANGE": altRoles = [MoneyRole.change]
+                    case "TAXSUM": altRoles = []
+                    default: altRoles = lineRoles
+                    }
                     let ans = alt.text as NSString
                     let afull = NSRange(location: 0, length: ans.length)
                     var ordinal = 0
@@ -329,10 +381,59 @@ enum CandidateFactory {
                             id: nextID, cents: cents, text: token,
                             negative: negative, lineIndex: i,
                             utf16Start: tr.location, utf16Length: tr.length,
-                            tier: "ocrVariant", feasibleRoles: lineRoles,
+                            tier: "ocrVariant", feasibleRoles: altRoles,
                             hints: [], conflictGroup: group))
                         nextID += 1
                         variantCount += 1
+                    }
+                }
+            }
+
+            // --- Token tiền GÃY KHOẢNG TRẮNG (tier
+            // ocrVariant; hồ sơ Gate D, ca WR-dollartree-1) ---
+            // Giá trị GỘP từ một token in bị khoảng trắng xẻ
+            // đôi tại biên thập phân ("$5. 00", "$0 25",
+            // "$5 25"): bản đọc biến thể của token đã in, cùng
+            // tầng với alternate — chỉ vào được qua tầng cứu
+            // với khép DUY NHẤT (AMD-V4-01 nguyên vẹn), mang
+            // provenance closureVariant; nguyên văn token gãy
+            // giữ trong `text` để truy vết (§3.7). Trùng giá
+            // trị token chính của dòng thì bỏ (không phải bằng
+            // chứng mới); trần 3 biến thể/dòng; nhóm xung đột
+            // dùng nhóm-chung-của-dòng như biến thể alternate
+            // vượt trần.
+            do {
+                var spaceSeen = Set(lineMoney.map { $0.cents })
+                var spaceCount = 0
+                let totalsLabelled = label.family == "SUBTOTAL"
+                    || label.family == "TAX" || label.family == "TOTAL"
+                    || label.family == "TAXSUM"
+                let spacePatterns = totalsLabelled
+                    ? [spaceDotMoneyRegex, spaceBareMoneyRegex]
+                    : [spaceDotMoneyRegex]
+                for reOpt in spacePatterns {
+                    guard let re = reOpt else { continue }
+                    for m in re.matches(in: line.text, range: full) {
+                        if spaceCount >= 3 { break }
+                        let wr = m.range(at: 1)
+                        let fr = m.range(at: 2)
+                        guard wr.location != NSNotFound,
+                              fr.location != NSNotFound,
+                              let cents = SafeMoney.parseCents(
+                                  "\(ns.substring(with: wr)).\(ns.substring(with: fr))")
+                        else { continue }
+                        if !spaceSeen.insert(cents).inserted { continue }
+                        money.append(MoneyCandidate(
+                            id: nextID, cents: cents,
+                            text: ns.substring(with: m.range),
+                            negative: false, lineIndex: i,
+                            utf16Start: m.range.location,
+                            utf16Length: m.range.length,
+                            tier: "ocrVariant", feasibleRoles: lineRoles,
+                            hints: [],
+                            conflictGroup: -(1_000_000 + i)))
+                        nextID += 1
+                        spaceCount += 1
                     }
                 }
             }

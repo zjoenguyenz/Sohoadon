@@ -78,7 +78,7 @@ struct ClassifiedItemLine {
         case qtyLink       // dòng phụ "N @ u" đứng một mình
         case itemLine      // tiền + chữ → ứng viên món
         case fragment      // chỉ tiền → mảnh giá (món thiếu tên)
-        case excluded      // họ SUBTOTAL/TOTAL/TAX/TENDER/CHANGE/TAXSUM
+        case excluded      // họ SUBTOTAL/TOTAL/TAX/TENDER/CHANGE/TAXSUM/GIFTCERT/PROMO
         case broken        // tiền gãy vật lý → món tiền = nil
         case hang          // tên + mã/INST, không tiền → món treo
         case nameOnly      // dòng tên chờ (mỹ quan + lấp tên mảnh)
@@ -350,8 +350,16 @@ enum ItemLineClassifier {
         return rest.filter { $0.isLetter }.count
     }
 
+    // Loại CỨNG ở tầng sinh ứng viên món (hồ sơ Gate D, ca
+    // WR-bestbuy-1): cùng tập họ loại trừ của tầng tổng —
+    // token trên dòng mang một họ này KHÔNG BAO GIỜ thành
+    // ứng viên món, ở mọi lượt (chính, ngoài cửa sổ, cứu).
+    // GIFTCERT/PROMO là phần bổ sung của hồ sơ: trước đó các
+    // dòng "FREE GIFT CARD" / "PRICE MATCH COMP" rơi vào họ
+    // NONE và tiền của chúng thành món ma (+surplus E1).
     private static let excludedFamilies: Set<String> =
-        ["SUBTOTAL", "TOTAL", "TAX", "TENDER", "CHANGE", "TAXSUM"]
+        ["SUBTOTAL", "TOTAL", "TAX", "TENDER", "CHANGE", "TAXSUM",
+         "GIFTCERT", "PROMO"]
 
     // MARK: Phân loại một dòng
 
