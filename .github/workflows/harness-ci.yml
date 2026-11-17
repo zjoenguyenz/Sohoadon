@@ -54,11 +54,12 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: "full = tat ca cac cong (mac dinh) | streams = chi cong luong V4-0"
+        description: "full = tat ca cac cong (mac dinh) | streams = chi cong luong V4-0 | gate100 = phien GATE100-v2"
         type: choice
         options:
           - full
           - streams
+          - gate100
         default: full
 
 jobs:
@@ -160,6 +161,75 @@ jobs:
           set -o pipefail
           "$BIN" streams --dir harness/streams 2>&1 | tee streams.log
           grep -q "STREAMS-DONE" streams.log
+      - name: GATE100 — giải mã corpus (chỉ khi job=gate100)
+        if: inputs.job == 'gate100'
+        run: |
+          python3 - <<'PYEOF'
+          import base64, glob, hashlib, json, os, re, subprocess, sys
+          freeze = json.load(open("FREEZE.json"))
+          want = {e["file"]: e["sha256"] for e in freeze["files"]}
+          assert len(want) == 40, len(want)
+          parts = {}
+          for f in glob.glob("Gate100B64/*.b64.part*"):
+              base = os.path.basename(f).split(".b64.")[0]
+              parts.setdefault(base, []).append(f)
+          singles = {os.path.basename(f)[:-4]
+                     for f in glob.glob("Gate100B64/*.b64")}
+          os.makedirs("Gate100Images", exist_ok=True)
+          names = sorted(set(list(parts.keys()) + list(singles)))
+          assert len(names) == 40, len(names)
+          for name in names:
+              if name in parts:
+                  blob = b"".join(open(p, "rb").read()
+                                  for p in sorted(parts[name]))
+              else:
+                  blob = open(f"Gate100B64/{name}.b64", "rb").read()
+              data = base64.b64decode(blob)
+              got = hashlib.sha256(data).hexdigest()
+              assert got == want[name], (name, got, want[name])
+              out = os.path.join("Gate100Images", name)
+              with open(out, "wb") as fh:
+                  fh.write(data)
+          print("decoded+sha256-verified 40/40")
+          # harness chi doc *.jpg: doi webp/png -> jpg bang sips (macOS)
+          for f in sorted(glob.glob("Gate100Images/*")):
+              stem, ext = os.path.splitext(f)
+              if ext.lower() in (".webp", ".png"):
+                  subprocess.run(["sips", "-s", "format", "jpeg", f,
+                                  "--out", stem + ".jpg"], check=True,
+                                 capture_output=True)
+                  os.remove(f)
+          jpgs = glob.glob("Gate100Images/*.jpg")
+          assert len(jpgs) == 40, len(jpgs)
+          # ban GT chay that: khoa .webp/.png -> .jpg (ban dong bang giu nguyen)
+          gt = json.load(open("gate100-gt.json"))
+          cases = {}
+          for k, v in gt["cases"].items():
+              stem, ext = os.path.splitext(k)
+              cases[stem + ".jpg" if ext.lower() in (".webp", ".png")
+                    else k] = v
+          gt["cases"] = cases
+          json.dump(gt, open("gate100-gt-runtime.json", "w"))
+          print("runtime GT keys:", len(cases))
+          PYEOF
+          ls Gate100Images | wc -l
+      - name: GATE100 — corpus 40 ảnh x 2 set (đúng đường app)
+        if: inputs.job == 'gate100'
+        run: |
+          "$BIN" images --dir Gate100Images --sets 2 --dump streams 2>&1 | tee gate100-images.log
+          grep -q "SURVIVED images x2" gate100-images.log
+      - name: GATE100 — roigate corpus (đáp án gate100-gt.json)
+        if: inputs.job == 'gate100'
+        run: |
+          set -o pipefail
+          "$BIN" roigate --dir Gate100Images --gt gate100-gt-runtime.json 2>&1 | tee gate100-roigate.log
+          grep -q "SURVIVED roigate" gate100-roigate.log
+      - name: GATE100 — roigate 43 ảnh bench (đáp án bench-gt.json)
+        if: inputs.job == 'gate100'
+        run: |
+          set -o pipefail
+          "$BIN" roigate --dir BenchImages --gt bench-gt.json 2>&1 | tee gate100-bench-roigate.log
+          grep -q "SURVIVED roigate" gate100-bench-roigate.log
       - name: Lưu bằng chứng (luồng thật + log)
         if: always()
         uses: actions/upload-artifact@v4
@@ -179,3 +249,6 @@ jobs:
             fuzz-results.txt
             streams.log
             fuzz-*.log
+            gate100-images.log
+            gate100-roigate.log
+            gate100-bench-roigate.log
