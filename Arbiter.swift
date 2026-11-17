@@ -207,10 +207,17 @@ enum TotalsArbiter {
         // thứ tự dòng) lấp tới trần. Ứng viên dòng TENDER/CHANGE/
         // TAXSUM không bao giờ vào: feasibleRoles của chúng không
         // chứa subtotal/total (luật §4.4(c) ở cả hai tầng).
+        // F1 (hồ sơ GATE100-R41, ca 01-walmart-1): token 0¢
+        // KHÔNG BAO GIỜ vào danh sách subtotal/total — kể cả
+        // khi là token neo. Tổng hoá đơn 0.00 không phải neo
+        // tổng; khép hình thức 0+0=0 là khép rác (nó từng
+        // chặn ROI chạy và thắng điểm ứng viên). Token 0 giữ
+        // nguyên các vai trò khác qua feasibleRoles ở tầng
+        // sinh (change/item/tender).
         func roleCandidates(_ role: String, anchors: [MoneyCandidate]) -> [MoneyCandidate] {
             var result: [MoneyCandidate] = []
             var seen = Set<Int>()
-            for c in anchors where !seen.contains(c.id) {
+            for c in anchors where !seen.contains(c.id) && c.cents != 0 {
                 seen.insert(c.id); result.append(c)
             }
             let pool = window.filter { $0.feasibleRoles.contains(role) }
@@ -219,7 +226,7 @@ enum TotalsArbiter {
                     return a.lineIndex < b.lineIndex
                 }
             for c in pool where result.count < maxRoleCandidates {
-                if !seen.contains(c.id) {
+                if !seen.contains(c.id) && c.cents != 0 {
                     seen.insert(c.id); result.append(c)
                 }
             }
@@ -237,6 +244,29 @@ enum TotalsArbiter {
         if pairs.count > maxAnchorPairs { pairs = Array(pairs.prefix(maxAnchorPairs)) }
         out.trace.append("pairs=\(pairs.count) subAnchors=\(subAnchors.count) totAnchors=\(totAnchors.count)")
 
+        // F3 (hồ sơ GATE100-R41, lớp T1): TAXSUM DỰ PHÒNG —
+        // khi cửa sổ KHÔNG có token nào trên dòng họ TAX và
+        // KHÔNG token nào được suất đỡ, dòng TỔNG THUẾ
+        // (TAXSUM, vd "TOTAL TAX: 0.36" của Lowe's) là bằng
+        // chứng thuế duy nhất còn lại trên tờ: token của nó
+        // được vào bể thuế, mang provenance riêng
+        // taxSummaryFallback (khôi phục ngữ nghĩa dự phòng
+        // INTEGRATE-V2 của Parser.swift: "TOTAL TAX" chỉ
+        // dùng khi không có dòng thuế thành phần). Có token
+        // họ TAX thật thì dự phòng KHÔNG kích hoạt — tránh
+        // đếm thuế hai lần, đúng lý do V4 hạ TAXSUM xuống
+        // giá trị kiểm.
+        let taxFallbackActive = !window.contains {
+            labels[$0.lineIndex].family == "TAX"
+        } && !window.contains {
+            CandidateFactory.rateSupported(lineIndex: $0.lineIndex, rates: rates)
+        }
+        let taxFallbackIDs: Set<Int> = taxFallbackActive
+            ? Set(window.filter {
+                labels[$0.lineIndex].family == "TAXSUM"
+            }.map { $0.id })
+            : []
+
         // ---- Pha 2: tập con thuế trong ngân sách ----
         var solutions: [Solution] = []
         var seenKeys = Set<String>()
@@ -252,10 +282,12 @@ enum TotalsArbiter {
             let lo = min(sTok.lineIndex, tTok.lineIndex)
             let hi = max(sTok.lineIndex, tTok.lineIndex)
             let pool = window.filter {
-                $0.feasibleRoles.contains(MoneyRole.tax)
+                ($0.feasibleRoles.contains(MoneyRole.tax)
+                    || taxFallbackIDs.contains($0.id))
                     && $0.id != sTok.id && $0.id != tTok.id
                     && $0.cents > 0
                     && (labels[$0.lineIndex].family == "TAX"
+                        || taxFallbackIDs.contains($0.id)
                         || CandidateFactory.rateSupported(lineIndex: $0.lineIndex, rates: rates)
                         || (lo <= $0.lineIndex && $0.lineIndex <= hi))
             }.sorted { $0.lineIndex < $1.lineIndex }
@@ -323,6 +355,19 @@ enum TotalsArbiter {
         }
         out.evaluationsUsed = evaluations
 
+        // F2 (hồ sơ GATE100-R41, lớp T5): luật bằng chứng
+        // thuế áp TOÀN CỤC — tồn tại ≥1 nghiệm có tập thuế
+        // KHÁC RỖNG thì MỌI nghiệm tập-rỗng bị loại TRƯỚC
+        // thang phân định. Luật cũ chỉ áp trong từng cặp
+        // neo: cặp có bể thuế rỗng vẫn đẻ nghiệm suy biến
+        // S==T, và nó cạnh tranh ngang nghiệm thật của cặp
+        // khác (ca 40-mcdonalds-4: (529,[],529) hoà với
+        // (499,[30],529) tới mơ hồ). Tờ không thuế thật —
+        // mọi nghiệm đều tập-rỗng — luật không đổi hành vi.
+        if solutions.contains(where: { !$0.taxTokens.isEmpty }) {
+            solutions = solutions.filter { !$0.taxTokens.isEmpty }
+        }
+
         // ---- Thang phân định nghiệm (đầu file) ----
         func distinctKeys(_ sols: [Solution]) -> Set<String> { Set(sols.map { $0.key }) }
         var effective = solutions
@@ -338,6 +383,21 @@ enum TotalsArbiter {
                 }
             }
             if !supported.isEmpty { effective = supported }
+        }
+        if distinctKeys(effective).count > 1 {
+            // Bậc 2b (F4, hồ sơ GATE100-R41, ca 03-target-1):
+            // NEO NHÃN CỨNG — nghiệm dùng token neo SUBTOTAL
+            // cứng (subAnchors) thắng nghiệm không dùng. Chỉ
+            // phá hoà giữa các nghiệm ĐÃ khép còn sót sau bậc
+            // suất đỡ (nghiệm gương của ca 03 dùng hai token
+            // trên CÙNG dòng thuế nên suất đỡ không tách
+            // được); chỉ chạy khi còn ≥2 nghiệm khác giá trị
+            // nên luật Pha 0 (nghiệm duy nhất thắng neo) và
+            // các ca khép duy nhất không bị chạm.
+            let hardAnchored = effective.filter { sol in
+                subAnchors.contains { $0.id == sol.subtotalToken.id }
+            }
+            if !hardAnchored.isEmpty { effective = hardAnchored }
         }
         if distinctKeys(effective).count > 1 {
             // Bậc 3: tổng được chứng thực lặp trên toàn tờ.
@@ -441,8 +501,13 @@ enum TotalsArbiter {
             out.provenance["subtotal"] = prov(sk, sd)
             let (tk, td) = anchorRule(chosen: sol.totalToken, anchors: totAnchors)
             out.provenance["total"] = prov(tk, td)
-            for (i, _) in out.taxes.enumerated() {
-                out.provenance["tax[\(i)]"] = prov("read", "closureUnique")
+            for (i, tok) in sol.taxTokens.enumerated() {
+                // F3: token thuế đến từ dòng TAXSUM dự phòng
+                // mang provenance riêng để truy vết được nó
+                // không phải dòng thuế thành phần.
+                out.provenance["tax[\(i)]"] = taxFallbackIDs.contains(tok.id)
+                    ? prov("read", "taxSummaryFallback")
+                    : prov("read", "closureUnique")
             }
             out.trace.append("solution=\(sol.describe) diff=\(sol.diff)")
             deficits(subtotal: out.subtotalCents, taxes: out.taxes, total: out.totalCents)
@@ -568,7 +633,6 @@ enum TotalsArbiter {
         wStart -= back
         out.windowStart = wStart
         let window = combined.filter { $0.lineIndex >= wStart }
-        let windowPrimary = primaries.filter { $0.lineIndex >= wStart }
 
         // Neo: trên hồ GỘP — dòng nhãn không có token chính
         // vẫn có thể có token biến thể (dòng TOTAL in gãy).
@@ -589,129 +653,146 @@ enum TotalsArbiter {
         let subAnchors = anchorTokens("SUBTOTAL")
         let totAnchors = anchorTokens("TOTAL")
 
-        // Danh sách vai: phần chính y hệt lượt chính (neo
-        // trước, hồ chính tới trần), biến thể NỐI SAU — token
-        // chính không bao giờ bị biến thể đẩy khỏi danh sách.
-        func roleCandidates(_ role: String, anchors: [MoneyCandidate]) -> [MoneyCandidate] {
-            var result: [MoneyCandidate] = []
-            var seen = Set<Int>()
-            for c in anchors where !seen.contains(c.id) {
-                seen.insert(c.id); result.append(c)
+        // Liệt kê nghiệm trên một HỒ ứng viên cho trước:
+        // hồ gộp nguyên trạng (lượt cứu thường) hoặc hồ đã
+        // nới vai trò trong khối (tầng F7 ở dưới). Thân liệt
+        // kê là MỘT — hai lượt chỉ khác hồ đưa vào. Ngân
+        // sách §3.3 dùng CHUNG (evaluations/trials đếm tiếp
+        // ở hàm ngoài); chạm ngân sách trả nil.
+        func enumerateSolutions(_ tokens: [MoneyCandidate]) -> [Solution]? {
+            let win = tokens.filter { $0.lineIndex >= wStart }
+            let winPrim = tokens.filter {
+                $0.tier == "primary" && $0.lineIndex >= wStart
             }
-            let pool = windowPrimary.filter { $0.feasibleRoles.contains(role) }
-                .sorted { a, b in
-                    if a.hintScore != b.hintScore { return a.hintScore > b.hintScore }
+            // Danh sách vai: phần chính y hệt lượt chính (neo
+            // trước, hồ chính tới trần), biến thể NỐI SAU — token
+            // chính không bao giờ bị biến thể đẩy khỏi danh sách.
+            func roleCandidates(_ role: String, anchors: [MoneyCandidate]) -> [MoneyCandidate] {
+                var result: [MoneyCandidate] = []
+                var seen = Set<Int>()
+                for c in anchors where !seen.contains(c.id) && c.cents != 0 {
+                    seen.insert(c.id); result.append(c)
+                }
+                let pool = winPrim.filter { $0.feasibleRoles.contains(role) }
+                    .sorted { a, b in
+                        if a.hintScore != b.hintScore { return a.hintScore > b.hintScore }
+                        return a.lineIndex < b.lineIndex
+                    }
+                for c in pool where result.count < maxRoleCandidates {
+                    if !seen.contains(c.id) && c.cents != 0 {
+                        seen.insert(c.id); result.append(c)
+                    }
+                }
+                let vpool = win.filter {
+                    $0.tier == "ocrVariant" && $0.feasibleRoles.contains(role)
+                }.sorted { $0.lineIndex < $1.lineIndex }
+                for c in vpool where result.count < maxRoleCandidates + 6 {
+                    if !seen.contains(c.id) && c.cents != 0 {
+                        seen.insert(c.id); result.append(c)
+                    }
+                }
+                return result
+            }
+            let subCands = roleCandidates(MoneyRole.subtotal, anchors: subAnchors)
+            let totCands = roleCandidates(MoneyRole.total, anchors: totAnchors)
+            var pairs: [(MoneyCandidate, MoneyCandidate)] = []
+            for s in subCands { for t in totCands
+            where s.id != t.id && s.lineIndex <= t.lineIndex
+                && s.conflictGroup != t.conflictGroup {
+                pairs.append((s, t))
+            } }
+            if pairs.count > maxAnchorPairs { pairs = Array(pairs.prefix(maxAnchorPairs)) }
+
+            var solutions: [Solution] = []
+            var seenKeys = Set<String>()
+            pairLoop: for (sTok, tTok) in pairs {
+                guard let need = SafeMoney.checkedSubtract(tTok.cents, sTok.cents),
+                      need >= 0 else { continue }
+                let lo = min(sTok.lineIndex, tTok.lineIndex)
+                let hi = max(sTok.lineIndex, tTok.lineIndex)
+                let pool = win.filter {
+                    $0.feasibleRoles.contains(MoneyRole.tax)
+                        && $0.id != sTok.id && $0.id != tTok.id
+                        && $0.conflictGroup != sTok.conflictGroup
+                        && $0.conflictGroup != tTok.conflictGroup
+                        && $0.cents > 0
+                        && (labels[$0.lineIndex].family == "TAX"
+                            || CandidateFactory.rateSupported(lineIndex: $0.lineIndex, rates: rates)
+                            || (lo <= $0.lineIndex && $0.lineIndex <= hi))
+                }.sorted { a, b in
+                    if (a.tier == "primary") != (b.tier == "primary") {
+                        return a.tier == "primary"
+                    }
                     return a.lineIndex < b.lineIndex
                 }
-            for c in pool where result.count < maxRoleCandidates {
-                if !seen.contains(c.id) {
-                    seen.insert(c.id); result.append(c)
+                if pool.count > maxWindowCandidatesPerRole {
+                    budgetHit = true
+                    out.trace.append("rescueBudgetExceeded:pool=\(pool.count)")
+                    break pairLoop
                 }
-            }
-            let vpool = window.filter {
-                $0.tier == "ocrVariant" && $0.feasibleRoles.contains(role)
-            }.sorted { $0.lineIndex < $1.lineIndex }
-            for c in vpool where result.count < maxRoleCandidates + 6 {
-                if !seen.contains(c.id) {
-                    seen.insert(c.id); result.append(c)
-                }
-            }
-            return result
-        }
-        let subCands = roleCandidates(MoneyRole.subtotal, anchors: subAnchors)
-        let totCands = roleCandidates(MoneyRole.total, anchors: totAnchors)
-        var pairs: [(MoneyCandidate, MoneyCandidate)] = []
-        for s in subCands { for t in totCands
-        where s.id != t.id && s.lineIndex <= t.lineIndex
-            && s.conflictGroup != t.conflictGroup {
-            pairs.append((s, t))
-        } }
-        if pairs.count > maxAnchorPairs { pairs = Array(pairs.prefix(maxAnchorPairs)) }
-
-        var solutions: [Solution] = []
-        var seenKeys = Set<String>()
-        pairLoop: for (sTok, tTok) in pairs {
-            guard let need = SafeMoney.checkedSubtract(tTok.cents, sTok.cents),
-                  need >= 0 else { continue }
-            let lo = min(sTok.lineIndex, tTok.lineIndex)
-            let hi = max(sTok.lineIndex, tTok.lineIndex)
-            let pool = window.filter {
-                $0.feasibleRoles.contains(MoneyRole.tax)
-                    && $0.id != sTok.id && $0.id != tTok.id
-                    && $0.conflictGroup != sTok.conflictGroup
-                    && $0.conflictGroup != tTok.conflictGroup
-                    && $0.cents > 0
-                    && (labels[$0.lineIndex].family == "TAX"
-                        || CandidateFactory.rateSupported(lineIndex: $0.lineIndex, rates: rates)
-                        || (lo <= $0.lineIndex && $0.lineIndex <= hi))
-            }.sorted { a, b in
-                if (a.tier == "primary") != (b.tier == "primary") {
-                    return a.tier == "primary"
-                }
-                return a.lineIndex < b.lineIndex
-            }
-            if pool.count > maxWindowCandidatesPerRole {
-                budgetHit = true
-                out.trace.append("rescueBudgetExceeded:pool=\(pool.count)")
-                break pairLoop
-            }
-            let n = pool.count
-            let maxK = min(maxTaxSubsetSize, n)
-            var chosen: [Int] = []
-            func enumerate(_ start: Int, _ depth: Int) {
-                if budgetHit { return }
-                do {
-                    trials += 1; evaluations += 1
-                    if trials > maxSubsetTrials || evaluations > maxEvaluations {
-                        budgetHit = true
-                        out.trace.append("rescueBudgetExceeded:trials=\(trials)")
-                        return
-                    }
-                    var sum = 0
-                    var ok = true
-                    var usedGroups = Set<Int>()
-                    for idx in chosen {
-                        let g = pool[idx].conflictGroup
-                        if usedGroups.contains(g) { ok = false; break }
-                        usedGroups.insert(g)
-                        if let v = SafeMoney.checkedAdd(sum, pool[idx].cents) {
-                            sum = v
-                        } else { ok = false; break }
-                    }
-                    if ok {
-                        let diff = Swift.abs(sum - need)
-                        // Luật bằng chứng thuế như lượt chính:
-                        // bể có bằng chứng thì tập rỗng bị cấm.
-                        if diff <= e2ToleranceCents
-                            && !(chosen.isEmpty && !pool.isEmpty) {
-                            let sol = Solution(
-                                subtotal: sTok.cents,
-                                taxTokens: chosen.map { pool[$0] },
-                                total: tTok.cents,
-                                totalToken: tTok, subtotalToken: sTok,
-                                diff: diff)
-                            if !seenKeys.contains(sol.key) {
-                                seenKeys.insert(sol.key)
-                                solutions.append(sol)
+                let n = pool.count
+                let maxK = min(maxTaxSubsetSize, n)
+                var chosen: [Int] = []
+                func enumerate(_ start: Int, _ depth: Int) {
+                    if budgetHit { return }
+                    do {
+                        trials += 1; evaluations += 1
+                        if trials > maxSubsetTrials || evaluations > maxEvaluations {
+                            budgetHit = true
+                            out.trace.append("rescueBudgetExceeded:trials=\(trials)")
+                            return
+                        }
+                        var sum = 0
+                        var ok = true
+                        var usedGroups = Set<Int>()
+                        for idx in chosen {
+                            let g = pool[idx].conflictGroup
+                            if usedGroups.contains(g) { ok = false; break }
+                            usedGroups.insert(g)
+                            if let v = SafeMoney.checkedAdd(sum, pool[idx].cents) {
+                                sum = v
+                            } else { ok = false; break }
+                        }
+                        if ok {
+                            let diff = Swift.abs(sum - need)
+                            // Luật bằng chứng thuế như lượt chính:
+                            // bể có bằng chứng thì tập rỗng bị cấm.
+                            if diff <= e2ToleranceCents
+                                && !(chosen.isEmpty && !pool.isEmpty) {
+                                let sol = Solution(
+                                    subtotal: sTok.cents,
+                                    taxTokens: chosen.map { pool[$0] },
+                                    total: tTok.cents,
+                                    totalToken: tTok, subtotalToken: sTok,
+                                    diff: diff)
+                                if !seenKeys.contains(sol.key) {
+                                    seenKeys.insert(sol.key)
+                                    solutions.append(sol)
+                                }
                             }
                         }
                     }
+                    guard depth < maxK else { return }
+                    var i = start
+                    while i < n {
+                        chosen.append(i)
+                        enumerate(i + 1, depth + 1)
+                        chosen.removeLast()
+                        if budgetHit { return }
+                        i += 1
+                    }
                 }
-                guard depth < maxK else { return }
-                var i = start
-                while i < n {
-                    chosen.append(i)
-                    enumerate(i + 1, depth + 1)
-                    chosen.removeLast()
-                    if budgetHit { return }
-                    i += 1
-                }
+                enumerate(0, 0)
+                if budgetHit { break pairLoop }
             }
-            enumerate(0, 0)
-            if budgetHit { break pairLoop }
+            return budgetHit ? nil : solutions
+        }
+
+        guard let solutions = enumerateSolutions(combined) else {
+            out.evaluationsUsed = evaluations
+            return nil
         }
         out.evaluationsUsed = evaluations
-        if budgetHit { return nil }
 
         // Thang bằng chứng — như lượt chính, trừ bậc chứng
         // thực lặp đếm trên hồ CHÍNH (xem đầu hàm).
@@ -735,8 +816,50 @@ enum TotalsArbiter {
             }
             if !corro.isEmpty { effective = corro }
         }
-        guard distinctKeys(effective).count == 1, let sol = effective.first
-        else {
+        var sol: Solution? = nil
+        if distinctKeys(effective).count == 1 {
+            sol = effective.first
+        }
+        if sol == nil {
+            // F7 (hồ sơ GATE100-R41, lớp T3): TẦNG CỨU HOÁN
+            // VỊ TRONG KHỐI — lượt cứu thường không cho nghiệm
+            // duy nhất thì thử lại với các token thuộc các
+            // dòng nhãn khối tổng LIỀN KỀ (họ SUBTOTAL/TAX/
+            // TOTAL/TAXSUM trong cửa sổ) được phép hoán cả ba
+            // vai trò của khối: lệch hàng cột tiền trói mỗi số
+            // tiền vào nhãn của hàng dưới (ca 33-dunkin:
+            // 244 + 9 = 253). Chốt chặn của hồ sơ là DUY NHẤT
+            // theo giá trị sau khi ưu tiên khép tuyệt đối —
+            // ≥2 nghiệm khác giá trị thì KHÔNG nhận (AMD-V4-01
+            // nguyên vẹn: mơ hồ đứng yên, không sai thầm).
+            let blockFamilies: Set<String> =
+                ["SUBTOTAL", "TAX", "TOTAL", "TAXSUM"]
+            var widened: [MoneyCandidate] = []
+            widened.reserveCapacity(combined.count)
+            for c in combined {
+                var cc = c
+                if blockFamilies.contains(labels[c.lineIndex].family) {
+                    cc.feasibleRoles.formUnion(
+                        [MoneyRole.subtotal, MoneyRole.tax, MoneyRole.total])
+                }
+                widened.append(cc)
+            }
+            if let sols = enumerateSolutions(widened) {
+                var eff = sols
+                let exactP = eff.filter { $0.diff == 0 }
+                if !exactP.isEmpty { eff = exactP }
+                if distinctKeys(eff).count == 1 {
+                    sol = eff.first
+                    out.trace.append(
+                        "rescue-permutation: unique closure \(eff[0].describe)")
+                } else {
+                    out.trace.append(
+                        "rescue-permutation: no unique closure (solutions=\(sols.count))")
+                }
+            }
+            out.evaluationsUsed = evaluations
+        }
+        guard let sol = sol else {
             out.trace.append("rescue: no unique closure (solutions=\(solutions.count))")
             return nil
         }

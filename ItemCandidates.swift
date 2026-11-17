@@ -180,6 +180,28 @@ enum ItemLineClassifier {
         text.contains { $0.isLetter }
     }
 
+    /// F6 (hồ sơ GATE100-R41, lớp T7): dấu trừ ĐẦU token —
+    /// cùng luật với CandidateFactory.leadingMinusNegates:
+    /// trừ dính sát hoặc cách đúng một khoảng trắng ngay
+    /// trước token, chỉ trên dòng có ngữ cảnh giảm giá
+    /// (DISCOUNT/COUPON/SAVINGS). moneyRegex giữ nguyên —
+    /// hàm này chỉ nhìn ký tự trước khoảng token.
+    private static func leadingMinusNegates(text: String,
+                                            tokenStart: Int) -> Bool {
+        let upper = text.uppercased()
+        guard upper.contains("DISCOUNT") || upper.contains("COUPON")
+            || upper.contains("SAVINGS") else { return false }
+        let ns = text as NSString
+        var i = tokenStart - 1
+        if i >= 0,
+           ns.substring(with: NSRange(location: i, length: 1)) == " " {
+            i -= 1
+        }
+        guard i >= 0 else { return false }
+        let ch = ns.substring(with: NSRange(location: i, length: 1))
+        return ch == "-" || ch == "−"
+    }
+
     // MARK: Quét token tiền (tầng món)
 
     /// Token chấm (cùng biên CandidateFactory: bỏ token mà ngay
@@ -200,8 +222,11 @@ enum ItemLineClassifier {
                ns.substring(with: NSRange(location: after, length: 1)) == "%" {
                 continue
             }
+            let trailingMinus = m.groups.count > 1 && m.groups[1] != nil
             guard let cents = SafeMoney.parseCents(
-                g1, negative: (m.groups.count > 1 && m.groups[1] != nil))
+                g1, negative: trailingMinus
+                    || leadingMinusNegates(text: text,
+                                           tokenStart: gr1.location))
             else { continue }
             toks.append(ItemMoneyToken(cents: cents, text: g1,
                                        range: m.range, form: "dot"))

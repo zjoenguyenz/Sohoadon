@@ -1399,6 +1399,15 @@ enum ReceiptReader {
                                                parsed.taxTotalCents)
             e2 = implied.map { abs($0 - total) <= 2 } ?? false
         }
+        // F1(ii) (hồ sơ GATE100-R41, ca 01-walmart-1): phòng
+        // thủ tầng chấm ứng viên — bản đọc "khép" với total
+        // bằng 0 KHÔNG được tính điểm khép E1/E2. Khép hình
+        // thức 0+0=0 từng đạt điểm cao nhất toàn tập 40 ca
+        // và thắng các lượt đọc thật (điểm mù của thước cổng).
+        if parsed.totalCents == 0 {
+            e1 = false
+            e2 = false
+        }
         var e3 = false
         if let sold = parsed.itemsSold {
             let positive = parsed.items.filter {

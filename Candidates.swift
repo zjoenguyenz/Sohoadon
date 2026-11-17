@@ -122,6 +122,31 @@ enum CandidateFactory {
     private static let rateRegex: NSRegularExpression? =
         try? NSRegularExpression(pattern: #"(\d{1,3}\.\d{3,4}|\d{1,3}\.\d{2,4}\s*%)"#)
 
+    /// F6 (hồ sơ GATE100-R41, lớp T7): dấu trừ ĐẦU token —
+    /// dạng in "-0.08" của Lowe's (trừ đứng trước số, dính
+    /// sát hoặc cách đúng một khoảng trắng). moneyRegex giữ
+    /// NGUYÊN (chỉ số nhóm + khoảng token không đổi): hàm
+    /// này nhìn ký tự ngay trước token trong dòng. Chỉ nhận
+    /// khi dòng có ngữ cảnh giảm giá (DISCOUNT/COUPON/
+    /// SAVINGS) — biện pháp giảm thiểu của hồ sơ: dấu gạch
+    /// trang trí/ngăn cách trước số tiền trên dòng thường
+    /// không bị hiểu thành âm.
+    private static func leadingMinusNegates(line: String,
+                                            tokenStart: Int) -> Bool {
+        let upper = line.uppercased()
+        guard upper.contains("DISCOUNT") || upper.contains("COUPON")
+            || upper.contains("SAVINGS") else { return false }
+        let ns = line as NSString
+        var i = tokenStart - 1
+        if i >= 0,
+           ns.substring(with: NSRange(location: i, length: 1)) == " " {
+            i -= 1
+        }
+        guard i >= 0 else { return false }
+        let ch = ns.substring(with: NSRange(location: i, length: 1))
+        return ch == "-" || ch == "−"
+    }
+
     // MARK: - Họ nhãn
 
     /// Phân họ nhãn cho MỘT dòng. Thứ tự kiểm là luật in
@@ -192,6 +217,15 @@ enum CandidateFactory {
             }
             return make("TAX", rank)
         }
+        // F5 (hồ sơ GATE100-R41, lớp T2): "Order Total" là
+        // nhãn TẠM TÍNH theo ngữ nghĩa in của Publix (phía
+        // sau còn dòng Grand Total) — nhận họ SUBTOTAL TRƯỚC
+        // luật contains("TOTAL"); nếu không, token của nó bị
+        // khoá vai trò total và khối không khép được (ca
+        // 10-publix-1). Tiệm nào dùng "Order Total" làm tổng
+        // cuối: khép E2 tự phủ quyết vai trò subtotal khi
+        // không có thuế đi kèm, ca rơi về best-effort như cũ.
+        if squashed.hasPrefix("ORDERTOTAL") { return make("SUBTOTAL") }
         if squashed.contains("TOTAL") || squashed.contains("AMOUNTDUE")
             || squashed.contains("BALANCEDUE") {
             return make("TOTAL")
@@ -247,6 +281,8 @@ enum CandidateFactory {
                         continue
                     }
                     let negative = m.range(at: 2).location != NSNotFound
+                        || leadingMinusNegates(line: line.text,
+                                               tokenStart: tokenRange.location)
                     guard let cents = SafeMoney.parseCents(token, negative: negative)
                     else { continue }   // ngoài miền: bỏ TOKEN, không bỏ dòng
                     lineMoney.append((cents, token, negative,
@@ -364,6 +400,8 @@ enum CandidateFactory {
                             continue   // token suất: không chiếm thứ tự
                         }
                         let negative = m.range(at: 2).location != NSNotFound
+                            || leadingMinusNegates(line: alt.text,
+                                                   tokenStart: tr.location)
                         guard let cents = SafeMoney.parseCents(token, negative: negative)
                         else { continue }   // không parse được: không chiếm thứ tự
                         let myOrdinal = ordinal
