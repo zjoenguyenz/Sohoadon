@@ -1,0 +1,217 @@
+{
+ "freezeVersion": "gate100-corpus-2026-11-16",
+ "frozenAt": "2026-11-16 America/Chicago",
+ "buildUnderTest": "run125 commit 586262b3 (build-ipa run #125, DFIX)",
+ "note": "All 40 images collected from the public web AFTER the run-123 build freeze; none was used in development. S5 holdout (15) stays sealed until the gate run.",
+ "s2s3Pool": [
+  "01-walmart-1.webp",
+  "02-walmart-2.jpg",
+  "03-target-1.webp",
+  "04-target-2.jpg",
+  "05-best-buy-1.webp",
+  "06-kroger-1.jpg",
+  "07-trader-joes-1.jpg",
+  "08-trader-joes-2.jpg",
+  "09-safeway-1.webp",
+  "10-publix-1.webp",
+  "11-publix-2.jpg",
+  "12-aldi-1.jpg",
+  "13-cvs-pharmacy-1.jpg",
+  "14-cvs-pharmacy-2.jpg",
+  "15-walgreens-1.jpg",
+  "16-walgreens-2.jpg",
+  "17-rite-aid-1.webp",
+  "18-mcdonalds-1.jpg",
+  "19-mcdonalds-2.jpg",
+  "20-mcdonalds-3.jpg",
+  "21-chick-fil-a-1.jpg",
+  "22-taco-bell-1.jpg",
+  "23-starbucks-1.jpg",
+  "24-hy-vee-gas-1.jpg",
+  "25-exxon-1.jpg"
+ ],
+ "s5Holdout": [
+  "26-murphy-usa-1.jpg",
+  "27-lowes-1.jpg",
+  "28-lowes-2.jpg",
+  "29-lowes-3.jpg",
+  "30-lowes-4.jpg",
+  "31-ace-hardware-1.jpg",
+  "32-ace-hardware-2.jpg",
+  "33-dunkin-donuts-1.jpg",
+  "34-sams-club-1.webp",
+  "35-bjs-wholesale-club-1.jpg",
+  "36-costco-1.jpg",
+  "37-cvs-pharmacy-3.jpg",
+  "38-publix-3.jpg",
+  "39-publix-4.jpg",
+  "40-mcdonalds-4.png"
+ ],
+ "files": [
+  {
+   "file": "01-walmart-1.webp",
+   "sha256": "a2e36a00031c448401117bd309b3886541f4cf10dc1b2d91777ee2800a485702"
+  },
+  {
+   "file": "02-walmart-2.jpg",
+   "sha256": "cbaf031f284245605d7e87372c435d483d72a3f98a380e21c17d01d8f8580686"
+  },
+  {
+   "file": "03-target-1.webp",
+   "sha256": "b9a47c12c58392f124fffeffd77a139245f85880e772702833cd5fbcc3621814"
+  },
+  {
+   "file": "04-target-2.jpg",
+   "sha256": "1ecbe6c2970c002cdadbd8552d7055c894179ea99b93613c198fa07d83308c17"
+  },
+  {
+   "file": "05-best-buy-1.webp",
+   "sha256": "3cc48bf45be2d937fc96661213a7ec849816ac69fa440e5792f6bb607d28dd67"
+  },
+  {
+   "file": "06-kroger-1.jpg",
+   "sha256": "77d114f344d1b9b71bdcc62048991e01da55b548ae213f1c6c30fa2d28b11cb2"
+  },
+  {
+   "file": "07-trader-joes-1.jpg",
+   "sha256": "eee062345a3c92e11237c18b9aba8e21666d9a6f01d154bf683f9e29ede5613e"
+  },
+  {
+   "file": "08-trader-joes-2.jpg",
+   "sha256": "a2a05068cb80a33d527889b8351f7ab48d49689d1e6a1a5d1321b343b011392e"
+  },
+  {
+   "file": "09-safeway-1.webp",
+   "sha256": "972e87ca9f470e0b8e75d043d1fb92431c0e99b6542113fbce9b7b6de689b0a4"
+  },
+  {
+   "file": "10-publix-1.webp",
+   "sha256": "0c69c648ca3cc767e36ef353fe129e54254a6215ea20a9cedab1957b37d6bcf6"
+  },
+  {
+   "file": "11-publix-2.jpg",
+   "sha256": "bcae9cf03245a064294db23aa1a06672ef0f819daa9ddc402cb5db69e87609e1"
+  },
+  {
+   "file": "12-aldi-1.jpg",
+   "sha256": "9e9a664febc727fee3f9e0b9b66148a4a0b76051c08704b2bcf26d5934b3e57f"
+  },
+  {
+   "file": "13-cvs-pharmacy-1.jpg",
+   "sha256": "0b1b9d54d121b44ecefdfc4b34e0fcc60b66ef0d095b3dcb76ae9f3a62505cff"
+  },
+  {
+   "file": "14-cvs-pharmacy-2.jpg",
+   "sha256": "b17687253d6108149410750c29377b1cb471d052a4753f76e38f57cf43ce650e"
+  },
+  {
+   "file": "15-walgreens-1.jpg",
+   "sha256": "3dd868b386609c38764b50450b1ea2ae4acebe95b36ee1dc9319658cd59dd966"
+  },
+  {
+   "file": "16-walgreens-2.jpg",
+   "sha256": "cc12945df1a07078939cc3df213901ccf1d68349900e15d1b5c8664a66848a48"
+  },
+  {
+   "file": "17-rite-aid-1.webp",
+   "sha256": "0298fa02c7766a990e1c1492bc7d3e48a38a7005b91f8b5bc051ff57b6c01196"
+  },
+  {
+   "file": "18-mcdonalds-1.jpg",
+   "sha256": "2c21054e45ffc4d729cd3881afc40ad273796daeaf4f362b0191d495fb7c662f"
+  },
+  {
+   "file": "19-mcdonalds-2.jpg",
+   "sha256": "1d1e0e498aa7bdcbfc5f9f22e265c79974a9bea28e1d4367ce9eb1bf393c2972"
+  },
+  {
+   "file": "20-mcdonalds-3.jpg",
+   "sha256": "d508fda2841c89d0b9a337078c8638dc53a11d7c205fcbd8f970dae83d655762"
+  },
+  {
+   "file": "21-chick-fil-a-1.jpg",
+   "sha256": "9eb74d5b5f923a2cd4d1b8e242fb002f0bd39f3eebe0316b6aaed09affe5cf9a"
+  },
+  {
+   "file": "22-taco-bell-1.jpg",
+   "sha256": "a9c74fb9aba73f8b46836249ec1096c3750293d8ff5b65fbbb7fe6c3c0adaa22"
+  },
+  {
+   "file": "23-starbucks-1.jpg",
+   "sha256": "85998e256d6bc0bbf5a8c62ec8f7b73d7eef6be8fcd23946cf4833b850cbdb2b"
+  },
+  {
+   "file": "24-hy-vee-gas-1.jpg",
+   "sha256": "9db875df8df4e962ed0653fbf367ca9e8751b56ae03096b0afff6453a0903714"
+  },
+  {
+   "file": "25-exxon-1.jpg",
+   "sha256": "24a7d205a8ef90924709c1f570834d4d9fbfe7f40adeb8ac4f2200bad7144a11"
+  },
+  {
+   "file": "26-murphy-usa-1.jpg",
+   "sha256": "de0ee195bb2685ac7d5b4dbe6eaf04f368d3e12743e29636b1104a33f12bc14c"
+  },
+  {
+   "file": "27-lowes-1.jpg",
+   "sha256": "2330ef7f8c281b91be2d23f71fc34587933e67ae28c784d09d28f145709f371d"
+  },
+  {
+   "file": "28-lowes-2.jpg",
+   "sha256": "296ec7c028654719bfb4a819825eb9d05cb35206404b5c47ee9392261fab95d4"
+  },
+  {
+   "file": "29-lowes-3.jpg",
+   "sha256": "151b22394e892c8833bbd9087be430c25a7c26f0fff737e4972ff4c9f2c3e33d"
+  },
+  {
+   "file": "30-lowes-4.jpg",
+   "sha256": "921d6bf60f7828280132f4aca7c058c84706f123787c6d8abc1f1d5e6ca458d6"
+  },
+  {
+   "file": "31-ace-hardware-1.jpg",
+   "sha256": "e73adf4a05de91cb7227a19587b104ac910812dca53ae92f3a21f99908e6a515"
+  },
+  {
+   "file": "32-ace-hardware-2.jpg",
+   "sha256": "f7a096a791e3609db7668d16c8eefa66ba7a4b10aa01bbd995379fe110d3e4d9"
+  },
+  {
+   "file": "33-dunkin-donuts-1.jpg",
+   "sha256": "8ba41717c1b5ea8eeea097d2eefd77a4dd3ec9f202e69c84a8fa0b70cd826057"
+  },
+  {
+   "file": "34-sams-club-1.webp",
+   "sha256": "25efa86cb4690ebe8fc4c539d5c6acb0079cd14a2dc4291ccabc8e4e4f42a9d3"
+  },
+  {
+   "file": "35-bjs-wholesale-club-1.jpg",
+   "sha256": "2541a2fc96a665af1b433c9e0faaa34b3c8940b397883fa42dea8cfc0fa178c7"
+  },
+  {
+   "file": "36-costco-1.jpg",
+   "sha256": "96b50540a1a5e448d163af0f908c558594b38b2dc36db0bf998773c1d37b1e99"
+  },
+  {
+   "file": "37-cvs-pharmacy-3.jpg",
+   "sha256": "cba9858f193b91a70ac1a67c694e88589f64d7d6f79a66f31cc13655015182d0"
+  },
+  {
+   "file": "38-publix-3.jpg",
+   "sha256": "c18216cf9f41a1da347b468457dbafb34750c22f8814df88cf1af6ccd9ab0578"
+  },
+  {
+   "file": "39-publix-4.jpg",
+   "sha256": "014491e33e6a2a586d7727812ea2c06064d62be3206ff1b5fdc1db5311faeab2"
+  },
+  {
+   "file": "40-mcdonalds-4.png",
+   "sha256": "25cd3e862098f3d882a69a9ec0391860515c7fddd64e4c9ffb0fd6fde108f790"
+  }
+ ],
+ "gate100Gt": {
+  "file": "gate100-gt.json",
+  "gtVersion": "gate100-gt-2026-11-17",
+  "sha256": "3f671fe3f6e5925df8a4efa37f4f0489650cd9194deb8493a8e0d140b6c1886e"
+ }
+}

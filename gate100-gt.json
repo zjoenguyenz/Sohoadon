@@ -1,0 +1,599 @@
+{
+ "cases": {
+  "01-walmart-1.webp": {
+   "card": "6572",
+   "date": "2023-01-06",
+   "lines": 24,
+   "seed": false,
+   "sold": null,
+   "subtotal": 35465,
+   "taxes": [
+    2227
+   ],
+   "total": 37692,
+   "vendorAliases": [
+    "walmart"
+   ]
+  },
+  "02-walmart-2.jpg": {
+   "card": "9832",
+   "date": "2021-11-07",
+   "lines": 31,
+   "seed": false,
+   "sold": null,
+   "subtotal": 8772,
+   "taxes": [
+    135
+   ],
+   "total": 8907,
+   "vendorAliases": [
+    "walmart"
+   ]
+  },
+  "03-target-1.webp": {
+   "card": "0128",
+   "date": "2026-08-29",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 1000,
+   "taxes": [
+    108
+   ],
+   "total": 1108,
+   "vendorAliases": [
+    "target"
+   ]
+  },
+  "04-target-2.jpg": {
+   "card": "1423",
+   "date": "2026-01-16",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 3855,
+   "taxes": [
+    54
+   ],
+   "total": 3909,
+   "vendorAliases": [
+    "target"
+   ]
+  },
+  "05-best-buy-1.webp": {
+   "card": null,
+   "date": "2024-04-26",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 3298,
+   "taxes": [
+    200
+   ],
+   "total": 3498,
+   "vendorAliases": [
+    "best buy"
+   ]
+  },
+  "06-kroger-1.jpg": {
+   "card": "5171",
+   "date": "2020-08-02",
+   "lines": 5,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [
+    49
+   ],
+   "total": 1065,
+   "vendorAliases": [
+    "kroger"
+   ]
+  },
+  "07-trader-joes-1.jpg": {
+   "card": null,
+   "date": "2022-11-07",
+   "lines": 19,
+   "seed": false,
+   "sold": null,
+   "subtotal": 6618,
+   "taxes": [],
+   "total": 6618,
+   "vendorAliases": [
+    "trader joe"
+   ]
+  },
+  "08-trader-joes-2.jpg": {
+   "card": null,
+   "date": "2020-10-09",
+   "lines": 11,
+   "seed": false,
+   "sold": null,
+   "subtotal": 4836,
+   "taxes": [],
+   "total": 4836,
+   "vendorAliases": [
+    "trader joe"
+   ]
+  },
+  "09-safeway-1.webp": {
+   "card": "0044",
+   "date": "2022-11-17",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [
+    0
+   ],
+   "total": 120,
+   "vendorAliases": [
+    "safeway"
+   ]
+  },
+  "10-publix-1.webp": {
+   "card": null,
+   "date": null,
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 458,
+   "taxes": [
+    7
+   ],
+   "total": 465,
+   "vendorAliases": [
+    "publix"
+   ]
+  },
+  "11-publix-2.jpg": {
+   "card": null,
+   "date": null,
+   "lines": 10,
+   "seed": false,
+   "sold": null,
+   "subtotal": 6327,
+   "taxes": [
+    331
+   ],
+   "total": 6658,
+   "vendorAliases": [
+    "publix"
+   ]
+  },
+  "12-aldi-1.jpg": {
+   "card": "9679",
+   "date": "2022-05-25",
+   "lines": 7,
+   "seed": false,
+   "sold": null,
+   "subtotal": 12560,
+   "taxes": [
+    700
+   ],
+   "total": 13260,
+   "vendorAliases": [
+    "aldi"
+   ]
+  },
+  "13-cvs-pharmacy-1.jpg": {
+   "card": null,
+   "date": "2020-09-26",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 998,
+   "taxes": [
+    92
+   ],
+   "total": 1090,
+   "vendorAliases": [
+    "cvs"
+   ]
+  },
+  "14-cvs-pharmacy-2.jpg": {
+   "card": null,
+   "date": "2019-10-12",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 5958,
+   "taxes": [
+    98
+   ],
+   "total": 6056,
+   "vendorAliases": [
+    "cvs"
+   ]
+  },
+  "15-walgreens-1.jpg": {
+   "card": "5039",
+   "date": "2019-12-20",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 1298,
+   "taxes": [
+    133
+   ],
+   "total": 1431,
+   "vendorAliases": [
+    "walgreens"
+   ]
+  },
+  "16-walgreens-2.jpg": {
+   "card": "9283",
+   "date": "2020-05-23",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 5015,
+   "taxes": [
+    489
+   ],
+   "total": 5504,
+   "vendorAliases": [
+    "walgreens"
+   ]
+  },
+  "17-rite-aid-1.webp": {
+   "card": "0787",
+   "date": "2025-02-24",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 1857,
+   "taxes": [
+    0
+   ],
+   "total": 1857,
+   "vendorAliases": [
+    "rite aid"
+   ]
+  },
+  "18-mcdonalds-1.jpg": {
+   "card": null,
+   "date": "2017-09-10",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 789,
+   "taxes": [
+    72
+   ],
+   "total": 861,
+   "vendorAliases": [
+    "mcdonald"
+   ]
+  },
+  "19-mcdonalds-2.jpg": {
+   "card": "0103",
+   "date": "2019-02-10",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 150,
+   "taxes": [
+    7
+   ],
+   "total": 157,
+   "vendorAliases": [
+    "mcdonald"
+   ]
+  },
+  "20-mcdonalds-3.jpg": {
+   "card": null,
+   "date": "2017-12-30",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 318,
+   "taxes": [
+    30
+   ],
+   "total": 348,
+   "vendorAliases": [
+    "mcdonald"
+   ]
+  },
+  "21-chick-fil-a-1.jpg": {
+   "card": "5963",
+   "date": "2023-02-01",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 1158,
+   "taxes": [
+    69
+   ],
+   "total": 1227,
+   "vendorAliases": [
+    "chick-fil-a"
+   ]
+  },
+  "22-taco-bell-1.jpg": {
+   "card": null,
+   "date": "2019-06-14",
+   "lines": 6,
+   "seed": false,
+   "sold": null,
+   "subtotal": 500,
+   "taxes": [
+    28
+   ],
+   "total": 528,
+   "vendorAliases": [
+    "taco bell"
+   ]
+  },
+  "23-starbucks-1.jpg": {
+   "card": null,
+   "date": "2015-04-19",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 730,
+   "taxes": [
+    34
+   ],
+   "total": 764,
+   "vendorAliases": [
+    "starbucks"
+   ]
+  },
+  "24-hy-vee-gas-1.jpg": {
+   "card": "3598",
+   "date": "2020-10-15",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [],
+   "total": 1398,
+   "vendorAliases": [
+    "hy-vee"
+   ]
+  },
+  "25-exxon-1.jpg": {
+   "card": null,
+   "date": "2020-10-27",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [],
+   "total": 3182,
+   "vendorAliases": [
+    "exxon"
+   ]
+  },
+  "26-murphy-usa-1.jpg": {
+   "card": "5728",
+   "date": "2016-07-15",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [],
+   "total": 2368,
+   "vendorAliases": [
+    "murphy usa",
+    "murphy"
+   ]
+  },
+  "27-lowes-1.jpg": {
+   "card": "4308",
+   "date": "2023-03-06",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 25598,
+   "taxes": [
+    1792
+   ],
+   "total": 27390,
+   "vendorAliases": [
+    "lowe's",
+    "lowes"
+   ]
+  },
+  "28-lowes-2.jpg": {
+   "card": "7728",
+   "date": "2023-09-08",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 600,
+   "taxes": [
+    36
+   ],
+   "total": 636,
+   "vendorAliases": [
+    "lowe's",
+    "lowes"
+   ]
+  },
+  "29-lowes-3.jpg": {
+   "card": "8520",
+   "date": "2026-08-07",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 528,
+   "taxes": [
+    44
+   ],
+   "total": 572,
+   "vendorAliases": [
+    "lowe's",
+    "lowes"
+   ]
+  },
+  "30-lowes-4.jpg": {
+   "card": "9033",
+   "date": "2022-01-05",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 1245,
+   "taxes": [
+    112
+   ],
+   "total": 1357,
+   "vendorAliases": [
+    "lowe's",
+    "lowes"
+   ]
+  },
+  "31-ace-hardware-1.jpg": {
+   "card": "9565",
+   "date": null,
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 299,
+   "taxes": [
+    31
+   ],
+   "total": 330,
+   "vendorAliases": [
+    "ace hardware"
+   ]
+  },
+  "32-ace-hardware-2.jpg": {
+   "card": "7100",
+   "date": "2018-06-02",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 1499,
+   "taxes": [
+    109
+   ],
+   "total": 1608,
+   "vendorAliases": [
+    "ace hardware"
+   ]
+  },
+  "33-dunkin-donuts-1.jpg": {
+   "card": null,
+   "date": "2018-07-11",
+   "lines": 3,
+   "seed": false,
+   "sold": null,
+   "subtotal": 244,
+   "taxes": [
+    9
+   ],
+   "total": 253,
+   "vendorAliases": [
+    "dunkin"
+   ]
+  },
+  "34-sams-club-1.webp": {
+   "card": "9177",
+   "date": "2023-03-27",
+   "lines": 14,
+   "seed": false,
+   "sold": null,
+   "subtotal": 15460,
+   "taxes": [
+    321
+   ],
+   "total": 15781,
+   "vendorAliases": [
+    "sam's club",
+    "sams club"
+   ]
+  },
+  "35-bjs-wholesale-club-1.jpg": {
+   "card": null,
+   "date": "2015-12-12",
+   "lines": 4,
+   "seed": false,
+   "sold": null,
+   "subtotal": 2836,
+   "taxes": [],
+   "total": 2836,
+   "vendorAliases": [
+    "bj's",
+    "bjs"
+   ]
+  },
+  "36-costco-1.jpg": {
+   "card": null,
+   "date": null,
+   "lines": 9,
+   "seed": false,
+   "sold": null,
+   "subtotal": 8561,
+   "taxes": [
+    352
+   ],
+   "total": 8913,
+   "vendorAliases": [
+    "costco"
+   ]
+  },
+  "37-cvs-pharmacy-3.jpg": {
+   "card": "3508",
+   "date": null,
+   "lines": 4,
+   "seed": false,
+   "sold": null,
+   "subtotal": null,
+   "taxes": [],
+   "total": 4091,
+   "vendorAliases": [
+    "cvs"
+   ]
+  },
+  "38-publix-3.jpg": {
+   "card": null,
+   "date": "2023-06-04",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 415,
+   "taxes": [
+    22
+   ],
+   "total": 437,
+   "vendorAliases": [
+    "publix"
+   ]
+  },
+  "39-publix-4.jpg": {
+   "card": null,
+   "date": "2023-09-10",
+   "lines": 1,
+   "seed": false,
+   "sold": null,
+   "subtotal": 1249,
+   "taxes": [
+    87
+   ],
+   "total": 1336,
+   "vendorAliases": [
+    "publix"
+   ]
+  },
+  "40-mcdonalds-4.png": {
+   "card": "2279",
+   "date": "2016-04-19",
+   "lines": 2,
+   "seed": false,
+   "sold": null,
+   "subtotal": 499,
+   "taxes": [
+    30
+   ],
+   "total": 529,
+   "vendorAliases": [
+    "mcdonald"
+   ]
+  }
+ },
+ "gtVersion": "gate100-gt-2026-11-17",
+ "note": "Bang su that cho 40 anh corpus GATE100-v2 (web, thu thap 2026-11-16, chua tung dung trong phat trien). Nguon: gate100-corpus/gt-draft.json (Leader doc tay tung anh, kiem so hoc 40/40). Schema giong bench-gt.json: tien = cent nguyen; truong khong in tren hoa don/khong doc duoc = null (thue = []). Ban dong bang kem FREEZE.json gate100-corpus-2026-11-16, build duoi kiem: run125 commit 586262b3."
+}
