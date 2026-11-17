@@ -1,0 +1,254 @@
+# HARNESS CI — cổng kiểm chứng của LUẬT 2026-11-12.
+#
+# CHỈ CHẠY THỦ CÔNG (workflow_dispatch) — lệnh chủ tài
+# khoản 2026-11-12 23:48 CST: chế độ tự kích hoạt theo
+# push đã bị BỎ vì đốt hạn mức Actions (tháng 11/2026
+# Sohoadon tốn $17.57 trong $18 miễn phí gói Pro, phần
+# lớn do workflow này tự chạy theo mỗi lần đẩy code).
+# Runner macOS $0.08/phút — chỉ bấm chạy khi thật sự tới
+# CỔNG QUYẾT ĐỊNH (trước patch lớn). SỬA LUẬT 2026-11-15
+# (anh): bỏ mức 100 lượt, cổng đầy đủ chạy 10 lượt — các
+# lượt 100x cũ đo SAI đường đọc (harness images gọi thẳng
+# ReceiptParser.parse, bỏ qua ReadPipeline) nên xanh giả;
+# từ G5 chế độ images chạy ĐÚNG ReceiptReader của app và
+# 10 lượt trên đường đúng thay cho 100 lượt trên đường sai.
+# (Từ 2026-11-15 repo Sohoadon đã public theo lệnh anh —
+# Actions ở repo public không tính vào hạn mức trả phí;
+# kỷ luật gom lượt vẫn giữ vì thời gian chờ.)
+#
+# FILE NHÁP: muốn hiệu lực phải nằm ở .github/workflows/
+# harness-ci.yml trong repo. Connector GitHub KHÔNG đẩy được
+# .github/workflows/* (403 — đã chứng minh) nên Leader cài
+# file này qua đường trình duyệt như mọi lần sửa workflow.
+#
+# Các cổng, đỏ ở đâu dừng ở đó:
+#   1. control  — parse luồng ĐÃ GHI L-R01 bằng Swift thật
+#                 (đối chứng audit: phải SURVIVED).
+#   2. law      — G5: 43 ảnh x 10 set liên tiếp qua
+#                 ReceiptReader.read (ĐÚNG đường app: chuỗi
+#                 ứng viên + ReadPipeline + ROI), cấu hình
+#                 mặc định BenchShell run #46 (old + top-1).
+#                 Một crash ở bất kỳ lượt nào = job đỏ.
+#   2b. roigate — G5: cổng ẢNH–ROI hai làn (cũ vs app) trên
+#                 43 ảnh: ca thâm hụt phải có roiRounds > 0
+#                 hoặc được cứu khép, >= 1 ca F2 khép nhờ
+#                 tầng cứu/ROI, delta từng ca >= 0.
+#   3. fuzz     — bẫy đột biến trên luồng ghi, mỗi đột biến
+#                 một process riêng; process chết vì signal
+#                 = TÁI HIỆN ĐƯỢC = job đỏ + ghi rõ id.
+#
+# SỬA G1 (2026-11-15, chương trình triệt để): thêm bước
+# "Cổng G1 — unit tests" chạy ở MỌI lượt (cả full lẫn
+# streams), NGAY SAU probe và TRƯỚC các cổng đắt tiền:
+# chế độ `unittests` của harness kiểm logic điều kiện thuần
+# (ReceiptLogic: canReparse / flags / ảnh gốc — khoá
+# L-2026-11-13-17, L-2026-11-13-20) + vòng đời
+# PendingDraftStore (save/load/file hỏng/schema lạ/xoá —
+# khoá L-2026-11-13-14) bằng Swift thật. Rẻ (giây), fail
+# fast: đỏ ở đây thì dừng trước khi đốt tiền các cổng sau.
+# Lượt XÁC NHẬN của gói G1 = đúng MỘT lượt job=streams
+# (Leader kích sau khi duyệt gói tại bàn).
+name: Harness — cổng tự chạy 10 lượt
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "full = tat ca cac cong (mac dinh) | streams = chi cong luong V4-0 | gate100 = phien GATE100-v2"
+        type: choice
+        options:
+          - full
+          - streams
+          - gate100
+        default: full
+
+jobs:
+  law-and-control:
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          echo "Xcode: $XC"
+          sudo xcode-select -s "$XC"
+          xcodebuild -version
+      - name: Cài XcodeGen
+        run: brew install xcodegen
+      - name: Sinh project harness
+        run: cd harness && xcodegen generate --spec project-harness.yml
+      - name: Build harness (Release)
+        run: |
+          set -o pipefail
+          xcodebuild -project harness/SoHoaDonHarness.xcodeproj \
+            -scheme SoHoaDonHarness -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath harness/dd build 2>&1 | tee build.log | tail -20
+          BIN=$(find harness/dd/Build/Products -name SoHoaDonHarness -type f -not -path "*.dSYM*" | head -1)
+          echo "BIN=$BIN" >> "$GITHUB_ENV"
+          cp vendors.json lexicon.json quality-thresholds.json "$(dirname "$BIN")/"
+      - name: Probe (ngôn ngữ + dữ liệu nạp thật)
+        run: |
+          set -o pipefail
+          "$BIN" probe | tee probe.log
+          ! grep -q "unloaded" probe.log
+      - name: Cổng G1 — unit tests (logic thuần + vòng đời nháp)
+        run: |
+          set -o pipefail
+          "$BIN" unittests 2>&1 | tee unittests.log
+          grep -q "SURVIVED unittests" unittests.log
+      - name: Cổng 1 — control trên luồng đã ghi L-R01
+        run: |
+          set -o pipefail
+          "$BIN" fixture harness/fixtures/L-R01-raw-a-original.json 2>&1 | tee control.log
+          grep -q "SURVIVED fixture" control.log
+      - name: Truy vết bisect (chỉ khi cổng control đỏ)
+        if: failure()
+        run: |
+          if [ -x "$BIN" ]; then
+            "$BIN" bisect harness/fixtures/L-R01-raw-a-original.json 2>&1 | tee bisect.log
+          else
+            echo "BIN không chạy được — bỏ qua bisect" | tee bisect.log
+          fi
+      - name: Chẻ biến thể dòng chết (chỉ khi cổng control đỏ)
+        if: failure()
+        run: |
+          if [ -x "$BIN" ]; then
+            "$BIN" variants harness/fixtures/L-R01-raw-a-original.json 2>&1 | tee variants.log
+          else
+            echo "BIN không chạy được — bỏ qua variants" | tee variants.log
+          fi
+      - name: Cổng 2 — LUẬT 10 lượt (43 ảnh x 10 set, đúng đường app)
+        if: inputs.job == 'full'
+        run: |
+          "$BIN" images --dir BenchImages --sets 10 --dump streams 2>&1 | tee images.log
+          grep -q "SURVIVED images x10" images.log
+      - name: Cổng 2b — ẢNH–ROI (hai làn cũ/app, G5)
+        if: inputs.job == 'full'
+        run: |
+          set -o pipefail
+          "$BIN" roigate --dir BenchImages --gt bench-gt.json 2>&1 | tee roigate.log
+          grep -q "SURVIVED roigate" roigate.log
+      - name: Ma trận cấu hình phụ (1 set mỗi tổ hợp còn lại)
+        if: inputs.job == 'full'
+        run: |
+          for cfg in "current 1" "current 3" "old 3" "enus 1"; do
+            set -- $cfg
+            "$BIN" images --dir BenchImages --sets 1 --lang "$1" --topk "$2" 2>&1 \
+              | tee "matrix-$1-$2.log"
+            grep -q "SURVIVED images x1" "matrix-$1-$2.log"
+          done
+      - name: Cổng 3 — bẫy đột biến (mỗi ca một process)
+        if: inputs.job == 'full'
+        run: |
+          : > fuzz-results.txt
+          "$BIN" fuzz harness/fixtures/L-R01-raw-a-original.json --list > fuzz-ids.txt
+          while read -r id; do
+            [ -z "$id" ] && continue
+            if "$BIN" fuzz harness/fixtures/L-R01-raw-a-original.json "$id" > "fuzz-$id.log" 2>&1 \
+               && grep -q "SURVIVED $id" "fuzz-$id.log"; then
+              echo "PASS $id" >> fuzz-results.txt
+            else
+              echo "DIED $id (exit=$?)" >> fuzz-results.txt
+            fi
+          done < fuzz-ids.txt
+          cat fuzz-results.txt
+          ! grep -q "^DIED" fuzz-results.txt
+      - name: Cổng luồng — V4-0 (chỉ khi job=streams)
+        if: inputs.job == 'streams'
+        run: |
+          set -o pipefail
+          "$BIN" streams --dir harness/streams 2>&1 | tee streams.log
+          grep -q "STREAMS-DONE" streams.log
+      - name: GATE100 — giải mã corpus (chỉ khi job=gate100)
+        if: inputs.job == 'gate100'
+        run: |
+          python3 - <<'PYEOF'
+          import base64, glob, hashlib, json, os, re, subprocess, sys
+          freeze = json.load(open("FREEZE.json"))
+          want = {e["file"]: e["sha256"] for e in freeze["files"]}
+          assert len(want) == 40, len(want)
+          parts = {}
+          for f in glob.glob("Gate100B64/*.b64.part*"):
+              base = os.path.basename(f).split(".b64.")[0]
+              parts.setdefault(base, []).append(f)
+          singles = {os.path.basename(f)[:-4]
+                     for f in glob.glob("Gate100B64/*.b64")}
+          os.makedirs("Gate100Images", exist_ok=True)
+          names = sorted(set(list(parts.keys()) + list(singles)))
+          assert len(names) == 40, len(names)
+          for name in names:
+              if name in parts:
+                  blob = b"".join(open(p, "rb").read()
+                                  for p in sorted(parts[name]))
+              else:
+                  blob = open(f"Gate100B64/{name}.b64", "rb").read()
+              data = base64.b64decode(blob)
+              got = hashlib.sha256(data).hexdigest()
+              assert got == want[name], (name, got, want[name])
+              out = os.path.join("Gate100Images", name)
+              with open(out, "wb") as fh:
+                  fh.write(data)
+          print("decoded+sha256-verified 40/40")
+          # harness chi doc *.jpg: doi webp/png -> jpg bang sips (macOS)
+          for f in sorted(glob.glob("Gate100Images/*")):
+              stem, ext = os.path.splitext(f)
+              if ext.lower() in (".webp", ".png"):
+                  subprocess.run(["sips", "-s", "format", "jpeg", f,
+                                  "--out", stem + ".jpg"], check=True,
+                                 capture_output=True)
+                  os.remove(f)
+          jpgs = glob.glob("Gate100Images/*.jpg")
+          assert len(jpgs) == 40, len(jpgs)
+          # ban GT chay that: khoa .webp/.png -> .jpg (ban dong bang giu nguyen)
+          gt = json.load(open("gate100-gt.json"))
+          cases = {}
+          for k, v in gt["cases"].items():
+              stem, ext = os.path.splitext(k)
+              cases[stem + ".jpg" if ext.lower() in (".webp", ".png")
+                    else k] = v
+          gt["cases"] = cases
+          json.dump(gt, open("gate100-gt-runtime.json", "w"))
+          print("runtime GT keys:", len(cases))
+          PYEOF
+          ls Gate100Images | wc -l
+      - name: GATE100 — corpus 40 ảnh x 2 set (đúng đường app)
+        if: inputs.job == 'gate100'
+        run: |
+          "$BIN" images --dir Gate100Images --sets 2 --dump streams 2>&1 | tee gate100-images.log
+          grep -q "SURVIVED images x2" gate100-images.log
+      - name: GATE100 — roigate corpus (đáp án gate100-gt.json)
+        if: inputs.job == 'gate100'
+        run: |
+          set -o pipefail
+          "$BIN" roigate --dir Gate100Images --gt gate100-gt-runtime.json 2>&1 | tee gate100-roigate.log
+          grep -q "SURVIVED roigate" gate100-roigate.log
+      - name: GATE100 — roigate 43 ảnh bench (đáp án bench-gt.json)
+        if: inputs.job == 'gate100'
+        run: |
+          set -o pipefail
+          "$BIN" roigate --dir BenchImages --gt bench-gt.json 2>&1 | tee gate100-bench-roigate.log
+          grep -q "SURVIVED roigate" gate100-bench-roigate.log
+      - name: Lưu bằng chứng (luồng thật + log)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-evidence-${{ github.run_number }}
+          path: |
+            build.log
+            streams/
+            probe.log
+            unittests.log
+            control.log
+            bisect.log
+            variants.log
+            images.log
+            roigate.log
+            matrix-*.log
+            fuzz-results.txt
+            streams.log
+            fuzz-*.log
+            gate100-images.log
+            gate100-roigate.log
+            gate100-bench-roigate.log
