@@ -460,6 +460,26 @@ enum ItemLineClassifier {
                 c.kind = .excluded
                 return c
             }
+            // L1 ca F6/29 (hồ sơ GATE100-R41 §1.4): dòng
+            // DISCOUNT mang token ÂM là dòng ĐIỀU CHỈNH giá,
+            // không phải món — Lowe's in giá món ĐÃ trừ giảm
+            // (150 + 378 = 528 đúng tạm tính), dòng discount
+            // chỉ là thông tin. Để nó trong bể món, pha gán
+            // phải đốt nước sửa loại bớt mới về gần Σ đúng
+            // (520 thay vì 528 ở ca 29) và thâm hụt E1 còn lại
+            // bị cờ oan. Loại ở tầng PHÂN LOẠI của tầng món
+            // (đúng chỗ legacy loại); labelFamily KHÔNG đổi
+            // nên tầng tổng không hề bị chạm. Chỉ áp khi có
+            // token âm thật: dòng discount mất dấu trừ khi OCR
+            // giữ nguyên hành vi cũ — thâm hụt E1 cờ to, không
+            // âm thầm sai (fail-closed). Họ NONE nên dòng bị
+            // loại này KHÔNG vào exclPool (chỉ TENDER/CHANGE
+            // mới vào) — khớp legacy: không có đường nhận lại.
+            if text.uppercased().contains("DISCOUNT"),
+               toks.contains(where: { $0.cents < 0 }) {
+                c.kind = .excluded
+                return c
+            }
             let last = toks[toks.count - 1]
             c.primaryCents = last.cents
             c.primaryTokenText = last.text

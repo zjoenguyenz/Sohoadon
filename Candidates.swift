@@ -240,6 +240,18 @@ enum CandidateFactory {
         // cuối: khép E2 tự phủ quyết vai trò subtotal khi
         // không có thuế đi kèm, ca rơi về best-effort như cũ.
         if squashed.hasPrefix("ORDERTOTAL") { return make("SUBTOTAL") }
+        // L1 ca 06-kroger-1 (hồ sơ GATE100-R41, lớp T6): dòng
+        // biên lai quẹt thẻ EMV mang MẶT NẠ THẺ dài kèm chữ
+        // TOTAL ("************5171 - C TOTAL: 6.47") là dòng
+        // TENDER — phần trả bằng thẻ của một lần trả tách —
+        // KHÔNG phải tổng hoá đơn. Không chặn, token của nó
+        // thành neo tổng cuối khối và best-effort trình nó làm
+        // tổng (647 thay vì tổng thật 1065 trên dòng BALANCE).
+        // Luật chỉ chạm dòng mang dãy mặt nạ ≥ 6 ký tự: dòng
+        // tổng in thường không bao giờ mang mặt nạ thẻ.
+        if squashed.contains("TOTAL"), hasLongCardMask(text) {
+            return make("TENDER")
+        }
         if squashed.contains("TOTAL") || squashed.contains("AMOUNTDUE")
             || squashed.contains("BALANCEDUE") {
             return make("TOTAL")
@@ -259,6 +271,22 @@ enum CandidateFactory {
             return make("PROMO")
         }
         return make("NONE")
+    }
+
+    /// Dãy ký tự mặt nạ thẻ liên tiếp dài ≥ 6 (*, •, ●) —
+    /// dấu hiệu dòng biên lai thanh toán (EMV/tender), dùng
+    /// bởi luật L1 ca 06-kroger-1 trong labelFamily.
+    private static func hasLongCardMask(_ text: String) -> Bool {
+        var run = 0
+        for ch in text {
+            if ch == "*" || ch == "•" || ch == "●" {
+                run += 1
+                if run >= 6 { return true }
+            } else {
+                run = 0
+            }
+        }
+        return false
     }
 
     // MARK: - Sinh ứng viên

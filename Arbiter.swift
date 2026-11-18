@@ -159,7 +159,9 @@ enum TotalsArbiter {
         // ---- Pha 1: cửa sổ khối tổng ----
         var windowStart: Int? = nil
         for (i, l) in labels.enumerated()
-        where l.family == "SUBTOTAL" || l.family == "TOTAL" {
+        where l.family == "SUBTOTAL" || l.family == "TOTAL"
+            || TotalsArbiter.isFuzzySubtotalLine(
+                text: lines[i].text, family: l.family) {
             windowStart = i; break
         }
         if windowStart == nil {
@@ -491,6 +493,46 @@ enum TotalsArbiter {
         }
 
         if distinctKeys(effective).count == 1, let sol = effective.first {
+            // L1 ca WR-dollartree-1 (phụ lục DFIX của hồ sơ
+            // Gate D): dòng tiêu đề cột "DESCRIPTION QTY PRICE
+            // TOTAL" mang họ TOTAL → cửa sổ mở TRƯỚC khối món
+            // và thừa kế neo biến token món đầu tiên (1.00) thành
+            // neo tổng; hồ chính khép suy biến (100, [], 100)
+            // bằng hai token món. Nghiệm ĐÚNG (500, [25], 525)
+            // chỉ tồn tại ở hồ biến thể (tiền in gãy khoảng
+            // trắng "$5. 00" / "$0 25" / "$5 25") — mà luật vào
+            // tầng cứu hiện hành (chỉ khi hồ chính 0 nghiệm)
+            // không bao giờ cho nó chạy. Đây là luật bằng chứng
+            // thuế (INT-V4-01) mở rộng qua tầng: khi nghiệm
+            // chính khép với tập thuế RỖNG trong khi tờ CÓ bằng
+            // chứng thuế in ở tầng biến thể (token biến thể
+            // trên dòng họ TAX mà dòng đó không có token chính
+            // nào), nghiệm chính phải đối mặt phép tìm gộp.
+            // Nhận kết quả gộp CHỈ khi nó khép duy nhất, có
+            // thuế khác rỗng, và khác giá trị với nghiệm chính;
+            // mọi trường hợp còn lại nghiệm chính đứng nguyên
+            // từng trường — kỷ luật "biến thể không lật khép có
+            // sẵn" chỉ nới đúng tại điểm bằng chứng thuế này.
+            if sol.taxTokens.isEmpty, !variantMoney.isEmpty,
+               variantMoney.contains(where: { v in
+                   labels[v.lineIndex].family == "TAX"
+                       && v.lineIndex >= wStart
+                       && !money.contains { $0.lineIndex == v.lineIndex }
+               }),
+               var rescued = rescueSearch(
+                   lines: lines, primaries: money, variants: variantMoney,
+                   rates: rates, labels: labels,
+                   itemsSumCents: itemsSumCents,
+                   evaluationsSoFar: evaluations, trialsSoFar: trials),
+               rescued.status == "closed", !rescued.taxes.isEmpty,
+               rescued.subtotalCents != sol.subtotal
+                   || rescued.totalCents != sol.total {
+                rescued.trace.append(
+                    "challenge: primary closure had empty taxes while "
+                    + "variant-tier tax evidence exists — combined "
+                    + "closure wins")
+                return rescued
+            }
             // ---- DUY NHẤT theo giá trị → chốt (§3.4) ----
             out.status = "closed"
             out.subtotalCents = sol.subtotal
@@ -572,14 +614,153 @@ enum TotalsArbiter {
                         window: window, subAnchors: subAnchors,
                         totAnchors: totAnchors, rates: rates,
                         buildTaxes: buildTaxes, prov: prov)
+        // L1 ca 06-kroger-1 (hồ sơ GATE100-R41, lớp T6): ca
+        // TRẢ TÁCH hai phương tiện — tờ không in tạm tính,
+        // tổng thật chỉ nằm trên dòng BALANCE và được trả
+        // bằng hai tender cộng lại đúng bằng nó (EBT 4.18 +
+        // thẻ 6.47 = 10.65). Best-effort vừa trình neo tổng
+        // cuối (phần thẻ 6.47 — xem luật mặt nạ EMV ở
+        // labelFamily) làm tổng; nếu phép phân rã tender
+        // DUY NHẤT theo giá trị tồn tại, ghi đè tổng bằng
+        // token BALANCE đó với provenance riêng. Trạng thái
+        // GIỮ "unclosed": không có tạm tính in nên E2 không
+        // kiểm chứng được — trình "closed" là nói quá bằng
+        // chứng. Thuế giữ nguyên bản thu hoạch của
+        // best-effort (dòng TAX đọc đúng 0.49).
+        let tenderSum = splitTenderBalance(lines: lines, labels: labels,
+                                           money: money)
+        if let tenderSum {
+            out.totalCents = tenderSum.cents
+            out.totalLineConfidence = lines[tenderSum.lineIndex].confidence
+            out.provenance["total"] = prov("read", "tenderSumClosure")
+            out.trace.append(
+                "tender-sum: balance token \(tenderSum.cents)@line "
+                + "\(tenderSum.lineIndex + 1) is the unique split-tender sum")
+        }
         deficits(subtotal: out.subtotalCents, taxes: out.taxes, total: out.totalCents)
         if let d2 = out.deficitE2, d2 != 0 {
             out.regionHint = "totals-block/e2-deficit:\(d2)"
         } else {
             out.regionHint = "totals-block/no-closure"
         }
-        candidateMap(chosenTaxIDs: [], subtotalID: nil, totalID: nil)
+        if tenderSum != nil {
+            out.regionHint = "totals-block/tender-sum-closure"
+        }
+        candidateMap(chosenTaxIDs: [], subtotalID: nil,
+                     totalID: tenderSum?.id)
         return out
+    }
+
+    /// L1 ca 06-kroger-1: tìm token TỔNG-THẬT kiểu trả tách.
+    /// Một token trên dòng chứa "BALANCE" là tổng thật khi nó
+    /// phân rã DUY NHẤT theo giá trị thành tổng của 2–4 token
+    /// phân biệt: các token nằm từ dòng BALANCE đầu tiên trở
+    /// đi, không nằm trên dòng BALANCE, dương, và không thuộc
+    /// khối tổng/thuế (họ SUBTOTAL/TAX/TAXSUM bị loại — token
+    /// thuế không phải mảnh tender). "Duy nhất" tính theo ĐA
+    /// TẬP GIÁ TRỊ: nhiều token cùng giá trị hoán đổi nhau
+    /// vẫn là một phân rã. Đúng một token BALANCE đủ điều
+    /// kiện mới trả về; mơ hồ (0 hoặc ≥ 2 token đủ điều
+    /// kiện, hoặc ≥ 2 đa tập phân rã) → nil, fail-closed.
+    /// Phân rã một mảnh (tender == tổng, ca trả thường) bị
+    /// loại bởi luật ≥ 2 mảnh. Trần hồ 12 token giữ phép
+    /// liệt kê hữu hạn (2^12 mặt nạ).
+    private static func splitTenderBalance(lines: [OCRLine],
+                                           labels: [LineLabel],
+                                           money: [MoneyCandidate])
+        -> MoneyCandidate? {
+        func isBalanceLine(_ i: Int) -> Bool {
+            lines[i].text.uppercased().contains("BALANCE")
+        }
+        let balanceTokens = money.filter { isBalanceLine($0.lineIndex) }
+        guard let firstBalanceLine = balanceTokens.map({ $0.lineIndex }).min()
+        else { return nil }
+        var qualifying: [MoneyCandidate] = []
+        for b in balanceTokens {
+            let pool = money.filter { c in
+                c.lineIndex >= firstBalanceLine
+                    && !isBalanceLine(c.lineIndex)
+                    && c.cents > 0 && c.id != b.id
+                    && !["SUBTOTAL", "TAX", "TAXSUM"]
+                        .contains(labels[c.lineIndex].family)
+            }
+            if pool.count > 12 { continue }
+            var multisets = Set<[Int]>()
+            let n = pool.count
+            var mask = 0
+            while mask < (1 << n) {
+                let bits = mask.nonzeroBitCount
+                if bits >= 2 && bits <= 4 {
+                    var sum = 0
+                    var values: [Int] = []
+                    for j in 0..<n where mask & (1 << j) != 0 {
+                        sum += pool[j].cents
+                        values.append(pool[j].cents)
+                    }
+                    if sum == b.cents {
+                        multisets.insert(values.sorted())
+                    }
+                }
+                mask += 1
+            }
+            if multisets.count == 1 { qualifying.append(b) }
+        }
+        return qualifying.count == 1 ? qualifying[0] : nil
+    }
+
+    // MARK: - L1: nhãn tạm tính mờ cho cửa sổ Pha 1 (ca F3/28)
+
+    /// L1 ca F3/28 (hồ sơ GATE100-R41 §1.3, đòn bẩy hồ sơ ghi
+    /// "consider"): nhãn tạm tính sai ĐÚNG MỘT ký tự (vd
+    /// "SUBTUTAL") trượt contains("SUBTOTAL") → họ NONE →
+    /// cửa sổ Pha 1 mở muộn tại dòng TOTAL đầu tiên, token
+    /// tạm tính + thuế nằm NGOÀI cửa sổ và khối tổng không
+    /// khép được (ca 28: cửa sổ mở tại INVOICE TOTAL, best-
+    /// effort trình 0.32 của dòng TOTAL DISCOUNT làm tổng).
+    /// Nấc mờ này CHỈ mở cửa sổ: dòng vẫn họ NONE, KHÔNG
+    /// thành neo, KHÔNG tự chốt số — khép vẫn phải qua liệt
+    /// kê nghiệm duy nhất như thường (fail-closed). Điều
+    /// kiện chặt: họ NONE + từ chữ đầu tiên của dòng (đã ép
+    /// khoảng trắng) dài ≥ 7 và lệch đúng 1 phép sửa so với
+    /// "SUBTOTAL". Quét toàn corpus đóng băng 116 luồng:
+    /// ngoài ca 28 không dòng nào chạm điều kiện này.
+    private static func isFuzzySubtotalLine(text: String,
+                                                family: String) -> Bool {
+        guard family == "NONE" else { return false }
+        let squashed = text.uppercased().filter { !$0.isWhitespace }
+        var lead = ""
+        for ch in squashed {
+            if ch.isLetter { lead.append(ch) } else { break }
+        }
+        guard lead.count >= 7 else { return false }
+        return editDistanceIsOne(lead, "SUBTOTAL")
+    }
+
+    /// Hai chuỗi lệch nhau đúng MỘT phép sửa (thay một ký tự,
+    /// hoặc thêm/bớt một ký tự) hay không.
+    private static func editDistanceIsOne(_ a: String, _ b: String) -> Bool {
+        let x = Array(a), y = Array(b)
+        if abs(x.count - y.count) > 1 { return false }
+        if x.count == y.count {
+            var diffs = 0
+            for i in x.indices where x[i] != y[i] {
+                diffs += 1
+                if diffs > 1 { return false }
+            }
+            return diffs == 1
+        }
+        let (s, l) = x.count < y.count ? (x, y) : (y, x)
+        var i = 0, j = 0, skipped = false
+        while i < s.count && j < l.count {
+            if s[i] == l[j] {
+                i += 1; j += 1
+            } else {
+                if skipped { return false }
+                skipped = true
+                j += 1
+            }
+        }
+        return true
     }
 
     // MARK: - G2: tầng cứu bằng hồ alternate (§2.6)
@@ -614,7 +795,9 @@ enum TotalsArbiter {
         // chỉ-có-tiền đếm trên token CHÍNH).
         var windowStart: Int? = nil
         for (i, l) in labels.enumerated()
-        where l.family == "SUBTOTAL" || l.family == "TOTAL" {
+        where l.family == "SUBTOTAL" || l.family == "TOTAL"
+            || TotalsArbiter.isFuzzySubtotalLine(
+                text: lines[i].text, family: l.family) {
             windowStart = i; break
         }
         if windowStart == nil {
@@ -1122,6 +1305,134 @@ enum ItemsArbiter {
                 -it.line)
     }
 
+    /// L1 ca tách dòng món (bằng chứng thiết bị 2026-11-17,
+    /// tờ L-R09 + luồng DEVICE-A0 của cùng tờ): OCR/assembler
+    /// tách MỘT dòng in thành hai dòng kề nhau cùng mã + cùng
+    /// giá, cả hai thành món → món bị tính hai lần (CORN 5.26
+    /// hiện hai lần trong chi tiết hoá đơn trên máy anh).
+    /// Gộp về một món khi dòng sau là bản sao SUY BIẾN của
+    /// dòng trước:
+    ///   (a) dòng sau CHỈ-MÃ: khung chữ ≤ 2 ký tự (vd
+    ///       "077512701330 5.26 R" — đúng hình bản chụp thiết
+    ///       bị). Dòng in thật của máy tính tiền luôn mang
+    ///       tên; dòng chỉ-mã + tiền không phải một dòng in.
+    ///   (b) dòng sau mang tên bị NHIỄU 1–2 ký tự so với dòng
+    ///       trước sau khi bỏ hậu tố cờ in (vd "CORN RKGD"
+    ///       của luồng A0): CHỈ gộp khi số học chứng minh
+    ///       được — Σ gán hiện tại VƯỢT đích E1 và bỏ dòng
+    ///       sao làm Σ tiến gần đích hơn.
+    /// Cặp song sinh GIỐNG HỆT (lệch 0) KHÔNG bao giờ gộp:
+    /// đó là hình hai lần quét thật của cùng một món (ca
+    /// L-R03: hai gói ngô in hai dòng giống hệt nhau, Σ món
+    /// khép đúng 6760 của GT — gộp sẽ phá khép đúng).
+    /// Điều kiện chung: hai dòng LIỀN KỀ (sau = trước + 1),
+    /// giá nằm trên chính dòng (amountLine == line — món
+    /// treo đã lấp bị loại), giá bằng nhau, dãy số dài nhất
+    /// ≥ 7 ký tự trong văn bản hai dòng bằng nhau (mã món),
+    /// dòng sau không mang liên kết nào. Giữ dòng đầy đủ
+    /// đứng trước, bỏ dòng sao; mỗi lần gộp ghi trace.
+    private static func mergeAdjacentDuplicates(
+        items: [ItemCandidate], links: [ItemLink], lines: [OCRLine],
+        target: Int?, trace: inout [String]
+    ) -> [ItemCandidate] {
+        let linkedLines = Set(links.flatMap {
+            [$0.line, $0.fromItemLine].compactMap { $0 }
+        })
+        // Σ gán hiện tại của bể trình (cổng số học của (b)) —
+        // đúng phép lọc dựng `pool` trong assign.
+        var sigma: Int? = nil
+        if let target {
+            let pool0 = items.filter {
+                $0.kind != "broken" && ($0.kind != "hang" || $0.filled)
+            }
+            sigma = assignPass(pool: pool0, target: target).sigma
+        }
+        var kept: [ItemCandidate] = []
+        for it in items {
+            var merged = false
+            if let prev = kept.last,
+               it.line == prev.line + 1,
+               let amount = it.primaryCents,
+               amount == prev.primaryCents,
+               it.amountLine == it.line, prev.amountLine == prev.line,
+               !linkedLines.contains(it.line) {
+                let codeA = longestDigitRun(lines[prev.line].text)
+                let codeB = longestDigitRun(lines[it.line].text)
+                if codeA.count >= 7 && codeA == codeB {
+                    let skelB = letterSkeleton(lines[it.line].text)
+                    if skelB.count <= 2 {
+                        merged = true
+                    } else if let target, let s = sigma, s > target,
+                              abs(s - amount - target) < abs(s - target) {
+                        let skelA = letterSkeleton(lines[prev.line].text)
+                        let d = levenshtein(strippedPrintFlags(skelA),
+                                            strippedPrintFlags(skelB),
+                                            cap: 2)
+                        if d >= 1 && d <= 2 { merged = true }
+                    }
+                    if merged {
+                        trace.append(
+                            "dup-merge: line \(it.line + 1) into line "
+                            + "\(prev.line + 1) (code \(codeA))")
+                        if let s = sigma { sigma = s - amount }
+                    }
+                }
+            }
+            if !merged { kept.append(it) }
+        }
+        return kept
+    }
+
+    /// Dãy chữ số liên tiếp dài nhất trong văn bản dòng
+    /// (mã món in trên dòng — ItemCandidate.itemCode chỉ bắt
+    /// mã ở ĐẦU dòng nên dòng tên-trước không có mã ở đó).
+    private static func longestDigitRun(_ text: String) -> String {
+        var best = ""
+        var cur = ""
+        for ch in text {
+            if ch.isNumber {
+                cur.append(ch)
+                if cur.count > best.count { best = cur }
+            } else {
+                cur = ""
+            }
+        }
+        return best
+    }
+
+    /// Khung chữ của dòng: chỉ ký tự chữ, đã hoa hoá.
+    private static func letterSkeleton(_ text: String) -> String {
+        String(text.uppercased().filter { $0.isLetter })
+    }
+
+    /// Bỏ hậu tố cờ in lẻ (F/R/X/A/T) ở cuối khung chữ,
+    /// giữ tối thiểu 3 ký tự — trước khi so tên hai dòng.
+    private static func strippedPrintFlags(_ skeleton: String) -> String {
+        var s = skeleton
+        while s.count > 3, let last = s.last, "FRXAT".contains(last) {
+            s.removeLast()
+        }
+        return s
+    }
+
+    /// Khoảng cách Levenshtein có trần (trả cap + 1 khi vượt
+    /// trần — chỉ cần phân biệt 0 / 1–2 / hơn nữa).
+    private static func levenshtein(_ a: String, _ b: String,
+                                    cap: Int) -> Int {
+        let x = Array(a), y = Array(b)
+        if abs(x.count - y.count) > cap { return cap + 1 }
+        var prev = Array(0...y.count)
+        for i in x.indices {
+            var cur = [i + 1]
+            for j in y.indices {
+                cur.append(min(prev[j + 1] + 1, cur[j] + 1,
+                               prev[j] + (x[i] == y[j] ? 0 : 1)))
+            }
+            prev = cur
+        }
+        return prev[y.count]
+    }
+
     static func assign(lines: [OCRLine], totals: TotalsArbitration,
                        soldAnchor: Int?,
                        contribution: String,
@@ -1140,7 +1451,7 @@ enum ItemsArbiter {
             lines: lines, classified: classified,
             totalsStart: totals.windowStart)
         out.trace.append("items-window=\(window.start)..<\(window.end)")
-        let (items, links) = ItemCandidateFactory.buildItems(
+        var (items, links) = ItemCandidateFactory.buildItems(
             lines: lines, classified: classified, window: window)
 
         // Đích E1 + tập subtotal ứng viên cho phân định (§3.2).
@@ -1148,6 +1459,15 @@ enum ItemsArbiter {
         var candSubs = Set(totals.effectiveSolutions.map { $0.subtotalCents })
         if let s = presentedSub { candSubs.insert(s) }
         let target = presentedSub ?? candSubs.min()
+
+        // L1 ca tách dòng món: gộp cặp dòng sao suy biến
+        // (một dòng in bị OCR tách hai) TRƯỚC khi dựng bể —
+        // xem mergeAdjacentDuplicates. Lượt gộp chỉ bỏ ứng
+        // viên khỏi `items`; đích/các bể phụ tính sau đó như
+        // thường.
+        items = mergeAdjacentDuplicates(items: items, links: links,
+                                        lines: lines, target: target,
+                                        trace: &out.trace)
 
         // Bể ngoài cửa sổ (CHỈ phía trên — xem đầu mục) + bể bị
         // họ loại trừ trong cửa sổ (hai nước sửa ii/iii).
