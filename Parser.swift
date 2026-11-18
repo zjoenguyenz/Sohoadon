@@ -524,6 +524,26 @@ enum ReceiptParser {
                 lineIndex: result.taxes[i].lineIndex,
                 corrections: &result.corrections)
         }
+        // P2-0/C-6: sinh khoá chống trùng TRÊN ĐƯỜNG V4 (đường
+        // app thật). Trước gói này mọi điểm sinh khoá nằm trong
+        // parseSams/parseGeneric ở vùng #if !GLKEEPER_V4_ONLY
+        // nên dedupeKey luôn nil và cảnh báo trùng không bao
+        // giờ cháy. Luật giữ nguyên hệt luật cũ: dòng TC# có
+        // 16–24 chữ số -> "SAMS-TC-" (Sam's) / "TC-" (tiệm
+        // khác); khoá yếu GEN| KHÔNG sinh ở đây mà sinh lúc
+        // lưu từ số anh đã sửa (ReviewView.save).
+        for line in lines {
+            if let groups = matchGroups(line.text,
+                                        pattern: #"^TC#\s+([\d ]+)$"#),
+               let raw = groups.first ?? nil {
+                let digits = raw.replacingOccurrences(of: " ", with: "")
+                if digits.count >= 16 && digits.count <= 24 {
+                    result.dedupeKey =
+                        (result.vendorKey == "sams" ? "SAMS-TC-" : "TC-") + digits
+                }
+                break
+            }
+        }
         result.warnings = validate(result)
         if finalTotals.status == "ambiguous" {
             result.warnings.append(

@@ -384,7 +384,9 @@ enum ItemLineClassifier {
     // NONE và tiền của chúng thành món ma (+surplus E1).
     private static let excludedFamilies: Set<String> =
         ["SUBTOTAL", "TOTAL", "TAX", "TENDER", "CHANGE", "TAXSUM",
-         "GIFTCERT", "PROMO"]
+         "GIFTCERT", "PROMO",
+         // P2-0/C-5 (dư): dòng TIP không bao giờ là món.
+         "TIP"]
 
     // MARK: Phân loại một dòng
 

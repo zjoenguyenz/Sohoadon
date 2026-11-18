@@ -7,6 +7,9 @@ import SwiftData
 /// - Cài Đặt: khoá Face ID, ghi chú lưu trữ.
 struct CardsView: View {
     @Query(sort: \CardTail.createdAt) private var cardTails: [CardTail]
+    // P2-0/C-8 + B-7: toàn sổ — đếm phạm vi xếp lại theo thẻ
+    // và tính file ảnh mồ côi.
+    @Query private var allReceipts: [Receipt]
     @Environment(\.modelContext) private var modelContext
     @AppStorage("faceIDLockEnabled") private var lockEnabled = true
 
@@ -17,6 +20,58 @@ struct CardsView: View {
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
     private var archivedCards: [CardTail] { cardTails.filter { $0.archived } }
+
+    /// P2-0/B-7: file trong thư mục bằng chứng KHÔNG thuộc
+    /// hoá đơn nào và không thuộc bản nháp đang chờ (nháp
+    /// thường + nháp bị cổng chất lượng chặn) — chỉ LIỆT KÊ.
+    private var orphanFiles: (count: Int, bytes: Int) {
+        let directory = ImageStore.directory
+        let names = (try? FileManager.default.contentsOfDirectory(
+            atPath: directory.path)) ?? []
+        var referenced = Set<String>()
+        for receipt in allReceipts {
+            for name in receipt.allOriginalImageFileNames {
+                referenced.insert(name)
+                referenced.insert(DiagnosticsStore.fileName(
+                    forImageFileName: name))
+            }
+        }
+        if let snapshot = PendingDraftStore.load() {
+            referenced.insert(snapshot.imageFileName)
+            referenced.formUnion(snapshot.originalFileNames)
+            referenced.insert(DiagnosticsStore.fileName(
+                forImageFileName: snapshot.imageFileName))
+        }
+        if let block = PendingBlockStore.load() {
+            referenced.insert(block.draft.imageFileName)
+            referenced.formUnion(block.draft.originalFileNames)
+            referenced.insert(DiagnosticsStore.fileName(
+                forImageFileName: block.draft.imageFileName))
+        }
+        var count = 0
+        var bytes = 0
+        for name in names where !referenced.contains(name) {
+            count += 1
+            if let attributes = try? FileManager.default
+                .attributesOfItem(atPath: directory
+                    .appendingPathComponent(name).path),
+               let size = attributes[.size] as? Int {
+                bytes += size
+            }
+        }
+        return (count, bytes)
+    }
+
+    /// P2-0/C-8: tờ này có phải "bản chụp phân loại theo
+    /// thẻ" không — lý do phân loại do CHÍNH cơ chế thẻ ghi
+    /// (gợi ý lúc lưu hoặc lần xếp lại trước), không phải
+    /// quyết định tay của anh.
+    private func isCardClassifiedSnapshot(_ receipt: Receipt,
+                                          last4: String) -> Bool {
+        receipt.classificationReason.hasPrefix("Thẻ •• \(last4)")
+            || receipt.classificationReason
+                .hasPrefix("Xếp lại theo thẻ •• \(last4)")
+    }
 
     var body: some View {
         NavigationStack {
@@ -56,6 +111,15 @@ struct CardsView: View {
                         .foregroundStyle(.secondary)
                     LabeledContent("Nơi lưu ảnh gốc", value: "Trong app (Files → Sổ Hóa Đơn)")
                     LabeledContent("Đọc hoá đơn", value: "Ngay trên máy, không gửi ra ngoài")
+                    // P2-0/B-7: LIỆT KÊ file ảnh chưa thuộc
+                    // hoá đơn nào (mồ côi) — chỉ để anh biết,
+                    // app KHÔNG tự xoá (file của bản nháp
+                    // đang chờ cũng có thể nằm trong số này).
+                    LabeledContent("File ảnh chưa gắn hoá đơn",
+                                   value: "\(orphanFiles.count) file · \(ByteCountFormatter.string(fromByteCount: Int64(orphanFiles.bytes), countStyle: .file))")
+                    Text("Chỉ liệt kê để anh biết — app không tự xoá. Sau gói này, huỷ ở màn Kiểm Lại và lượt đọc rỗng đã tự xoá file của chúng; số còn lại là di sản các bản trước.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Thẻ & Cài Đặt")
@@ -87,7 +151,16 @@ struct CardsView: View {
                 }
                 Button("Huỷ", role: .cancel) { pendingKindChange = nil }
             } message: {
-                Text("Hoá đơn cũ của thẻ này giữ nguyên phân loại đã lưu, trừ khi anh chọn xếp lại.")
+                // P2-0/C-8: nói rõ PHẠM VI trước khi anh
+                // chọn — xếp lại chỉ chạm các tờ đang chờ
+                // duyệt mà phân loại đến từ chính thẻ này;
+                // tờ anh đã duyệt / đã tự quyết thì không
+                // một lần xếp lại nào được ghi đè.
+                if let pending = pendingKindChange {
+                    Text("Xếp lại sẽ chạm \(pending.affectedCount) tờ đang chờ duyệt do thẻ này phân loại. \(pending.untouchedCount) tờ khác của thẻ này (đã duyệt hoặc anh đã tự quyết) giữ nguyên.")
+                } else {
+                    Text("Hoá đơn cũ của thẻ này giữ nguyên phân loại đã lưu, trừ khi anh chọn xếp lại.")
+                }
             }
         }
     }
@@ -161,7 +234,21 @@ struct CardsView: View {
         if let card = data.existingCard {
             if card.kind != data.kind {
                 // Đổi loại: không tự áp — hỏi anh trước qua confirmationDialog.
-                pendingKindChange = PendingKindChange(card: card, brand: data.brand, kind: data.kind, last4: card.last4)
+                // P2-0/C-8: đếm sẵn phạm vi xếp lại để hộp
+                // thoại nói rõ trước khi anh chọn.
+                let affected = allReceipts.filter {
+                    $0.cardLast4 == card.last4
+                        && $0.status == .needsReview
+                        && isCardClassifiedSnapshot($0, last4: card.last4)
+                }.count
+                let untouched = allReceipts.filter {
+                    $0.cardLast4 == card.last4
+                }.count - affected
+                pendingKindChange = PendingKindChange(
+                    card: card, brand: data.brand, kind: data.kind,
+                    last4: card.last4,
+                    affectedCount: affected,
+                    untouchedCount: untouched)
             } else {
                 // N2-FIX: như setArchived — hỏng thì hoàn tác
                 // trong bộ nhớ và báo thật.
@@ -207,9 +294,27 @@ struct CardsView: View {
         if reclassifyOld {
             let last4 = pending.last4
             // Lọc trong bộ nhớ thay cho #Predicate (tránh phụ thuộc macro với optional).
-            for receipt in receipts where receipt.cardLast4 == last4 {
+            // P2-0/C-8: CHỈ xếp lại các tờ đang chờ duyệt
+            // mà phân loại đến từ chính thẻ này (bản chụp
+            // gợi ý) — bản cũ quét MỌI tờ cùng đuôi, ghi
+            // đè cả quyết định tay và tờ đã duyệt. Sau khi
+            // xếp: mục không thuộc loại mới -> mặc định của
+            // loại mới, và trạng thái suy lại bằng bộ cờ
+            // (cùng luật C-7).
+            for receipt in receipts
+            where receipt.cardLast4 == last4
+                && receipt.status == .needsReview
+                && isCardClassifiedSnapshot(receipt, last4: last4) {
                 receipt.classification = pending.kind
                 receipt.classificationReason = "Xếp lại theo thẻ •• \(last4) — anh chọn đổi cả hoá đơn cũ"
+                if !Categories.list(for: pending.kind)
+                    .contains(receipt.category) {
+                    receipt.category = Categories.defaultValue(
+                        for: pending.kind)
+                }
+                receipt.scheduleCLine = Categories.scheduleCLine(
+                    forCategory: receipt.category)
+                refreshReceiptStatusFromFlags(receipt)
             }
         }
         if !saveContextOrFalse(modelContext) {
@@ -233,6 +338,10 @@ struct PendingKindChange {
     var brand: String
     var kind: Classification
     var last4: String
+    /// P2-0/C-8: số tờ xếp lại sẽ chạm / số tờ giữ nguyên —
+    /// tính lúc mở hộp thoại để nói rõ phạm vi trước.
+    var affectedCount: Int = 0
+    var untouchedCount: Int = 0
 }
 
 enum CardFormTarget: Identifiable {
@@ -272,7 +381,10 @@ struct CardFormView: View {
         case .edit(let card):
             _last4Text = State(initialValue: card.last4)
             _brandText = State(initialValue: card.brand)
-            _selectedKind = State(initialValue: card.kind == .unknown ? .personal : card.kind)
+            // P2-0 mục 17 (§2.2(7)): giữ đúng loại đã lưu —
+            // bản cũ ép .unknown thành .personal ngay khi
+            // mở form, anh chỉ sửa hãng cũng bị đổi loại oan.
+            _selectedKind = State(initialValue: card.kind)
         }
     }
 
@@ -300,6 +412,9 @@ struct CardFormView: View {
                     Picker("Loại", selection: $selectedKind) {
                         Text("CÁ NHÂN").tag(Classification.personal)
                         Text("BUSINESS").tag(Classification.business)
+                        // P2-0 mục 17 (§2.2(7)): loại CHƯA RÕ
+                        // chọn được ở form thẻ như mọi nơi khác.
+                        Text("CHƯA RÕ").tag(Classification.unknown)
                     }
                     .pickerStyle(.segmented)
                     Text("Hoá đơn trả bằng thẻ này sẽ được GỢI Ý xếp vào loại trên — anh luôn đổi được từng tờ.")
@@ -334,6 +449,14 @@ struct CardFormView: View {
         }
         if !isEditing, existingTails.contains(where: { $0.last4 == digits && !$0.archived }) {
             errorText = "Đuôi \(digits) đã có trong danh sách thẻ đang dùng."
+            return
+        }
+        // P2-0 mục 17 (§2.2(7)): đuôi đã có ở mục NGƯNG
+        // DÙNG cũng không thêm bản trùng — chỉ đường dùng
+        // lại thẻ cũ. Bản cũ cho qua và sinh hai CardTail
+        // cùng đuôi.
+        if !isEditing, existingTails.contains(where: { $0.last4 == digits && $0.archived }) {
+            errorText = "Đuôi \(digits) đã có ở mục thẻ đã ngưng dùng — anh dùng lại thẻ đó (nút Dùng lại) thay vì thêm trùng."
             return
         }
         let data = CardFormData(

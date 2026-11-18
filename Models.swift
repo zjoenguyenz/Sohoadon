@@ -241,6 +241,13 @@ final class Receipt {
     var stableID: String = ""
     var duplicateOfStableID: String? = nil
     var excludedFromTotals: Bool = false
+    /// WP6-SPEC §5 / P2-0 L-1: anh đã TỰ XÁC NHẬN kiểm tra một tờ
+    /// còn cờ LỆCH SỐ HỌC (V1/V2) và duyệt bất chấp. Cộng thêm
+    /// thuần tuý có mặc định false -> di trú nhẹ SwiftData tự
+    /// động, dữ liệu đã lưu không đổi nghĩa; các cờ vẫn tính
+    /// trực tiếp từ số đã lưu mỗi lần hiển thị (không "nuốt"
+    /// cờ) — dấu này chỉ ghi nhận quyết định của anh.
+    var confirmedWithFlag: Bool = false
     /// F5 (mức tối thiểu): thời điểm anh duyệt + tên các trường anh nhập
     /// tay (phân biệt số-máy-đọc với số-anh-nhập — hai giá trị chứng minh
     /// khác nhau theo Rev. Proc. 97-22).
@@ -438,7 +445,11 @@ func dollarsTextToCents(_ text: String) -> Int? {
         var frac = String(parts[1])
         if frac.isEmpty { frac = "00" }
         if frac.count == 1 { frac += "0" }
-        if frac.count > 2 { frac = String(frac.prefix(2)) }
+        // P2-0 mục 17 (§2.2(7)): phần thập phân dài hơn 2 chữ
+        // số là chữ đọc lạ — bản cũ cắt cụt thầm lặng
+        // (1.234 -> 123 cent), nay trả nil cho ô tiền đó
+        // trống để bộ cờ lên tiếng thay vì ghi số sai.
+        if frac.count > 2 { return nil }
         guard let c = Int(frac) else { return nil }
         cents = c
     }

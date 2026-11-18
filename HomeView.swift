@@ -19,16 +19,34 @@ struct HomeView: View {
         receipts.filter { $0.status == .needsReview }.count
     }
 
+    /// P2-0/C-2: tổng năm CHÍNH THỨC = chỉ tờ đã duyệt,
+    /// không bị loại khỏi tổng (bản trùng), tính theo số ĐÃ
+    /// TRẢ (tổng in + tip). Trước gói này hero cộng cả tờ
+    /// đang chờ duyệt và dùng totalCents trơn.
     private func yearSum(_ kind: Classification) -> Int {
-        currentYearReceipts.filter { $0.classification == kind }.reduce(0) { $0 + ($1.totalCents ?? 0) }
+        currentYearReceipts.filter {
+            $0.classification == kind && $0.status == .reviewed
+                && !$0.excludedFromTotals
+        }.reduce(0) { $0 + ($1.amountPaidCents ?? 0) }
+    }
+
+    /// P2-0/C-2: tiền chờ duyệt của năm nay — hiện một dòng
+    /// riêng dưới thẻ hero, không trộn vào tổng chính thức.
+    private var yearPendingTotal: Int {
+        currentYearReceipts.filter {
+            $0.status == .needsReview && !$0.excludedFromTotals
+        }.reduce(0) { $0 + ($1.amountPaidCents ?? 0) }
     }
 
     private var topCategories: [(name: String, kind: Classification, total: Int)] {
         var totals: [String: (Classification, Int)] = [:]
-        for receipt in currentYearReceipts {
+        // P2-0/C-2: chỉ tờ chính thức (đã duyệt, không loại
+        // khỏi tổng), số đã trả.
+        for receipt in currentYearReceipts
+        where receipt.status == .reviewed && !receipt.excludedFromTotals {
             let key = receipt.category.isEmpty ? "Khác" : receipt.category
             let old = totals[key] ?? (receipt.classification, 0)
-            totals[key] = (receipt.classification, old.1 + (receipt.totalCents ?? 0))
+            totals[key] = (receipt.classification, old.1 + (receipt.amountPaidCents ?? 0))
         }
         return totals
             .map { (name: $0.key, kind: $0.value.0, total: $0.value.1) }
@@ -93,7 +111,11 @@ struct HomeView: View {
                         VStack(alignment: .leading, spacing: DS.spaceS) {
                             sectionTitle("Theo mục")
                             VStack(spacing: 0) {
-                                ForEach(Array(topCategories.enumerated()), id: \.element.name) { index, entry in
+                                // P2-0 mục 17 (§2.2(7)): id theo
+                                // vị trí — hai mục trùng tên ở
+                                // hai loại khác nhau không còn
+                                // đè nhau trong danh sách.
+                                ForEach(Array(topCategories.enumerated()), id: \.offset) { index, entry in
                                     HStack(spacing: DS.spaceM) {
                                         ZStack {
                                             RoundedRectangle(cornerRadius: 13)
@@ -134,7 +156,12 @@ struct HomeView: View {
                                     NavigationLink {
                                         ReceiptDetailView(receipt: receipt)
                                     } label: {
-                                        ReceiptRowView(receipt: receipt)
+                                        ReceiptRowView(
+                                            receipt: receipt,
+                                            hasDuplicates: !receipt.stableID.isEmpty
+                                                && receipts.contains {
+                                                    $0.duplicateOfStableID == receipt.stableID
+                                                })
                                     }
                                     .buttonStyle(.plain)
                                     if index < min(5, receipts.count) - 1 {
@@ -238,6 +265,13 @@ struct HomeView: View {
                     splitLegend(kind: .unknown)
                 }
             }
+            // P2-0/C-2: tiền chờ duyệt hiện RIÊNG — tổng lớn
+            // ở trên là tổng chính thức (đã duyệt) mà thôi.
+            if yearPendingTotal != 0 {
+                Text("Đang chờ duyệt: \(formatMoney(cents: yearPendingTotal)) — chưa tính vào tổng chính thức")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.82))
+            }
         }
         .padding(DS.spaceL)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -304,19 +338,37 @@ struct ReportsView: View {
         receipts.filter { Calendar.current.component(.year, from: $0.date) == selectedYear }
     }
 
+    /// P2-0/C-2: tổng Báo Cáo cũng là tổng CHÍNH THỨC —
+    /// chỉ tờ đã duyệt, không loại khỏi tổng, số đã trả.
     private func sum(_ kind: Classification, in items: [Receipt]) -> Int {
-        items.filter { $0.classification == kind }.reduce(0) { $0 + ($1.totalCents ?? 0) }
+        items.filter {
+            $0.classification == kind && $0.status == .reviewed
+                && !$0.excludedFromTotals
+        }.reduce(0) { $0 + ($1.amountPaidCents ?? 0) }
     }
 
-    private var categoryRows: [(name: String, kind: Classification, total: Int, count: Int)] {
+    /// P2-0/C-2: tiền chờ duyệt của năm đang xem.
+    private var pendingTotal: Int {
+        yearReceipts.filter {
+            $0.status == .needsReview && !$0.excludedFromTotals
+        }.reduce(0) { $0 + ($1.amountPaidCents ?? 0) }
+    }
+
+    private var categoryRows: [(key: String, name: String, kind: Classification, total: Int, count: Int)] {
         var grouped: [String: (Classification, Int, Int)] = [:]
-        for receipt in yearReceipts where receipt.classification != .unknown {
+        // P2-0/C-2: worksheet chỉ tính tờ chính thức.
+        for receipt in yearReceipts
+        where receipt.classification != .unknown
+            && receipt.status == .reviewed && !receipt.excludedFromTotals {
             let key = "\(receipt.classificationRaw)|\(receipt.category.isEmpty ? "Khác" : receipt.category)"
             let old = grouped[key] ?? (receipt.classification, 0, 0)
-            grouped[key] = (receipt.classification, old.1 + (receipt.totalCents ?? 0), old.2 + 1)
+            grouped[key] = (receipt.classification, old.1 + (receipt.amountPaidCents ?? 0), old.2 + 1)
         }
         return grouped
-            .map { (name: $0.key.components(separatedBy: "|").last ?? $0.key, kind: $0.value.0, total: $0.value.1, count: $0.value.2) }
+            // P2-0 mục 17 (§2.2(7)): id của hàng là KHOÁ
+            // GỘP (loại|mục) — hai mục trùng tên ở hai loại
+            // không còn trùng id trong ForEach.
+            .map { (key: $0.key, name: $0.key.components(separatedBy: "|").last ?? $0.key, kind: $0.value.0, total: $0.value.1, count: $0.value.2) }
             .sorted { a, b in
                 if a.kind != b.kind { return a.kind == .business }
                 return a.total > b.total
@@ -361,14 +413,14 @@ struct ReportsView: View {
                                 .monospacedDigit()
                         }
                     }
-                    Text("\(yearReceipts.count) hoá đơn · \(yearReceipts.filter { $0.status == .needsReview }.count) tờ đang chờ duyệt")
+                    Text("\(yearReceipts.count) hoá đơn · \(yearReceipts.filter { $0.status == .needsReview }.count) tờ đang chờ duyệt (\(formatMoney(cents: pendingTotal))) — tổng ở trên chỉ tính tờ ĐÃ duyệt, tiền chờ chưa tính vào")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 if !categoryRows.isEmpty {
                     Section("Theo mục (Schedule C worksheet — bản xem trước)") {
-                        ForEach(categoryRows, id: \.name) { row in
+                        ForEach(categoryRows, id: \.key) { row in
                             HStack {
                                 Image(systemName: row.kind.iconName)
                                     .foregroundStyle(row.kind.color)

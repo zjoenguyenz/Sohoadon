@@ -237,13 +237,43 @@ func receiptFlags(_ receipt: Receipt) -> [String] {
         taxCents: receipt.taxCents,
         kind: kind,
         businessPurpose: receipt.businessPurpose,
-        hasOriginalImage: receiptHasOriginalImage(receipt)))
+        hasOriginalImage: receiptHasOriginalImage(receipt),
+        // P2-0 mục 19: màn đã lưu luôn CÓ tên tiệm để phán.
+        vendor: receipt.vendor))
+}
+
+/// P2-0 (C-7/C-8): suy lại trạng thái duyệt từ bộ cờ trên số
+/// ĐÃ LƯU hiện tại của tờ — cờ trống -> .reviewed (đóng dấu
+/// reviewedAt khi tờ CHUYỂN sang đã duyệt), còn cờ ->
+/// .needsReview. Mọi đường sửa bản ghi đã lưu (Lưu thay đổi
+/// ở Chi Tiết, xếp lại theo thẻ) đi qua đây thay vì giữ
+/// nguyên trạng thái cũ bất chấp số mới.
+func refreshReceiptStatusFromFlags(_ receipt: Receipt) {
+    let wasReviewed = receipt.status == .reviewed
+    receipt.status = receiptFlags(receipt).isEmpty ? .reviewed : .needsReview
+    if receipt.status == .reviewed && !wasReviewed {
+        receipt.reviewedAt = Date()
+    }
+}
+
+/// P2-0/C-1: cờ LỆCH SỐ HỌC (V1/V2) — loại cờ DUY NHẤT anh
+/// được duyệt bất chấp sau khi tự xác nhận đã kiểm với giấy
+/// (WP6-SPEC §5, trường confirmedWithFlag). Mọi cờ khác
+/// (thiếu trường / chưa phân loại / thiếu ảnh gốc / chưa rõ
+/// tiệm) CHẶN nút duyệt.
+func isArithmeticDiscrepancyFlag(_ flag: String) -> Bool {
+    flag.hasPrefix("Tổng các món (")
+        || flag == "Subtotal + thuế khác tổng tiền"
 }
 
 // MARK: - Dòng hoá đơn trong danh sách
 
 struct ReceiptRowView: View {
     var receipt: Receipt
+    /// P2-0 (mục nối duplicateOf): true khi có tờ khác đang
+    /// trỏ duplicateOfStableID vào tờ này (tờ này là bản GỐC
+    /// của ít nhất một bản trùng). Nơi gọi tính từ toàn sổ.
+    var hasDuplicates: Bool = false
 
     var body: some View {
         // UI-2026-11-13: hàng chuẩn DesignSystem — thumbnail bo
@@ -283,6 +313,14 @@ struct ReceiptRowView: View {
                     ClassificationBadge(kind: receipt.classification, cardLast4: receipt.cardLast4)
                     if receipt.status == .needsReview {
                         StatusChip(text: "CHỜ DUYỆT", color: DS.warning)
+                    }
+                    // P2-0 (mục nối duplicateOf): bản trùng
+                    // hiện dấu riêng, KHÔNG chỉ im lặng biến
+                    // khỏi tổng.
+                    if receipt.duplicateOfStableID != nil {
+                        StatusChip(text: "TRÙNG — LOẠI KHỎI TỔNG", color: .gray)
+                    } else if hasDuplicates {
+                        StatusChip(text: "CÓ BẢN TRÙNG", color: .gray)
                     }
                 }
             }
@@ -336,8 +374,30 @@ struct ReceiptListView: View {
             }
     }
 
+    /// P2-0/C-2: tổng CHÍNH THỨC = chỉ tờ đã duyệt và không
+    /// bị loại khỏi tổng (bản trùng), tính theo số ĐÃ TRẢ
+    /// (tổng in + tip). Trước gói này tổng chạy tính cả tờ
+    /// đang chờ duyệt và dùng totalCents trơn.
     private func sum(of kind: Classification, in items: [Receipt]) -> Int {
-        items.filter { $0.classification == kind }.reduce(0) { $0 + ($1.totalCents ?? 0) }
+        items.filter {
+            $0.classification == kind && $0.status == .reviewed
+                && !$0.excludedFromTotals
+        }.reduce(0) { $0 + ($1.amountPaidCents ?? 0) }
+    }
+
+    /// P2-0/C-2: tiền đang CHỜ duyệt (mọi loại) — hiện riêng
+    /// một dòng minh bạch, không trộn vào tổng chính thức.
+    private func pendingSum(in items: [Receipt]) -> Int {
+        items.filter {
+            $0.status == .needsReview && !$0.excludedFromTotals
+        }.reduce(0) { $0 + ($1.amountPaidCents ?? 0) }
+    }
+
+    /// P2-0 (mục nối duplicateOf): tập stableID đang bị ít
+    /// nhất một bản trùng trỏ vào — hàng gốc hiện chip
+    /// "CÓ BẢN TRÙNG".
+    private var duplicateTargetIDs: Set<String> {
+        Set(receipts.compactMap { $0.duplicateOfStableID })
     }
 
     var body: some View {
@@ -362,6 +422,11 @@ struct ReceiptListView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        if pendingSum(in: filtered) != 0 {
+                            Text("Đang chờ duyệt: \(formatMoney(cents: pendingSum(in: filtered))) — chưa tính vào tổng chính thức ở trên")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 ForEach(monthGroups, id: \.key) { group in
@@ -370,7 +435,10 @@ struct ReceiptListView: View {
                             NavigationLink {
                                 ReceiptDetailView(receipt: receipt)
                             } label: {
-                                ReceiptRowView(receipt: receipt)
+                                ReceiptRowView(
+                                    receipt: receipt,
+                                    hasDuplicates: !receipt.stableID.isEmpty
+                                        && duplicateTargetIDs.contains(receipt.stableID))
                             }
                         }
                     } header: {
@@ -436,6 +504,11 @@ struct ReceiptDetailView: View {
     // REPARSE: cần danh sách đuôi thẻ để áp gợi ý phân loại đúng như
     // ReviewView.save() khi tờ CHƯA từng có quyết định phân loại.
     @Query private var cardTails: [CardTail]
+    // P2-0 (mục nối duplicateOf): toàn sổ để hiển thị quan hệ
+    // trùng của tờ này (bản gốc của nó / các bản trùng của nó).
+    @Query private var allReceipts: [Receipt]
+    /// P2-0/C-1: hộp xác nhận "duyệt kèm cờ" (chỉ cờ V1/V2).
+    @State private var showConfirmWithFlag = false
     @State private var selectedKind: Classification
     @State private var selectedCategory: String
     @State private var purposeText: String
@@ -483,6 +556,25 @@ struct ReceiptDetailView: View {
     // chụp lại bị khoá (đúng luật ScanView đang áp ở tab CHỤP).
     private var documentCameraSupported: Bool {
         VNDocumentCameraViewController.isSupported
+    }
+
+    /// P2-0 (mục nối duplicateOf): tờ GỐC mà tờ này là bản
+    /// trùng của nó (nil khi tờ này không phải bản trùng hoặc
+    /// bản gốc đã bị xoá).
+    private var duplicateOriginal: Receipt? {
+        guard let target = receipt.duplicateOfStableID, !target.isEmpty
+        else { return nil }
+        return allReceipts.first { $0.stableID == target }
+    }
+
+    /// P2-0 (mục nối duplicateOf): các bản trùng đang trỏ
+    /// vào tờ này.
+    private var duplicateCopies: [Receipt] {
+        guard !receipt.stableID.isEmpty else { return [] }
+        return allReceipts.filter {
+            $0.duplicateOfStableID == receipt.stableID
+                && $0.stableID != receipt.stableID
+        }
     }
 
     private var canReparse: Bool {
@@ -691,6 +783,26 @@ struct ReceiptDetailView: View {
                     LabeledContent("Thuế (tổng)") { moneyText(receipt.taxTotalCents) }
                 }
                 LabeledContent("TỔNG") { moneyText(receipt.totalCents).bold() }
+                // P2-0/C-9: tờ có tip thì TỔNG trên là tổng IN
+                // trên giấy; số đã trả thật = tổng in + tip.
+                if let tip = receipt.tipAmountCents {
+                    LabeledContent("Tip") { moneyText(tip) }
+                    LabeledContent("Đã trả (tổng in + tip)") {
+                        moneyText(receipt.amountPaidCents).bold()
+                    }
+                }
+                // P2-0 mục 18 (F4): độ tin cậy tiệm/ngày hiện
+                // cạnh các trường (độ tin cậy TỔNG đã có chip ở
+                // thẻ hero) — 0 nghĩa là không có bằng chứng
+                // chấm điểm thì không hiện.
+                if receipt.vendorConfidence > 0 {
+                    LabeledContent("Độ tin cậy tiệm",
+                                   value: "\(Int((receipt.vendorConfidence * 100).rounded()))%")
+                }
+                if receipt.dateConfidence > 0 {
+                    LabeledContent("Độ tin cậy ngày",
+                                   value: "\(Int((receipt.dateConfidence * 100).rounded()))%")
+                }
                 if let last4 = receipt.cardLast4 {
                     LabeledContent("Thẻ", value: "\(receipt.cardBrand ?? "Thẻ") •• \(last4)")
                 }
@@ -698,6 +810,19 @@ struct ReceiptDetailView: View {
                     LabeledContent("Mã chống trùng") {
                         Text(key).font(.caption).foregroundStyle(.secondary)
                     }
+                }
+                // P2-0 (mục nối duplicateOf): quan hệ trùng
+                // hiện rõ ở Chi Tiết, hai chiều.
+                if let original = duplicateOriginal {
+                    LabeledContent("Bản trùng của tờ") {
+                        Text("\(original.vendor.isEmpty ? "(Chưa rõ tiệm)" : original.vendor) — \(original.date.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.caption)
+                    }
+                    LabeledContent("Tính vào tổng", value: "Không — đã loại khỏi tổng")
+                }
+                if !duplicateCopies.isEmpty {
+                    LabeledContent("Bản trùng của tờ này",
+                                   value: "\(duplicateCopies.count) bản — đã loại khỏi tổng")
                 }
                 LabeledContent("Bản bộ đọc của app") {
                     Text(currentParserVersion).font(.caption).foregroundStyle(.secondary)
@@ -854,25 +979,52 @@ struct ReceiptDetailView: View {
 
             Section {
                 if receipt.status == .needsReview {
-                    Button {
-                        // N2-FIX: duyệt chỉ thành công khi LƯU
-                        // được; hỏng thì trả trạng thái cũ và báo
-                        // thật — bản cũ nuốt lỗi mà vẫn hiện
-                        // "Đã duyệt ✓" theo trạng thái trong RAM.
-                        let oldStatus = receipt.status
-                        receipt.status = .reviewed
-                        if saveContextOrFalse(modelContext) {
-                            saveError = nil
-                        } else {
-                            receipt.status = oldStatus
-                            saveError = "Duyệt chưa lưu được — trên máy tờ này vẫn đang chờ duyệt. Anh thử lại giúp."
+                    // P2-0/C-1 + §2.2 gate: cổng duyệt theo
+                    // LOẠI cờ. Cờ thiếu trường / chưa phân
+                    // loại / thiếu ảnh / chưa rõ tiệm -> CHẶN
+                    // duyệt và nói rõ còn thiếu gì. Chỉ cờ
+                    // LỆCH SỐ HỌC (V1/V2) mới duyệt được kèm
+                    // xác nhận tường minh của anh (WP6-SPEC
+                    // §5: dấu confirmedWithFlag). Không cờ ->
+                    // duyệt thẳng như cũ.
+                    let blockingFlags = flags.filter {
+                        !isArithmeticDiscrepancyFlag($0)
+                    }
+                    let confirmableFlags = flags.filter {
+                        isArithmeticDiscrepancyFlag($0)
+                    }
+                    if !blockingFlags.isEmpty {
+                        Button {} label: {
+                            Label("Duyệt — đã kiểm, cho vào sổ chính thức", systemImage: "checkmark.circle.fill")
                         }
-                    } label: {
-                        Label("Duyệt — đã kiểm, cho vào sổ chính thức", systemImage: "checkmark.circle.fill")
+                        .disabled(true)
+                        Text("Chưa duyệt được — còn thiếu: \(blockingFlags.joined(separator: "; ")). Anh xử lý các điểm này trước giúp.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if !confirmableFlags.isEmpty {
+                        Button { showConfirmWithFlag = true } label: {
+                            Label("Duyệt kèm cờ — anh xác nhận đã kiểm số lệch", systemImage: "checkmark.circle.fill")
+                        }
+                        Text("Tờ còn lệch số học (\(confirmableFlags.joined(separator: "; "))) — bấm duyệt sẽ hỏi anh xác nhận đã kiểm với giấy.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Button { approveReceipt(confirmedWithFlag: false) } label: {
+                            Label("Duyệt — đã kiểm, cho vào sổ chính thức", systemImage: "checkmark.circle.fill")
+                        }
                     }
                 } else {
                     Label("Đã duyệt ✓", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
+                    // L-1 (WP6-SPEC §5): dấu xác nhận kèm cờ
+                    // hiện rõ sau khi duyệt — các cờ VẪN tính
+                    // trực tiếp từ số đã lưu ở mục "Cần kiểm
+                    // lại" phía trên, dấu này không nuốt cờ.
+                    if receipt.confirmedWithFlag {
+                        Text("Đã xác nhận kèm cờ: tờ còn cờ lệch số học, anh đã tự kiểm với giấy và duyệt.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Button(role: .destructive) { showDeleteConfirm = true } label: {
                     Label("Xoá hoá đơn này", systemImage: "trash")
@@ -882,6 +1034,18 @@ struct ReceiptDetailView: View {
         .dsListBackground()
         .navigationTitle("Chi Tiết Hoá Đơn")
         .navigationBarTitleDisplayMode(.inline)
+        // P2-0/C-1 (WP6-SPEC §5): xác nhận tường minh trước
+        // khi duyệt một tờ còn cờ lệch số học.
+        .confirmationDialog("Tờ còn lệch số học — anh đã kiểm với giấy chưa?",
+                            isPresented: $showConfirmWithFlag,
+                            titleVisibility: .visible) {
+            Button("Đã kiểm với giấy — duyệt kèm cờ") {
+                approveReceipt(confirmedWithFlag: true)
+            }
+            Button("Chưa — để kiểm lại", role: .cancel) {}
+        } message: {
+            Text("Số trên tờ chưa khép sổ (mục Cần kiểm lại). Duyệt kèm cờ ghi dấu anh đã tự xác nhận; các cờ vẫn hiện nguyên để accountant thấy.")
+        }
         .confirmationDialog("Xoá hẳn hoá đơn này và ảnh gốc?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Xoá", role: .destructive) {
                 // C9-FIX (FULL-REVIEW): bản cũ xoá FILE TRƯỚC,
@@ -1133,6 +1297,30 @@ struct ReceiptDetailView: View {
         }
     }
 
+    /// P2-0/C-1: duyệt tờ — đường thẳng (không cờ) hoặc kèm
+    /// cờ sau xác nhận tường minh. N2-FIX giữ nguyên: chỉ
+    /// thành công khi LƯU được; hỏng thì trả mọi trường về
+    /// cũ và báo thật.
+    private func approveReceipt(confirmedWithFlag: Bool) {
+        let oldStatus = receipt.status
+        let oldConfirmed = receipt.confirmedWithFlag
+        let oldReviewedAt = receipt.reviewedAt
+        receipt.status = .reviewed
+        if confirmedWithFlag {
+            receipt.confirmedWithFlag = true
+        }
+        // P2-0 mục 16 (F4): đóng dấu thời điểm duyệt.
+        receipt.reviewedAt = Date()
+        if saveContextOrFalse(modelContext) {
+            saveError = nil
+        } else {
+            receipt.status = oldStatus
+            receipt.confirmedWithFlag = oldConfirmed
+            receipt.reviewedAt = oldReviewedAt
+            saveError = "Duyệt chưa lưu được — trên máy tờ này vẫn đang chờ duyệt. Anh thử lại giúp."
+        }
+    }
+
     private func reparseReceipt() {
         // L-2026-11-13-18: CHỐT các sửa tay đang chờ trong màn này
         // (loại/mục/mục đích anh vừa gõ mà chưa bấm "Lưu thay đổi")
@@ -1143,6 +1331,11 @@ struct ReceiptDetailView: View {
         // trước = các sửa đó thành "quyết định của anh" và được
         // luật giữ nguyên của bước áp bảo vệ như thường.
         let kindChanged = selectedKind != receipt.classification
+        // P2-0 mục 16 (F5): chụp giá trị TRƯỚC khi chốt sửa
+        // tay, để biết trường nào là anh vừa sửa (ghi vào
+        // userEnteredFieldNames ở cuối hàm).
+        let categoryBeforeCommit = receipt.category
+        let purposeBeforeCommit = receipt.businessPurpose
         receipt.classification = selectedKind
         if kindChanged {
             receipt.classificationReason = "Anh đổi tay trong chi tiết hoá đơn"
@@ -1259,6 +1452,29 @@ struct ReceiptDetailView: View {
             || (receipt.classification == .business
                 && receipt.businessPurpose.trimmingCharacters(in: .whitespaces).isEmpty)
         receipt.status = stillNeedsReview ? .needsReview : .reviewed
+        // P2-0 mục 15 (§2.2(5)): đóng dấu dòng Schedule C
+        // theo mục CUỐI CÙNG sau gợi ý — trước gói này không
+        // đường nào từng ghi trường này.
+        receipt.scheduleCLine = Categories.scheduleCLine(
+            forCategory: receipt.category)
+        // P2-0 mục 16 (F4/F5): duyệt qua Đọc lại cũng đóng
+        // dấu thời điểm; các sửa tay vừa chốt ghi tên trường.
+        if receipt.status == .reviewed {
+            receipt.reviewedAt = Date()
+        }
+        var enteredNames = receipt.userEnteredFieldNames
+        if kindChanged && !enteredNames.contains("classification") {
+            enteredNames.append("classification")
+        }
+        if selectedCategory != categoryBeforeCommit
+            && !enteredNames.contains("category") {
+            enteredNames.append("category")
+        }
+        if purposeText != purposeBeforeCommit
+            && !enteredNames.contains("businessPurpose") {
+            enteredNames.append("businessPurpose")
+        }
+        receipt.userEnteredFieldNames = enteredNames
         receipt.parserVersion = currentParserVersion
 
         // N2-FIX: chỉ đồng bộ state + hiện ghi chú "đã đọc lại"
@@ -1279,12 +1495,46 @@ struct ReceiptDetailView: View {
 
     private func saveChanges() {
         let kindChanged = selectedKind != receipt.classification
+        let categoryBefore = receipt.category
+        let purposeBefore = receipt.businessPurpose
         receipt.classification = selectedKind
         if kindChanged {
             receipt.classificationReason = "Anh đổi tay trong chi tiết hoá đơn"
         }
         receipt.category = selectedCategory
+        // P2-0/C-7: đổi loại mà mục đang chọn KHÔNG thuộc
+        // danh sách của loại mới -> chỉnh về mục mặc định
+        // của loại mới (đúng mẫu bước Đọc lại) thay vì lưu
+        // một mục không thuộc loại.
+        if !Categories.list(for: receipt.classification)
+            .contains(receipt.category) {
+            receipt.category = Categories.defaultValue(
+                for: receipt.classification)
+            selectedCategory = receipt.category
+        }
         receipt.businessPurpose = purposeText
+        // P2-0 mục 15 (§2.2(5)): đóng dấu dòng Schedule C.
+        receipt.scheduleCLine = Categories.scheduleCLine(
+            forCategory: receipt.category)
+        // P2-0 mục 16 (F5): ghi tên các trường anh vừa sửa
+        // tay (hợp nhất với tên đã ghi trước đó).
+        var enteredNames = receipt.userEnteredFieldNames
+        if kindChanged && !enteredNames.contains("classification") {
+            enteredNames.append("classification")
+        }
+        if receipt.category != categoryBefore
+            && !enteredNames.contains("category") {
+            enteredNames.append("category")
+        }
+        if purposeText != purposeBefore
+            && !enteredNames.contains("businessPurpose") {
+            enteredNames.append("businessPurpose")
+        }
+        receipt.userEnteredFieldNames = enteredNames
+        // P2-0/C-7: trạng thái được SUY LẠI bằng bộ cờ trên
+        // số đã sửa — trước gói này tờ .reviewed sửa thành
+        // trạng thái bị cấm vẫn giữ .reviewed.
+        refreshReceiptStatusFromFlags(receipt)
         // N2-FIX: "Đã lưu ✓" chỉ khi lưu được thật; hỏng thì
         // báo đỏ và giữ nguyên thay đổi trong bộ nhớ để anh
         // bấm Lưu lại là ghi tiếp, không phải nhập lại.
@@ -1316,6 +1566,10 @@ struct ReviewView: View {
     @State private var reasonText: String = ""
     @State private var selectedCategory: String
     @State private var purposeText: String = ""
+    /// P2-0/C-9: ô nhập TIP — chỉ hiện khi tờ có dấu hiệu
+    /// nhà hàng (TIP / GRATUITY in trên giấy). TỔNG giữ
+    /// nguyên là tổng IN; tip lưu riêng, số đã trả suy ra.
+    @State private var tipText: String = ""
     @State private var suggestionApplied = false
     @State private var showDuplicateAlert = false
     @State private var duplicateCount = 0
@@ -1543,6 +1797,20 @@ struct ReviewView: View {
                     }
                     .font(.body.weight(.semibold))
                     .foregroundStyle(DS.brand)
+                    // P2-0/C-9: ô TIP chỉ hiện với tờ nhà
+                    // hàng (giấy có TIP / GRATUITY / SUGGESTED
+                    // TIP) — trước gói này app không có đường
+                    // nào ghi tip, tổng đã trả luôn thiếu tip.
+                    if showsTipField {
+                        HStack {
+                            Text("Tip (anh ghi thêm)")
+                            Spacer()
+                            moneyField($tipText)
+                        }
+                        Text("Ô TỔNG giữ nguyên tổng IN trên giấy; số đã trả của tờ = tổng in + tip.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if draft.result.totalConfidence > 0 {
                         Text("Độ tin cậy của tổng tiền: \(Int(draft.result.totalConfidence * 100))%")
                             .font(.caption)
@@ -1665,6 +1933,19 @@ struct ReviewView: View {
                         // chụp nháp ngay sau đây.
                         finished = true
                         editSaveTask?.cancel()
+                        // P2-0/B-7: huỷ TƯỜNG MINH thì xoá
+                        // luôn file bằng chứng của bản nháp
+                        // này (ảnh chính + file gốc kèm + hồ
+                        // sơ chẩn đoán) — trước gói này chúng
+                        // thành file mồ côi vĩnh viễn trong
+                        // thư mục bằng chứng.
+                        ImageStore.delete(fileName: draft.imageFileName)
+                        ImageStore.delete(fileName: DiagnosticsStore.fileName(
+                            forImageFileName: draft.imageFileName))
+                        for name in draft.originalFileNames
+                        where name != draft.imageFileName {
+                            ImageStore.delete(fileName: name)
+                        }
                         onDone()
                     }
                         .frame(maxWidth: .infinity)
@@ -1701,7 +1982,11 @@ struct ReviewView: View {
                 Button("Vẫn lưu thêm") { save(ignoreDuplicate: true) }
                 Button("Huỷ, không lưu", role: .cancel) {}
             } message: {
-                Text("Mã chống trùng của tờ này khớp \(duplicateCount) hoá đơn đã lưu (cùng mã TC#). Anh kiểm tra kẻo tính trùng 2 lần.")
+                // P2-0/C-6: chữ cảnh báo nói đúng LOẠI khoá
+                // thực tế đã khớp (TC# / khoá yếu) — bản cũ
+                // luôn nói "cùng mã TC#" kể cả khi khớp bằng
+                // khoá yếu suy từ tiệm + ngày + tổng.
+                Text("Mã chống trùng của tờ này khớp \(duplicateCount) hoá đơn đã lưu (\(dedupeKeyKindText(currentDedupeKey()))). Anh kiểm tra kẻo tính trùng 2 lần.")
             }
             .alert("Lưu không thành công", isPresented: $saveFailed) {
                 Button("Đã hiểu", role: .cancel) {}
@@ -1786,8 +2071,47 @@ struct ReviewView: View {
         checkDuplicate()
     }
 
+    /// P2-0/C-9: tờ có dấu hiệu nhà hàng không — giấy in
+    /// TIP / GRATUITY / SUGGESTED TIP / TIP: thì hiện ô tip.
+    private var showsTipField: Bool {
+        let text = draft.result.rawText.uppercased()
+        return text.contains("GRATUITY")
+            || text.contains("SUGGESTED TIP")
+            || text.contains("TIP:")
+            || text.contains(" TIP ")
+    }
+
+    /// P2-0/C-6: khoá chống trùng HIỆU LỰC của tờ đang kiểm:
+    /// khoá máy đọc (TC#) nếu có; chưa có thì khoá yếu
+    /// GEN|tiệm|ngày|tổng dựng từ ĐÚNG các ô anh đang sửa
+    /// (luật khoá yếu của bộ đọc cũ) — chỉ khi có cả tiệm và
+    /// tổng. Kiểm trùng và lưu dùng chung khoá này.
+    private func currentDedupeKey() -> String? {
+        if let key = draft.result.dedupeKey { return key }
+        let vendor = vendorText.trimmingCharacters(in: .whitespaces)
+        guard !vendor.isEmpty,
+              let total = dollarsTextToCents(totalText) else { return nil }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return "GEN|\(vendor)|\(formatter.string(from: dateValue))|\(total)"
+    }
+
+    /// P2-0/C-6: mô tả loại khoá cho chữ cảnh báo trùng.
+    private func dedupeKeyKindText(_ key: String?) -> String {
+        guard let key else { return "cùng mã chống trùng" }
+        if key.hasPrefix("GEN|") {
+            return "khoá yếu: cùng tiệm + ngày + tổng tiền — có thể là hai lần mua giống hệt"
+        }
+        if key.hasPrefix("SAMS-TC-") || key.hasPrefix("TC-") {
+            return "cùng mã TC#"
+        }
+        return "cùng mã chống trùng của tiệm"
+    }
+
     private func checkDuplicate() {
-        guard let key = draft.result.dedupeKey else { duplicateCount = 0; return }
+        guard let key = currentDedupeKey() else { duplicateCount = 0; return }
         // Lọc trong bộ nhớ thay cho #Predicate so sánh String? — loại bỏ điểm
         // rủi ro biên dịch với macro predicate trên cột optional (đã xử lý khi duyệt).
         // N2-FIX: bản cũ `(try? fetch) ?? []` biến lỗi đọc sổ
@@ -1826,7 +2150,22 @@ struct ReviewView: View {
         receipt.classificationReason = reasonText
         receipt.category = selectedCategory
         receipt.businessPurpose = purposeText
-        receipt.dedupeKey = draft.result.dedupeKey
+        // P2-0/C-6: lưu khoá HIỆU LỰC (TC# của bộ đọc, hoặc
+        // khoá yếu GEN| dựng từ các ô đã sửa khi bộ đọc
+        // không có khoá) — trước gói này dedupeKey trên
+        // đường v4 luôn nil.
+        let effectiveKey = currentDedupeKey()
+        receipt.dedupeKey = effectiveKey
+        // P2-0/C-9: tip anh ghi -> lưu riêng; totalPrintedCents
+        // chốt = tổng IN (ô TỔNG hiện tại) để amountPaidCents
+        // = tổng in + tip đúng nghĩa.
+        if let tip = dollarsTextToCents(tipText), tip > 0 {
+            receipt.tipAmountCents = tip
+            receipt.totalPrintedCents = receipt.totalCents
+        }
+        // P2-0 mục 15 (§2.2(5)): đóng dấu dòng Schedule C.
+        receipt.scheduleCLine = Categories.scheduleCLine(
+            forCategory: selectedCategory)
         receipt.vendorConfidence = draft.result.vendorConfidence
         receipt.dateConfidence = draft.result.dateConfidence
         receipt.totalConfidence = draft.result.totalConfidence
@@ -1841,7 +2180,7 @@ struct ReviewView: View {
         // Mã giao dịch tách khỏi khoá chống trùng: dedupeKey dạng "SAMS-TC-<số>"
         // hoặc "TC-<số>" thì phần số chính là transactionRef; khoá yếu dạng
         // "GEN|..." không chứa mã giao dịch -> để nil, không bịa.
-        if let key = draft.result.dedupeKey {
+        if let key = effectiveKey {
             if key.hasPrefix("SAMS-TC-") {
                 receipt.transactionRef = String(key.dropFirst("SAMS-TC-".count))
             } else if key.hasPrefix("TC-") {
@@ -1878,8 +2217,70 @@ struct ReviewView: View {
             // (bằng đúng số anh đã duyệt theo điều kiện ở trên).
             receipt.taxCents = draft.result.taxTotalCents
         }
-        // Kỷ luật Hộp Chờ: còn cảnh báo / chưa rõ loại / business thiếu mục đích
-        // -> ở trạng thái chờ duyệt, chưa phải chứng từ chính thức.
+        // P2-0 (mục nối duplicateOf): anh chọn "Vẫn lưu
+        // thêm" một tờ trùng -> tờ mới thành BẢN TRÙNG có
+        // danh tính: trỏ về bản gốc SỚM NHẤT cùng khoá và
+        // bị loại khỏi tổng. Đọc sổ lỗi ở bước này thì gắn
+        // cờ ép chờ duyệt (như duplicateCheckFailed) — tờ
+        // vẫn lưu nhưng không giả vờ đã nối xong.
+        var duplicateLinkFailed = false
+        if ignoreDuplicate && duplicateCount > 0, let effectiveKey {
+            do {
+                let all = try modelContext.fetch(FetchDescriptor<Receipt>())
+                let original = all
+                    .filter { $0.dedupeKey == effectiveKey && !$0.stableID.isEmpty }
+                    .sorted { $0.createdAt < $1.createdAt }
+                    .first
+                if let original {
+                    receipt.duplicateOfStableID = original.stableID
+                    receipt.excludedFromTotals = true
+                }
+            } catch {
+                duplicateLinkFailed = true
+            }
+        }
+        // P2-0 mục 16 (F5): tên các trường ANH SỬA TAY so
+        // với kết quả máy đọc (phân biệt số máy đọc / số anh
+        // nhập cho accountant truy vết).
+        var enteredNames: [String] = []
+        if vendorText.trimmingCharacters(in: .whitespaces)
+            != (draft.result.vendor ?? "") {
+            enteredNames.append("vendor")
+        }
+        if dateValue != dateDefault { enteredNames.append("date") }
+        if receipt.subtotalCents != draft.result.subtotalCents {
+            enteredNames.append("subtotal")
+        }
+        if receipt.taxCents
+            != (draft.result.taxes.isEmpty ? nil : draft.result.taxTotalCents) {
+            enteredNames.append("tax")
+        }
+        if receipt.totalCents != draft.result.totalCents {
+            enteredNames.append("total")
+        }
+        let kindSuggestion = suggestClassification(
+            cardLast4: draft.result.cardLast4,
+            cardBrand: draft.result.cardBrand,
+            tails: cardTails)
+        if selectedKind != kindSuggestion.0 {
+            enteredNames.append("classification")
+        }
+        if selectedCategory != Categories.defaultValue(for: selectedKind) {
+            enteredNames.append("category")
+        }
+        if selectedKind == .business
+            && !purposeText.trimmingCharacters(in: .whitespaces).isEmpty {
+            enteredNames.append("businessPurpose")
+        }
+        receipt.userEnteredFieldNames = enteredNames
+        // Kỷ luật Hộp Chờ: còn cờ trên SỐ ĐÃ SỬA -> chờ duyệt.
+        // P2-0/C-3: điều kiện cũ "!draft.result.warnings
+        // .isEmpty" đo cảnh báo của BẢN ĐỌC GỐC — anh sửa
+        // xong hết ở Kiểm Lại mà tờ vẫn bị giữ oan ở Hộp
+        // Chờ. Nay trạng thái suy từ BỘ CỜ chạy trên đúng
+        // các số anh vừa chốt (cùng bộ cờ của tờ đã lưu:
+        // lệch món/tổng, thiếu tổng, thiếu mục đích,
+        // chưa phân loại, thiếu ảnh gốc, chưa rõ tiệm).
         // V3 (Pha 4): cộng hai điều kiện của đường đọc mới — trọng
         // tài F5 đòi kiểm lại, hoặc ghi chẩn đoán thất bại (hợp
         // đồng fail-closed: không hồ sơ = không "sạch").
@@ -1887,15 +2288,34 @@ struct ReviewView: View {
         // và anh không sửa) — ngày đó không phải bằng chứng;
         // tờ phải chờ duyệt để anh chốt lại ngày đúng sau.
         let dateIsUntouchedDefault = dateWasMissing && dateValue == dateDefault
-        let stillNeedsReview = selectedKind == .unknown
-            || receipt.totalCents == nil
-            || !draft.result.warnings.isEmpty
+        let kindTag: ReceiptKindTag
+        switch selectedKind {
+        case .personal: kindTag = .personal
+        case .business: kindTag = .business
+        case .unknown: kindTag = .unknown
+        }
+        let editedFlags = ReceiptLogic.flags(for: ReceiptFlagInput(
+            subtotalCents: receipt.subtotalCents,
+            itemAmountCents: draft.result.items.map { $0.amountCents },
+            totalCents: receipt.totalCents,
+            taxCents: receipt.taxCents,
+            kind: kindTag,
+            businessPurpose: purposeText,
+            hasOriginalImage: ReceiptLogic.hasLoadableOriginal(
+                fileNames: [draft.imageFileName] + draft.originalFileNames,
+                isLoadable: { ImageStore.load(fileName: $0) != nil }),
+            vendor: vendorText.trimmingCharacters(in: .whitespaces)))
+        let stillNeedsReview = !editedFlags.isEmpty
             || (draft.reconcileReport?.requiresReview ?? false)
             || draft.diagnosticsWriteFailed
             || dateIsUntouchedDefault
             || duplicateCheckFailed
-            || (selectedKind == .business && purposeText.trimmingCharacters(in: .whitespaces).isEmpty)
+            || duplicateLinkFailed
         receipt.status = stillNeedsReview ? .needsReview : .reviewed
+        // P2-0 mục 16 (F4): đóng dấu thời điểm duyệt.
+        if receipt.status == .reviewed {
+            receipt.reviewedAt = Date()
+        }
 
         modelContext.insert(receipt)
         for (index, parsed) in draft.result.items.enumerated() {

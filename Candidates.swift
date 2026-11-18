@@ -203,6 +203,20 @@ enum CandidateFactory {
             return make("TENDER")
         }
         if squashed.contains("SUBTOTAL") { return make("SUBTOTAL") }
+        // P2-0/C-5 (dư): họ TIP — dòng tip ("TIP", "SUGGESTED
+        // TIP") không phải dòng món cũng không phải neo tiền;
+        // tầng món loại cứng họ này (excludedFamilies), tầng
+        // sinh giữ vai trò mặc định như NONE trước đây.
+        if squashed.hasPrefix("TIP") || squashed.contains("SUGGESTEDTIP") {
+            return make("TIP")
+        }
+        // P2-0/C-13: "TAXABLE …" (dòng ghi số tiền CHỊU thuế),
+        // "TAX EXEMPT" và "TAX ID" KHÔNG phải dòng thuế — bản
+        // cũ rơi vào họ TAX theo tiền tố và đầu độc bể thuế.
+        if squashed.hasPrefix("TAXABLE") || squashed.hasPrefix("TAXEXEMPT")
+            || squashed.hasPrefix("TAXID") {
+            return make("NONE")
+        }
         if squashed.hasPrefix("TAX") || squashed.hasPrefix("SALESTAX") {
             var rank: Int? = nil
             // Hạng = số đầu tiên sau tiền tố TAX đã bỏ khoảng trắng
@@ -641,31 +655,81 @@ enum CardCandidateFactory {
                 totals[tail] = s
             }
         }
-        let brand = extractBrand(lines: lines)
         if totals.isEmpty {
-            return (nil, brand, 0, false, ["card: không ứng viên"])
+            return (nil, extractBrand(lines: lines), 0, false,
+                    ["card: không ứng viên"])
         }
         let ranked = totals.sorted { $0.value.score > $1.value.score }
         let top = ranked[0]
         if ranked.count > 1 && ranked[1].value.score >= top.value.score {
-            return (nil, brand, 0, true,
+            return (nil, extractBrand(lines: lines), 0, true,
                     ["card: tranh chấp \(ranked[0].key)/\(ranked[1].key) cùng điểm \(top.value.score)"])
         }
         let conf = lines[top.value.bestLine].confidence
+        // P2-0/C-4: hãng lấy TỪ DÒNG CỦA ĐUÔI THẮNG trước —
+        // bản cũ lấy dòng hãng đầu tiên của cả tờ nên tờ hai
+        // thẻ ghi hãng của thẻ thua.
+        let brand = extractBrand(lines: lines,
+                                 winningLine: top.value.bestLine)
         return (top.key, brand, conf, false,
                 ["card: \(top.key) điểm \(top.value.score) từ \(top.value.lines.count) dòng"])
     }
 
-    /// Hãng thẻ: giữ nguyên luật của v3 (dòng đầu tiên chứa tên
-    /// hãng; kèm "Debit" nếu in cùng dòng) — tên hãng là trường
-    /// dữ liệu, không phải cổng đuôi thẻ.
-    private static func extractBrand(lines: [OCRLine]) -> String? {
+    /// Tên hãng (chưa kèm hậu tố Debit) trên MỘT dòng — nil khi
+    /// dòng không chứa tên hãng nào.
+    private static func brandName(onLine upper: String) -> String? {
+        for b in brandWords where upper.contains(b) {
+            var name = b == "MASTER CARD" ? "Mastercard" : b.capitalized
+            if b == "AMEX" || b == "AMERICAN EXPRESS" { name = "Amex" }
+            return name
+        }
+        return nil
+    }
+
+    /// P2-0/C-17: chữ DEBIT có nằm trong ±2 dòng quanh dòng
+    /// neo (dòng đuôi thắng) hoặc trên bất kỳ dòng họ TENDER
+    /// nào không — bằng chứng "thẻ ghi nợ" của giao dịch.
+    private static func debitNear(lines: [OCRLine], anchor: Int) -> Bool {
+        for j in lines.indices where abs(j - anchor) <= 2 {
+            if lines[j].text.uppercased().contains("DEBIT") { return true }
+        }
+        for line in lines
+        where CandidateFactory.labelFamily(of: line.text,
+                                           hasMoney: false).family == "TENDER" {
+            if line.text.uppercased().contains("DEBIT") { return true }
+        }
+        return false
+    }
+
+    /// Hãng thẻ: luật gốc của v3 (dòng đầu tiên chứa tên hãng;
+    /// kèm "Debit" nếu in cùng dòng), cộng hai sửa P2-0:
+    /// C-4 — có đuôi thắng thì ưu tiên hãng TRÊN DÒNG của
+    /// đuôi thắng, không có mới rơi về dòng hãng đầu tiên;
+    /// C-17 — dòng hãng thiếu DEBIT thì quét ±2 dòng quanh
+    /// dòng đuôi thắng + các dòng TEND, thấy DEBIT thì nối
+    /// hậu tố " Debit". Không có đuôi thắng (không ứng viên /
+    /// tranh chấp) giữ nguyên luật gốc.
+    private static func extractBrand(lines: [OCRLine],
+                                     winningLine: Int? = nil) -> String? {
+        if let w = winningLine, lines.indices.contains(w) {
+            let upper = lines[w].text.uppercased()
+            if var name = brandName(onLine: upper) {
+                if upper.contains("DEBIT")
+                    || debitNear(lines: lines, anchor: w) {
+                    name += " Debit"
+                }
+                return name
+            }
+        }
         for line in lines {
             let upper = line.text.uppercased()
-            for b in brandWords where upper.contains(b) {
-                var name = b == "MASTER CARD" ? "Mastercard" : b.capitalized
-                if b == "AMEX" || b == "AMERICAN EXPRESS" { name = "Amex" }
-                if upper.contains("DEBIT") { name += " Debit" }
+            if var name = brandName(onLine: upper) {
+                if upper.contains("DEBIT") {
+                    name += " Debit"
+                } else if let w = winningLine,
+                          debitNear(lines: lines, anchor: w) {
+                    name += " Debit"
+                }
                 return name
             }
         }
@@ -716,10 +780,23 @@ enum DateCandidateFactory {
         guard let month = month, let day = day, var year = year else { return nil }
         if year < 100 { year += 2000 }
         guard (1...12).contains(month), (1...31).contains(day) else { return nil }
+        // P2-0/C-14: giờ/phút ngoài miền (25:70) phải BỊ LOẠI —
+        // bản cũ để Calendar tự lăn sang ngày kế, sinh ngày
+        // không hề in trên giấy.
+        guard (0...23).contains(hour), (0...59).contains(minute)
+        else { return nil }
         var comps = DateComponents()
         comps.year = year; comps.month = month; comps.day = day
         comps.hour = hour; comps.minute = minute
-        return Calendar.current.date(from: comps)
+        guard let date = Calendar.current.date(from: comps) else { return nil }
+        // Đối chiếu vòng tròn: thành phần đọc ngược từ Date
+        // phải khớp đúng số đã xin (bắt ngày bất khả thi kiểu
+        // 31/02 mà Calendar lăn thầm sang tháng 3).
+        let back = Calendar.current.dateComponents(
+            [.year, .month, .day, .hour, .minute], from: date)
+        guard back.year == year, back.month == month, back.day == day,
+              back.hour == hour, back.minute == minute else { return nil }
+        return date
     }
 
     private static func ampmAdjusted(_ hour: Int, _ ampm: String?) -> Int {
@@ -739,7 +816,15 @@ enum DateCandidateFactory {
             distinctDays: Int) {
         var dtCands: [(index: Int, date: Date, conf: Double)] = []
         var dCands: [(index: Int, date: Date, conf: Double)] = []
+        // P2-0/C-5 (dư): mọi ngày in SAU dòng RETURN POLICY
+        // (hạn đổi trả in ở chân tờ) bị loại khỏi ứng viên —
+        // chúng không phải ngày mua.
+        let returnPolicyIndex = lines.firstIndex {
+            let s = $0.text.uppercased()
+            return s.contains("RETURN POLICY") || s.contains("RETURNPOLICY")
+        }
         for (i, line) in lines.enumerated() {
+            if let rp = returnPolicyIndex, i > rp { continue }
             let text = line.text
             var placed = false
             if let g = groups(dtNumRegex, text), g.count == 7,
@@ -766,10 +851,12 @@ enum DateCandidateFactory {
                                  year: Int(g[3] ?? ""))
             }
             if found == nil, let g = groups(dIsoRegex, text), g.count == 4 {
-                var comps = DateComponents()
-                comps.year = Int(g[1] ?? ""); comps.month = Int(g[2] ?? "")
-                comps.day = Int(g[3] ?? "")
-                found = Calendar.current.date(from: comps)
+                // P2-0/C-14: nhánh ISO đi qua CÙNG cửa kiểm
+                // của makeDate (miền + đối chiếu vòng tròn)
+                // thay vì dựng DateComponents trực tiếp.
+                found = makeDate(month: Int(g[2] ?? ""),
+                                 day: Int(g[3] ?? ""),
+                                 year: Int(g[1] ?? ""))
             }
             if found == nil, let g = groups(dMonRegex, text), g.count == 4,
                let mon = g[2].flatMap({ monthNames[$0.uppercased()] }) {
@@ -819,7 +906,11 @@ enum DateCandidateFactory {
                 best = (key, v.hour, v.minute, line.confidence)
             }
         }
-        if let b = best {
+        // P2-0/C-14: giờ ghép kề cũng phải trong miền — giờ
+        // bất khả thi (25:70) thì giữ ngày trơn thay vì lăn
+        // ngày như bản cũ.
+        if let b = best, (0...23).contains(b.hour),
+           (0...59).contains(b.minute) {
             var comps = Calendar.current.dateComponents(
                 [.year, .month, .day], from: base.date)
             comps.hour = b.hour

@@ -29,12 +29,19 @@ import Foundation
 // ReceiptViews) không đổi một chữ.
 
 /// 21680 -> "$216.80"
-func formatMoney(cents: Int) -> String {
+// P2-0 mục 17 (§2.2(7)): NumberFormatter dựng MỘT LẦN dùng
+// chung — bản cũ cấp phát mới ở MỌI lần gọi (đường hiển thị
+// gọi theo từng dòng hoá đơn). Cấu hình giữ nguyên hệt.
+private let sharedMoneyFormatter: NumberFormatter = {
     let formatter = NumberFormatter()
     formatter.numberStyle = .currency
     formatter.currencyCode = "USD"
     formatter.locale = Locale(identifier: "en_US")
-    return formatter.string(from: NSNumber(value: Double(cents) / 100.0)) ?? "$0.00"
+    return formatter
+}()
+
+func formatMoney(cents: Int) -> String {
+    return sharedMoneyFormatter.string(from: NSNumber(value: Double(cents) / 100.0)) ?? "$0.00"
 }
 
 func formatMoney(optionalCents cents: Int?) -> String {
@@ -53,6 +60,11 @@ let missingPurposeFlagText = "Thiếu mục đích business — sở thuế hay 
 /// Chữ cờ thiếu ảnh gốc (IMGFIX) — hằng số để test khoá đúng
 /// nguyên văn như missingPurposeFlagText.
 let missingOriginalImageFlagText = "Thiếu ảnh gốc — cần gắn lại để đủ bằng chứng"
+
+/// P2-0 mục 19 (§2.2 gate): tờ không rõ tiệm mà vẫn có thể
+/// thành .reviewed là lỗ hổng đóng cổng — chữ cờ dùng chung
+/// như hai hằng trên.
+let missingVendorFlagText = "Chưa rõ tiệm"
 
 // MARK: - Đầu vào thuần cho bộ sinh cờ
 
@@ -81,6 +93,11 @@ struct ReceiptFlagInput: Equatable {
     var kind: ReceiptKindTag
     var businessPurpose: String
     var hasOriginalImage: Bool
+    /// P2-0 mục 19 (§2.2 gate): tên tiệm của tờ. nil = nơi gọi
+    /// KHÔNG cung cấp (các điểm dựng cũ / harness) -> bộ cờ
+    /// không phán về tiệm; có giá trị mà rỗng hoặc toàn trắng
+    /// -> cờ missingVendorFlagText.
+    var vendor: String? = nil
 }
 
 // MARK: - Bộ logic thuần
@@ -125,6 +142,12 @@ enum ReceiptLogic {
         }
         if input.totalCents == nil {
             flags.append("Thiếu tổng tiền")
+        }
+        // P2-0 mục 19 (§2.2 gate): chỉ phán khi nơi gọi CÓ
+        // cung cấp tên tiệm (vendor != nil).
+        if let vendor = input.vendor,
+           vendor.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            flags.append(missingVendorFlagText)
         }
         if input.kind == .business && input.businessPurpose.trimmingCharacters(in: .whitespaces).isEmpty {
             flags.append(missingPurposeFlagText)

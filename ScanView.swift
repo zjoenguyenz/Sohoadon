@@ -548,6 +548,17 @@ struct ScanView: View {
                 if outcome.result.rawText
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .isEmpty {
+                    // P2-0/B-7: lượt đọc RỖNG thì xoá file đã
+                    // lưu của chính lượt này (ảnh chính + file
+                    // gốc kèm + hồ sơ chẩn đoán) — bản cũ để
+                    // chúng thành file mồ côi vĩnh viễn.
+                    ImageStore.delete(fileName: request.imageFileName)
+                    ImageStore.delete(fileName: DiagnosticsStore.fileName(
+                        forImageFileName: request.imageFileName))
+                    for name in originalFileNames
+                    where name != request.imageFileName {
+                        ImageStore.delete(fileName: name)
+                    }
                     statusText = nil
                     errorText = "Không đọc được chữ nào trong ảnh — anh chụp lại rõ hơn, đủ sáng giúp."
                     processNextImportedFile()
