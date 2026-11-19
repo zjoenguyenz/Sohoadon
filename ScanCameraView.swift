@@ -861,7 +861,7 @@ final class ReceiptCameraController: NSObject, ObservableObject,
         let devicePoint = CGPoint(x: cx, y: 1 - cy)
         let layerPoint = layer.layerPointConverted(
             fromCaptureDevicePoint: devicePoint)
-        let poi = layer.captureDevicePointOfInterestForPoint(layerPoint)
+        let poi = layer.captureDevicePointConverted(fromLayerPoint: layerPoint)
         setFocusPOI(poi)
     }
 
@@ -888,7 +888,7 @@ final class ReceiptCameraController: NSObject, ObservableObject,
     /// Chạm tay vào xem trước: điểm nét ưu tiên của anh.
     func handleTap(at point: CGPoint) {
         guard let layer = previewLayer, device != nil else { return }
-        let poi = layer.captureDevicePointOfInterestForPoint(point)
+        let poi = layer.captureDevicePointConverted(fromLayerPoint: point)
         userFocusOverrideUntil = Date().addingTimeInterval(2.5)
         lastFocusCenter = nil
         setFocusPOI(poi)
