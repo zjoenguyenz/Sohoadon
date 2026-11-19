@@ -788,7 +788,7 @@ enum HarnessUnitTests {
                             missingVendorFlagText]))
         check("GT18-tron-co-anh-khoa",
               ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
-                    for: flagInput(vendor: "", hasImage: false)))
+                    for: flagInput(hasImage: false, vendor: "")))
                 == .blockedByMissingImage(
                     flags: [missingVendorFlagText, missingOriginalImageFlagText]))
     }
