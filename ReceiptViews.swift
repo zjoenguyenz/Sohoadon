@@ -256,14 +256,17 @@ func refreshReceiptStatusFromFlags(_ receipt: Receipt) {
     }
 }
 
-/// P2-0/C-1: cờ LỆCH SỐ HỌC (V1/V2) — loại cờ DUY NHẤT anh
-/// được duyệt bất chấp sau khi tự xác nhận đã kiểm với giấy
-/// (WP6-SPEC §5, trường confirmedWithFlag). Mọi cờ khác
-/// (thiếu trường / chưa phân loại / thiếu ảnh gốc / chưa rõ
-/// tiệm) CHẶN nút duyệt.
+/// P2-0/C-1 (sửa bởi L-2026-11-18-32): cờ LỆCH SỐ HỌC
+/// (V1/V2). G1: thân phân lớp đã tách sang ReceiptLogic
+/// (thuần Foundation, harness kiểm bằng Swift thật); hàm này
+/// chỉ còn là tầng bọc mỏng giữ tên cũ cho tầng view. Hành vi
+/// CỔNG duyệt theo lớp cờ nay do ReceiptLogic.approvalGate
+/// quyết: từ L-32, cờ thiếu trường (thiếu tổng / chưa rõ
+/// tiệm / thiếu mục đích / chưa phân loại) KHÔNG còn chặn
+/// nút duyệt — đi đường duyệt-kèm-cờ như V1/V2; chỉ cờ thiếu
+/// ảnh gốc còn giữ khoá kèm đường gỡ tại nút.
 func isArithmeticDiscrepancyFlag(_ flag: String) -> Bool {
-    flag.hasPrefix("Tổng các món (")
-        || flag == "Subtotal + thuế khác tổng tiền"
+    ReceiptLogic.isArithmeticDiscrepancyFlag(flag)
 }
 
 // MARK: - Dòng hoá đơn trong danh sách
@@ -507,11 +510,20 @@ struct ReceiptDetailView: View {
     // P2-0 (mục nối duplicateOf): toàn sổ để hiển thị quan hệ
     // trùng của tờ này (bản gốc của nó / các bản trùng của nó).
     @Query private var allReceipts: [Receipt]
-    /// P2-0/C-1: hộp xác nhận "duyệt kèm cờ" (chỉ cờ V1/V2).
+    /// P2-0/C-1 (mở rộng bởi L-2026-11-18-32): hộp xác nhận
+    /// "duyệt kèm cờ" — nay phủ mọi lớp cờ trừ thiếu ảnh gốc;
+    /// pendingConfirmFlags chụp đúng bộ cờ lúc bấm để hộp nêu
+    /// rõ từng cờ anh đang xác nhận.
     @State private var showConfirmWithFlag = false
+    @State private var pendingConfirmFlags: [String] = []
     @State private var selectedKind: Classification
     @State private var selectedCategory: String
     @State private var purposeText: String
+    /// L-2026-11-18-32: tên tiệm sửa tay ngay trong Chi Tiết
+    /// — trước gói này Chi Tiết KHÔNG có ô sửa tiệm nào (mục
+    /// "Thông tin" chỉ hiện chữ), nên cờ "Chưa rõ tiệm" không
+    /// đường nào tự gỡ được trong màn này.
+    @State private var vendorText: String
     @State private var showDeleteConfirm = false
     @State private var savedNote = false
     /// N2-FIX: lỗi lưu gần nhất ở màn này (nil = không lỗi) —
@@ -539,6 +551,7 @@ struct ReceiptDetailView: View {
         _selectedKind = State(initialValue: receipt.classification)
         _selectedCategory = State(initialValue: receipt.category)
         _purposeText = State(initialValue: receipt.businessPurpose)
+        _vendorText = State(initialValue: receipt.vendor)
     }
 
     private var categoryOptions: [String] {
@@ -750,6 +763,23 @@ struct ReceiptDetailView: View {
                 }
             }
 
+            // S2: bản scan phẳng (sản phẩm phụ của lần chụp/quét —
+            // xem FlatScan) hiển thị để xem cho rõ chữ; ảnh gốc
+            // phía trên vẫn là bằng chứng của tờ, không thay thế.
+            if let flatImage = FlatScan.loadFlatImage(
+                forOriginal: receipt.imageFileName) {
+                Section("Bản scan phẳng") {
+                    Image(uiImage: flatImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 320)
+                        .frame(maxWidth: .infinity)
+                    Text("Bản này do app làm phẳng từ ảnh gốc khi chụp — để xem cho rõ chữ. Ảnh gốc phía trên vẫn là bằng chứng của tờ.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Thông tin") {
                 LabeledContent("Tiệm", value: receipt.vendor.isEmpty ? "—" : receipt.vendor)
                 // WP5 bước 3: bằng chứng liên hệ tiệm ĐÃ LƯU (model WP2) —
@@ -924,6 +954,18 @@ struct ReceiptDetailView: View {
                             BusinessPurposeField(text: $purposeText)
                             Button("Lưu mục đích") { saveChanges() }
                         }
+                        // L-2026-11-18-32: cờ "Chưa rõ tiệm" cũng
+                        // phải TỰ PHỤC VỤ như cờ mục đích — ô gõ
+                        // tên tiệm + nút lưu ngay dưới cảnh báo.
+                        // Trước gói này Chi Tiết không có ô sửa
+                        // tiệm nào, cờ này là án treo vĩnh viễn
+                        // (tờ Hobby Lobby của anh, bản #143).
+                        // Lưu xong bộ cờ tính lại trên bản ghi:
+                        // tên tiệm có chữ -> cờ tự tắt.
+                        if flag == missingVendorFlagText {
+                            TextField("Tên tiệm", text: $vendorText)
+                            Button("Lưu tên tiệm") { saveChanges() }
+                        }
                     }
                 }
             }
@@ -935,6 +977,13 @@ struct ReceiptDetailView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                // L-2026-11-18-32: ô sửa tên tiệm trong khối
+                // sửa của Chi Tiết (dùng chung state với ô tự
+                // phục vụ dưới cờ "Chưa rõ tiệm") — sửa được cả
+                // khi tên đọc SAI (không có cờ) chứ không chỉ
+                // khi thiếu tên. Lưu qua nút "Lưu thay đổi"
+                // chung của khối, như loại/mục/mục đích.
+                TextField("Tiệm", text: $vendorText)
                 Picker("Loại", selection: $selectedKind) {
                     Text("CÁ NHÂN").tag(Classification.personal)
                     Text("BUSINESS").tag(Classification.business)
@@ -979,39 +1028,40 @@ struct ReceiptDetailView: View {
 
             Section {
                 if receipt.status == .needsReview {
-                    // P2-0/C-1 + §2.2 gate: cổng duyệt theo
-                    // LOẠI cờ. Cờ thiếu trường / chưa phân
-                    // loại / thiếu ảnh / chưa rõ tiệm -> CHẶN
-                    // duyệt và nói rõ còn thiếu gì. Chỉ cờ
-                    // LỆCH SỐ HỌC (V1/V2) mới duyệt được kèm
-                    // xác nhận tường minh của anh (WP6-SPEC
-                    // §5: dấu confirmedWithFlag). Không cờ ->
-                    // duyệt thẳng như cũ.
-                    let blockingFlags = flags.filter {
-                        !isArithmeticDiscrepancyFlag($0)
-                    }
-                    let confirmableFlags = flags.filter {
-                        isArithmeticDiscrepancyFlag($0)
-                    }
-                    if !blockingFlags.isEmpty {
+                    // Cổng duyệt theo LỚP cờ — phán quyết thuần
+                    // ở ReceiptLogic.approvalGate (L-2026-11-18
+                    // -32, thay luật chặn của P2-0/C-1): không
+                    // cờ -> duyệt thẳng; còn cờ lệch số học /
+                    // thiếu trường -> duyệt kèm cờ qua hộp xác
+                    // nhận nêu rõ từng cờ (WP6-SPEC §5: dấu
+                    // confirmedWithFlag); CHỈ cờ thiếu ảnh gốc
+                    // còn giữ khoá — bằng chứng bắt buộc — và
+                    // nút phải nói rõ lý do + đường gỡ ngay tại
+                    // nút. Nguyên tắc anh chốt: chủ app không
+                    // bao giờ bị khoá duyệt với tờ đã tự kiểm.
+                    switch ReceiptLogic.approvalGate(flags: flags) {
+                    case .approveDirectly:
+                        Button { approveReceipt(confirmedWithFlag: false) } label: {
+                            Label("Duyệt — đã kiểm, cho vào sổ chính thức", systemImage: "checkmark.circle.fill")
+                        }
+                    case .approveWithFlagConfirmation(let confirmFlags):
+                        Button {
+                            pendingConfirmFlags = confirmFlags
+                            showConfirmWithFlag = true
+                        } label: {
+                            Label("Duyệt kèm cờ — anh xác nhận đã kiểm", systemImage: "checkmark.circle.fill")
+                        }
+                        Text("Tờ còn cờ: \(confirmFlags.joined(separator: "; ")). Bấm duyệt sẽ hỏi anh xác nhận đã tự kiểm với giấy; các cờ vẫn hiện nguyên để accountant thấy.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    case .blockedByMissingImage(let allFlags):
                         Button {} label: {
                             Label("Duyệt — đã kiểm, cho vào sổ chính thức", systemImage: "checkmark.circle.fill")
                         }
                         .disabled(true)
-                        Text("Chưa duyệt được — còn thiếu: \(blockingFlags.joined(separator: "; ")). Anh xử lý các điểm này trước giúp.")
+                        Text("Chưa duyệt được — tờ đang thiếu ảnh gốc, là bằng chứng bắt buộc phải có. Anh gắn lại ảnh ở mục \"Ảnh gốc\" phía trên (chọn từ thư viện ảnh / Files, hoặc chụp lại bản gốc) — gắn xong nút duyệt mở ngay. Cờ đang có: \(allFlags.joined(separator: "; ")).")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else if !confirmableFlags.isEmpty {
-                        Button { showConfirmWithFlag = true } label: {
-                            Label("Duyệt kèm cờ — anh xác nhận đã kiểm số lệch", systemImage: "checkmark.circle.fill")
-                        }
-                        Text("Tờ còn lệch số học (\(confirmableFlags.joined(separator: "; "))) — bấm duyệt sẽ hỏi anh xác nhận đã kiểm với giấy.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Button { approveReceipt(confirmedWithFlag: false) } label: {
-                            Label("Duyệt — đã kiểm, cho vào sổ chính thức", systemImage: "checkmark.circle.fill")
-                        }
                     }
                 } else {
                     Label("Đã duyệt ✓", systemImage: "checkmark.seal.fill")
@@ -1021,7 +1071,7 @@ struct ReceiptDetailView: View {
                     // trực tiếp từ số đã lưu ở mục "Cần kiểm
                     // lại" phía trên, dấu này không nuốt cờ.
                     if receipt.confirmedWithFlag {
-                        Text("Đã xác nhận kèm cờ: tờ còn cờ lệch số học, anh đã tự kiểm với giấy và duyệt.")
+                        Text("Đã xác nhận kèm cờ: tờ còn cờ chưa xử lý, anh đã tự kiểm với giấy và duyệt.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1034,9 +1084,11 @@ struct ReceiptDetailView: View {
         .dsListBackground()
         .navigationTitle("Chi Tiết Hoá Đơn")
         .navigationBarTitleDisplayMode(.inline)
-        // P2-0/C-1 (WP6-SPEC §5): xác nhận tường minh trước
-        // khi duyệt một tờ còn cờ lệch số học.
-        .confirmationDialog("Tờ còn lệch số học — anh đã kiểm với giấy chưa?",
+        // P2-0/C-1 (WP6-SPEC §5) mở rộng bởi L-2026-11-18-32:
+        // xác nhận tường minh trước khi duyệt một tờ còn cờ —
+        // hộp nêu rõ TỪNG cờ đang có (chụp ở pendingConfirmFlags
+        // lúc bấm nút), không chỉ riêng lớp lệch số học như cũ.
+        .confirmationDialog("Tờ còn cờ chưa xử lý — anh đã kiểm với giấy chưa?",
                             isPresented: $showConfirmWithFlag,
                             titleVisibility: .visible) {
             Button("Đã kiểm với giấy — duyệt kèm cờ") {
@@ -1044,7 +1096,7 @@ struct ReceiptDetailView: View {
             }
             Button("Chưa — để kiểm lại", role: .cancel) {}
         } message: {
-            Text("Số trên tờ chưa khép sổ (mục Cần kiểm lại). Duyệt kèm cờ ghi dấu anh đã tự xác nhận; các cờ vẫn hiện nguyên để accountant thấy.")
+            Text("Tờ còn các cờ: \(pendingConfirmFlags.joined(separator: "; ")). Duyệt kèm cờ ghi dấu anh đã tự xác nhận; các cờ vẫn hiện nguyên để accountant thấy.")
         }
         .confirmationDialog("Xoá hẳn hoá đơn này và ảnh gốc?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Xoá", role: .destructive) {
@@ -1069,6 +1121,16 @@ struct ReceiptDetailView: View {
                     for name in extraNames {
                         ImageStore.delete(fileName: name)
                     }
+                    // S2: bản scan phẳng đi kèm các ảnh gốc này
+                    // cũng là file của tờ — dọn cùng.
+                    FlatScan.deleteFlat(forOriginal: mainName)
+                    for name in extraNames {
+                        FlatScan.deleteFlat(forOriginal: name)
+                    }
+                    // P2-1: kích lượt gương — tờ vừa xoá khỏi
+                    // kho sẽ được đối chiếu manifest và chuyển
+                    // bản gương vào _deleted/ (không xoá cứng).
+                    MirrorSync.requestSync(using: modelContext)
                     dismiss()
                 } else {
                     modelContext.rollback()
@@ -1148,6 +1210,8 @@ struct ReceiptDetailView: View {
         // trông như đã gắn thành công.
         if saveContextOrFalse(modelContext) {
             reattachError = nil
+            // P2-1: bằng chứng vừa đổi — kích lượt gương.
+            MirrorSync.requestSync(using: modelContext)
         } else {
             reattachError = "Ảnh đã lưu vào máy nhưng ghi nhận vào hoá đơn không thành công — anh thử gắn lại giúp."
         }
@@ -1231,6 +1295,23 @@ struct ReceiptDetailView: View {
         // việc ghi nhận bản quét mới đã LƯU được thật.
         if saveContextOrFalse(modelContext) {
             rescanError = nil
+            // P2-1: bằng chứng vừa đổi — kích lượt gương.
+            MirrorSync.requestSync(using: modelContext)
+            // S2: bộ bằng chứng vừa đổi — sinh bản scan phẳng
+            // cho các trang quét mới ở nền (chỉ để hiển thị;
+            // trang nào không có góc tin cậy thì không có bản
+            // phẳng, màn Chi Tiết tự lùi về ảnh gốc).
+            let flatTargets = newNames
+            DispatchQueue.global(qos: .utility).async {
+                for name in flatTargets {
+                    guard let original = ImageStore.load(fileName: name),
+                          let cg = ReceiptReader.uprightCGImage(
+                            from: original),
+                          let flat = FlatScan.makeFlatImage(from: cg)
+                    else { continue }
+                    _ = FlatScan.saveFlatImage(flat, forOriginal: name)
+                }
+            }
         } else {
             rescanError = "Bản quét đã lưu vào máy nhưng ghi nhận vào hoá đơn không thành công — anh thử lại giúp."
         }
@@ -1313,6 +1394,8 @@ struct ReceiptDetailView: View {
         receipt.reviewedAt = Date()
         if saveContextOrFalse(modelContext) {
             saveError = nil
+            // P2-1: trạng thái duyệt vừa đổi — kích lượt gương.
+            MirrorSync.requestSync(using: modelContext)
         } else {
             receipt.status = oldStatus
             receipt.confirmedWithFlag = oldConfirmed
@@ -1336,12 +1419,22 @@ struct ReceiptDetailView: View {
         // userEnteredFieldNames ở cuối hàm).
         let categoryBeforeCommit = receipt.category
         let purposeBeforeCommit = receipt.businessPurpose
+        let vendorBeforeCommit = receipt.vendor
         receipt.classification = selectedKind
         if kindChanged {
             receipt.classificationReason = "Anh đổi tay trong chi tiết hoá đơn"
         }
         receipt.category = selectedCategory
         receipt.businessPurpose = purposeText
+        // L-2026-11-18-32: chốt cả tên tiệm anh vừa gõ (cùng
+        // luật L-2026-11-13-18 cho loại/mục/mục đích) — tên
+        // gõ tay là quyết định của anh, bước áp số đọc ở dưới
+        // không được ghi đè (xem vendorHandEntered).
+        receipt.vendor = vendorText.trimmingCharacters(
+            in: .whitespacesAndNewlines)
+        let vendorHandEntered = !receipt.vendor.isEmpty
+            && (receipt.userEnteredFieldNames.contains("vendor")
+                || receipt.vendor != vendorBeforeCommit)
         // V3 (Pha 4): Đọc lại đi qua ĐƯỜNG ĐỌC DUY NHẤT
         // (ReceiptReader, nguồn storedText — cùng F4+F5 như lần
         // quét mới, kèm hồ sơ chẩn đoán v2 cho lần đọc này);
@@ -1361,7 +1454,15 @@ struct ReceiptDetailView: View {
         let result = outcome.result
 
         // --- Trường máy đọc, ánh xạ như save() ---
-        receipt.vendor = result.vendor ?? ""
+        // L-2026-11-18-32: tên tiệm gõ tay (vendorHandEntered)
+        // thì GIỮ NGUYÊN — bản cũ ghi đè vô điều kiện bằng
+        // kết quả đọc, bộ đọc trượt (Hobby Lobby) là xoá mất
+        // tên anh vừa gõ về rỗng. Địa chỉ/điện thoại/mã cửa
+        // hàng vẫn áp theo máy đọc như save() (bằng chứng liên
+        // hệ đọc từ giấy, không suy từ tên gõ tay).
+        if !vendorHandEntered {
+            receipt.vendor = result.vendor ?? ""
+        }
         receipt.vendorAddress = result.vendorAddress ?? ""
         receipt.vendorPhone = result.vendorPhone
         receipt.storeNumber = result.storeNumber
@@ -1416,7 +1517,12 @@ struct ReceiptDetailView: View {
         if let key = result.dedupeKey {
             receipt.dedupeKey = key
         }
-        receipt.vendorConfidence = result.vendorConfidence
+        // L-2026-11-18-32: giữ tên gõ tay thì cũng giữ độ tin
+        // cậy đã lưu — ghi độ tin cậy của lần đọc trượt lên
+        // tên của anh là số vô nghĩa.
+        if !vendorHandEntered {
+            receipt.vendorConfidence = result.vendorConfidence
+        }
         receipt.dateConfidence = result.dateConfidence
         receipt.totalConfidence = result.totalConfidence
 
@@ -1445,10 +1551,25 @@ struct ReceiptDetailView: View {
         // trọng tài F5 đòi kiểm lại, hoặc ghi chẩn đoán thất bại
         // (ReadOutcome.requiresReview đã gồm cả hai) thì tờ ở lại
         // Kiểm Lại dù các số có vẻ đủ.
+        // L-2026-11-18-29: cả hai hạng tử suy từ cảnh báo đều
+        // qua hoà giải sổ thẻ (như ReviewView): đuôi khớp ĐÚNG
+        // thẻ đã đăng ký thì cờ nghi ngờ đuôi thẻ không còn là
+        // lý do giữ tờ. outcome.requiresReview chỉ được tính
+        // lại khi đọc đã khép (report.status == .ok — nơi
+        // requiresReview suy thuần từ warnings) và cảnh báo
+        // hiệu lực đã rỗng; ghi chẩn đoán thất bại luôn giữ tờ.
+        let effectiveWarnings = warningsClearingRegisteredCardFlags(
+            result.warnings,
+            cardLast4: result.cardLast4,
+            registeredTails: Set(cardTails.map { $0.last4 }))
+        let readRequiresReview = outcome.diagnosticsWriteFailed
+            || (outcome.report.requiresReview
+                && !(outcome.report.status == .ok
+                     && effectiveWarnings.isEmpty))
         let stillNeedsReview = receipt.classification == .unknown
             || receipt.totalCents == nil
-            || !result.warnings.isEmpty
-            || outcome.requiresReview
+            || !effectiveWarnings.isEmpty
+            || readRequiresReview
             || (receipt.classification == .business
                 && receipt.businessPurpose.trimmingCharacters(in: .whitespaces).isEmpty)
         receipt.status = stillNeedsReview ? .needsReview : .reviewed
@@ -1474,6 +1595,14 @@ struct ReceiptDetailView: View {
             && !enteredNames.contains("businessPurpose") {
             enteredNames.append("businessPurpose")
         }
+        // L-2026-11-18-32: so Ô GÕ với giá trị trước chốt
+        // (không so bản ghi sau áp số đọc — tên máy đọc đổi
+        // không phải tay anh sửa).
+        if vendorText.trimmingCharacters(in: .whitespacesAndNewlines)
+            != vendorBeforeCommit
+            && !enteredNames.contains("vendor") {
+            enteredNames.append("vendor")
+        }
         receipt.userEnteredFieldNames = enteredNames
         receipt.parserVersion = currentParserVersion
 
@@ -1481,11 +1610,14 @@ struct ReceiptDetailView: View {
         // khi hạ cánh đã LƯU được; bản cũ nuốt lỗi mà vẫn báo
         // thành công trong khi số trên máy vẫn là số cũ.
         if saveContextOrFalse(modelContext) {
+            // P2-1: số liệu vừa đọc lại — kích lượt gương.
+            MirrorSync.requestSync(using: modelContext)
             // Vẽ lại theo số mới: đồng bộ 3 state của khối Phân loại về đúng
             // giá trị vừa hạ cánh (kể cả khi gợi ý vừa đổi loại/mục).
             selectedKind = receipt.classification
             selectedCategory = receipt.category
             purposeText = receipt.businessPurpose
+            vendorText = receipt.vendor
             reparsedNote = true
             saveError = nil
         } else {
@@ -1497,6 +1629,7 @@ struct ReceiptDetailView: View {
         let kindChanged = selectedKind != receipt.classification
         let categoryBefore = receipt.category
         let purposeBefore = receipt.businessPurpose
+        let vendorBefore = receipt.vendor
         receipt.classification = selectedKind
         if kindChanged {
             receipt.classificationReason = "Anh đổi tay trong chi tiết hoá đơn"
@@ -1513,6 +1646,14 @@ struct ReceiptDetailView: View {
             selectedCategory = receipt.category
         }
         receipt.businessPurpose = purposeText
+        // L-2026-11-18-32: ghi tên tiệm anh gõ trong Chi Tiết
+        // (cắt trắng hai đầu như bộ cờ phán rỗng). refresh-
+        // ReceiptStatusFromFlags ở cuối hàm tính lại cờ trên
+        // bản ghi vừa ghi: tên tiệm có chữ -> cờ "Chưa rõ
+        // tiệm" tự tắt; đó là cờ duy nhất thì tờ tự chuyển
+        // .reviewed như cơ chế C-7 vẫn làm cho các lớp khác.
+        receipt.vendor = vendorText.trimmingCharacters(
+            in: .whitespacesAndNewlines)
         // P2-0 mục 15 (§2.2(5)): đóng dấu dòng Schedule C.
         receipt.scheduleCLine = Categories.scheduleCLine(
             forCategory: receipt.category)
@@ -1530,6 +1671,10 @@ struct ReceiptDetailView: View {
             && !enteredNames.contains("businessPurpose") {
             enteredNames.append("businessPurpose")
         }
+        if receipt.vendor != vendorBefore
+            && !enteredNames.contains("vendor") {
+            enteredNames.append("vendor")
+        }
         receipt.userEnteredFieldNames = enteredNames
         // P2-0/C-7: trạng thái được SUY LẠI bằng bộ cờ trên
         // số đã sửa — trước gói này tờ .reviewed sửa thành
@@ -1541,6 +1686,8 @@ struct ReceiptDetailView: View {
         if saveContextOrFalse(modelContext) {
             savedNote = true
             saveError = nil
+            // P2-1: thay đổi vừa lưu — kích lượt gương.
+            MirrorSync.requestSync(using: modelContext)
         } else {
             savedNote = false
             saveError = "Lưu thay đổi không thành công — số trên máy chưa đổi. Anh bấm Lưu lại giúp."
@@ -1704,7 +1851,10 @@ struct ReviewView: View {
                     .padding(.vertical, DS.spaceS)
                 }
                 .listRowBackground(Color.clear)
-                if let image = ImageStore.load(fileName: draft.imageFileName) {
+                // S2: ưu tiên bản scan phẳng khi có (đúng ảnh bộ
+                // đọc đã đọc); không có thì ảnh gốc như trước.
+                if let image = FlatScan.displayImage(
+                    forOriginal: draft.imageFileName) {
                     Section {
                         Image(uiImage: image)
                             .resizable()
@@ -1727,9 +1877,9 @@ struct ReviewView: View {
                     }
                 }
 
-                if !draft.result.warnings.isEmpty {
+                if !visibleWarnings.isEmpty {
                     Section("Anh kiểm tra giúp") {
-                        ForEach(draft.result.warnings, id: \.self) { warning in
+                        ForEach(visibleWarnings, id: \.self) { warning in
                             Label(warning, systemImage: "exclamationmark.triangle.fill")
                                 .font(.callout)
                                 .foregroundStyle(.orange)
@@ -1946,6 +2096,12 @@ struct ReviewView: View {
                         where name != draft.imageFileName {
                             ImageStore.delete(fileName: name)
                         }
+                        // S2: bản scan phẳng của bản nháp này
+                        // cũng dọn cùng.
+                        FlatScan.deleteFlat(forOriginal: draft.imageFileName)
+                        for name in draft.originalFileNames {
+                            FlatScan.deleteFlat(forOriginal: name)
+                        }
                         onDone()
                     }
                         .frame(maxWidth: .infinity)
@@ -2055,6 +2211,36 @@ struct ReviewView: View {
             reasonText: reasonText,
             suggestionApplied: suggestionApplied)
         PendingDraftStore.save(snapshot)
+    }
+
+    /// L-2026-11-18-29: cảnh báo HIỂN THỊ và dùng để chốt
+    /// trạng thái = cảnh báo của bộ đọc SAU hoà giải với sổ
+    /// thẻ: đuôi khớp ĐÚNG một thẻ đã đăng ký thì cờ nghi ngờ
+    /// đuôi thẻ bị gỡ (logic thuần ở ReceiptLogic — bộ đọc ở
+    /// tầng dưới không biết sổ thẻ). Cảnh báo gốc trong
+    /// draft.result KHÔNG bị sửa (hồ sơ chẩn đoán giữ nguyên).
+    private var visibleWarnings: [String] {
+        warningsClearingRegisteredCardFlags(
+            draft.result.warnings,
+            cardLast4: draft.result.cardLast4,
+            registeredTails: Set(cardTails.map { $0.last4 }))
+    }
+
+    /// L-2026-11-18-29: requiresReview của báo cáo trọng tài
+    /// (đọc "closed") được ReadPipeline suy từ warnings CHƯA
+    /// hoà giải sổ thẻ (report.requiresReview = !warnings
+    /// .isEmpty ở arbiterReport). Nếu sau hoà giải tờ không
+    /// còn cảnh báo nào thì lý do giữ tờ ở Kiểm Lại đã mất —
+    /// tính lại tại đây; các trạng thái khác (.ambiguous /
+    /// .noSolution / .tooComplex / .partial) giữ nguyên phán
+    /// quyết của pipeline.
+    private var reportRequiresReview: Bool {
+        guard let report = draft.reconcileReport,
+              report.requiresReview else { return false }
+        if report.status == .ok && visibleWarnings.isEmpty {
+            return false
+        }
+        return true
     }
 
     private func applySuggestionOnce() {
@@ -2306,7 +2492,7 @@ struct ReviewView: View {
                 isLoadable: { ImageStore.load(fileName: $0) != nil }),
             vendor: vendorText.trimmingCharacters(in: .whitespaces)))
         let stillNeedsReview = !editedFlags.isEmpty
-            || (draft.reconcileReport?.requiresReview ?? false)
+            || reportRequiresReview
             || draft.diagnosticsWriteFailed
             || dateIsUntouchedDefault
             || duplicateCheckFailed
@@ -2362,5 +2548,9 @@ struct ReviewView: View {
         finished = true
         editSaveTask?.cancel()
         onDone()
+        // P2-1: gương thư mục Files chạy nền sau mỗi lần lưu
+        // hoá đơn mới thành công (lớp phụ — không chặn luồng
+        // lưu, không ném lỗi về màn Kiểm Lại).
+        MirrorSync.requestSync(using: modelContext)
     }
 }

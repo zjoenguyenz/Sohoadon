@@ -37,6 +37,7 @@ enum HarnessUnitTests {
         runCanReparseTests(check)
         runHasLoadableOriginalTests(check)
         runFlagsTests(check)
+        runApprovalGateTests(check)
         runVariantRescueTests(check)
         runQualityGateTests(check)
         return lines
@@ -612,11 +613,13 @@ enum HarnessUnitTests {
         tax: Int? = 384,
         kind: ReceiptKindTag = .business,
         purpose: String = "Mua cho khách trong tiệm",
-        hasImage: Bool = true
+        hasImage: Bool = true,
+        vendor: String? = nil
     ) -> ReceiptFlagInput {
         ReceiptFlagInput(subtotalCents: subtotal, itemAmountCents: items,
                          totalCents: total, taxCents: tax, kind: kind,
-                         businessPurpose: purpose, hasOriginalImage: hasImage)
+                         businessPurpose: purpose, hasOriginalImage: hasImage,
+                         vendor: vendor)
     }
 
     private static func runFlagsTests(_ check: (String, Bool) -> Void) {
@@ -680,6 +683,114 @@ enum HarnessUnitTests {
                 == ["Tổng các món ($1.00) khác subtotal ($5.00)",
                     missingPurposeFlagText,
                     missingOriginalImageFlagText])
+        // P2-0 mục 19: nơi gọi CÓ cung cấp tiệm mà rỗng ->
+        // cờ "Chưa rõ tiệm"; toàn khoảng trắng cũng tính rỗng.
+        check("FL16-tiem-rong-co",
+              ReceiptLogic.flags(for: flagInput(vendor: ""))
+                == [missingVendorFlagText])
+        check("FL17-tiem-khoang-trang-co",
+              ReceiptLogic.flags(for: flagInput(vendor: "   "))
+                .contains(missingVendorFlagText))
+        // Có tên tiệm -> không cờ tiệm; không cung cấp
+        // (vendor nil, mặc định) -> bộ cờ không phán về tiệm.
+        check("FL18-co-tiem-khong-co",
+              ReceiptLogic.flags(for: flagInput(vendor: "Hobby Lobby")) == [])
+        check("FL19-khong-cung-cap-tiem-khong-phan",
+              ReceiptLogic.flags(for: flagInput()) == [])
+    }
+
+    // MARK: - E. Cổng duyệt theo lớp cờ (khoá L-2026-11-18-32)
+    //
+    // Cổng cũ (P2-0/C-1): mọi cờ ngoài V1/V2 đều CHẶN nút
+    // duyệt — tờ Hobby Lobby của anh chỉ có đúng một cờ
+    // "Chưa rõ tiệm" mà Chi Tiết lại không có ô sửa tiệm, nên
+    // bị khoá vĩnh viễn. Luật mới: chỉ cờ thiếu ảnh gốc (bằng
+    // chứng bắt buộc) còn giữ khoá; lệch số học + thiếu trường
+    // đi đường duyệt-kèm-cờ có xác nhận. Các ca dưới đây nạp
+    // cờ SINH THẬT từ ReceiptLogic.flags để khoá cả chuỗi cờ
+    // lẫn phán quyết cổng.
+
+    private static func runApprovalGateTests(_ check: (String, Bool) -> Void) {
+        // Phân lớp từng loại cờ.
+        check("GT01-phan-lop-lech-mon",
+              ReceiptLogic.flagClass("Tổng các món ($1.00) khác subtotal ($5.00)")
+                == .arithmeticDiscrepancy)
+        check("GT02-phan-lop-lech-tong",
+              ReceiptLogic.flagClass("Subtotal + thuế khác tổng tiền")
+                == .arithmeticDiscrepancy)
+        check("GT03-phan-lop-thieu-tong",
+              ReceiptLogic.flagClass("Thiếu tổng tiền") == .missingField)
+        check("GT04-phan-lop-tiem",
+              ReceiptLogic.flagClass(missingVendorFlagText) == .missingField)
+        check("GT05-phan-lop-muc-dich",
+              ReceiptLogic.flagClass(missingPurposeFlagText) == .missingField)
+        check("GT06-phan-lop-phan-loai",
+              ReceiptLogic.flagClass("Chưa phân loại Cá nhân / Business")
+                == .missingField)
+        check("GT07-phan-lop-anh-goc",
+              ReceiptLogic.flagClass(missingOriginalImageFlagText)
+                == .missingOriginalImage)
+        // Không cờ -> duyệt thẳng.
+        check("GT08-khong-co-duyet-thang",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(for: flagInput()))
+                == .approveDirectly)
+        // Ca của anh: CHỈ một cờ "Chưa rõ tiệm" -> duyệt kèm
+        // cờ được (cổng cũ: khoá cứng).
+        check("GT09-chi-co-tiem-duyet-kem-co",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(vendor: "")))
+                == .approveWithFlagConfirmation(flags: [missingVendorFlagText]))
+        // Điền tên tiệm -> cờ tự tắt -> duyệt thẳng (nguyên
+        // tắc (a): cờ thiếu trường tắt khi điền đúng trường).
+        check("GT10-dien-tiem-co-tat",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(vendor: "Hobby Lobby")))
+                == .approveDirectly)
+        // Lệch số học V1 / V2 -> duyệt kèm cờ (hành vi cũ giữ
+        // nguyên).
+        check("GT11-lech-mon-duyet-kem-co",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(items: [3896, 315])))
+                == .approveWithFlagConfirmation(
+                    flags: ["Tổng các món ($42.11) khác subtotal ($42.14)"]))
+        check("GT12-lech-tong-duyet-kem-co",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(total: 4601)))
+                == .approveWithFlagConfirmation(
+                    flags: ["Subtotal + thuế khác tổng tiền"]))
+        // Thiếu tổng / thiếu mục đích / chưa phân loại: trước
+        // đây khoá cứng, nay duyệt kèm cờ.
+        check("GT13-thieu-tong-duyet-kem-co",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(total: nil)))
+                == .approveWithFlagConfirmation(flags: ["Thiếu tổng tiền"]))
+        check("GT14-thieu-muc-dich-duyet-kem-co",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(purpose: "")))
+                == .approveWithFlagConfirmation(flags: [missingPurposeFlagText]))
+        check("GT15-chua-phan-loai-duyet-kem-co",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(kind: .unknown, purpose: "")))
+                == .approveWithFlagConfirmation(
+                    flags: ["Chưa phân loại Cá nhân / Business"]))
+        // Thiếu ảnh gốc: lớp DUY NHẤT còn khoá.
+        check("GT16-thieu-anh-khoa",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(hasImage: false)))
+                == .blockedByMissingImage(flags: [missingOriginalImageFlagText]))
+        // Trộn: lệch + thiếu trường (không ảnh) -> kèm cờ cả
+        // bộ; có thêm cờ ảnh -> khoá vì ảnh.
+        check("GT17-tron-khong-anh-kem-co",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(items: [3896, 315], vendor: "")))
+                == .approveWithFlagConfirmation(
+                    flags: ["Tổng các món ($42.11) khác subtotal ($42.14)",
+                            missingVendorFlagText]))
+        check("GT18-tron-co-anh-khoa",
+              ReceiptLogic.approvalGate(flags: ReceiptLogic.flags(
+                    for: flagInput(vendor: "", hasImage: false)))
+                == .blockedByMissingImage(
+                    flags: [missingVendorFlagText, missingOriginalImageFlagText]))
     }
 
     // MARK: - G4: cổng chất lượng — ngưỡng dữ liệu, phân loại,

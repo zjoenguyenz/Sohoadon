@@ -66,6 +66,50 @@ let missingOriginalImageFlagText = "Thiếu ảnh gốc — cần gắn lại đ
 /// như hai hằng trên.
 let missingVendorFlagText = "Chưa rõ tiệm"
 
+// MARK: - Cờ nghi ngờ đuôi thẻ ↔ sổ thẻ đã đăng ký (L-2026-11-18-29)
+//
+// Bộ đọc (Parser.validate, khối P3-FLAG-CARD) sinh cờ nghi ngờ
+// đuôi thẻ THUẦN theo độ tin cậy Vision của dòng thẻ + dấu hiệu
+// dòng bị gộp — tầng đọc không biết sổ thẻ đã đăng ký (sổ sống ở
+// tầng app/SwiftData). Hệ quả trên máy anh (bản #143): đuôi đọc
+// ĐÚNG 2586 nhưng mực in mờ -> confidence thấp -> cờ "độ tin cậy
+// THẤP" vẫn bật, dù suggestClassification tra sổ và xếp Business
+// chính xác — app vừa tin vừa nghi cùng một con số.
+//
+// Luật hoà giải ở tầng app (hai hàm thuần dưới đây, tầng view
+// truyền vào tập đuôi đã đăng ký): đuôi đọc được khớp ĐÚNG MỘT
+// đuôi đã đăng ký (bằng chuỗi tuyệt đối — cùng mức tin mà
+// suggestClassification vẫn dùng để phân loại) thì cờ nghi ngờ
+// đuôi thẻ bị gỡ: con số đã được chính hồ sơ của anh xác nhận,
+// nghi ngờ không còn căn cứ. Không khớp -> giữ nguyên mọi cờ.
+// TUYỆT ĐỐI không khớp mờ: đuôi đọc sai một số (2580, ca
+// L-R09 trên luồng đóng băng) không được tự thành 2586.
+
+/// Một cảnh báo có phải CỜ NGHI NGỜ ĐUÔI THẺ của
+/// Parser.validate không — ba dạng chữ validate sinh ở khối
+/// P3-FLAG-CARD (Parser.swift): dòng bị gộp với dòng tổng /
+/// độ tin cậy THẤP / chưa thật chắc. Mọi cảnh báo khác (tổng,
+/// tiệm, ngày, tranh chấp đuôi "Thẻ: có hai đuôi...") không
+/// khớp mẫu này.
+func isCardTailConfidenceWarning(_ warning: String) -> Bool {
+    guard warning.hasPrefix("Đuôi thẻ ") else { return false }
+    return warning.contains("độ tin cậy THẤP")
+        || warning.contains("nằm trên dòng bị gộp với dòng tổng")
+        || warning.contains("chưa thật chắc")
+}
+
+/// Gỡ cờ nghi ngờ đuôi thẻ khỏi danh sách cảnh báo KHI VÀ CHỈ
+/// KHI đuôi đọc được nằm trong tập đuôi đã đăng ký (khớp chuỗi
+/// tuyệt đối). Mọi trường hợp còn lại trả danh sách nguyên vẹn.
+func warningsClearingRegisteredCardFlags(_ warnings: [String],
+                                         cardLast4: String?,
+                                         registeredTails: Set<String>)
+    -> [String] {
+    guard let tail = cardLast4, !tail.isEmpty,
+          registeredTails.contains(tail) else { return warnings }
+    return warnings.filter { !isCardTailConfidenceWarning($0) }
+}
+
 // MARK: - Đầu vào thuần cho bộ sinh cờ
 
 /// Phân loại ở dạng thẻ thuần — ReceiptLogic không biết
@@ -164,5 +208,73 @@ enum ReceiptLogic {
             flags.append(missingOriginalImageFlagText)
         }
         return flags
+    }
+
+    // MARK: - Cổng duyệt theo lớp cờ (L-2026-11-18-32)
+
+    /// Lớp của một cờ "Cần kiểm lại" — quyết định hành vi cổng
+    /// duyệt ở Chi Tiết. Ba lớp:
+    /// - arithmeticDiscrepancy: lệch số học V1/V2 (Σ món khác
+    ///   subtotal; subtotal + thuế khác tổng).
+    /// - missingField: cờ THIẾU TRƯỜNG (thiếu tổng tiền, chưa
+    ///   rõ tiệm, thiếu mục đích business, chưa phân loại) —
+    ///   tự tắt khi anh điền đúng trường đó; chưa điền thì vẫn
+    ///   duyệt được kèm xác nhận (xem approvalGate).
+    /// - missingOriginalImage: thiếu ảnh gốc — bằng chứng bắt
+    ///   buộc, lớp DUY NHẤT còn giữ khoá (kèm đường gỡ tại nút).
+    enum ReceiptFlagClass: Equatable {
+        case arithmeticDiscrepancy
+        case missingField
+        case missingOriginalImage
+    }
+
+    static func flagClass(_ flag: String) -> ReceiptFlagClass {
+        if flag == missingOriginalImageFlagText {
+            return .missingOriginalImage
+        }
+        if isArithmeticDiscrepancyFlag(flag) {
+            return .arithmeticDiscrepancy
+        }
+        return .missingField
+    }
+
+    /// Cờ LỆCH SỐ HỌC (V1/V2) — thân thuần của hàm cùng tên ở
+    /// ReceiptViews.swift (tầng view chỉ còn là hàm bọc mỏng
+    /// theo kỷ luật G1). Chuỗi khoá nguyên văn như bản gốc.
+    static func isArithmeticDiscrepancyFlag(_ flag: String) -> Bool {
+        flag.hasPrefix("Tổng các món (")
+            || flag == "Subtotal + thuế khác tổng tiền"
+    }
+
+    /// Phán quyết cổng duyệt cho một bộ cờ.
+    enum ApprovalGateDecision: Equatable {
+        /// Không cờ — duyệt thẳng.
+        case approveDirectly
+        /// Còn cờ thuộc lớp lệch số học / thiếu trường — duyệt
+        /// được qua "Duyệt kèm cờ" với hộp xác nhận nêu rõ từng
+        /// cờ; việc duyệt ghi confirmedWithFlag.
+        case approveWithFlagConfirmation(flags: [String])
+        /// Còn cờ thiếu ảnh gốc — giữ khoá (bằng chứng bắt
+        /// buộc); nút phải hiện lý do + đường gỡ cụ thể.
+        case blockedByMissingImage(flags: [String])
+    }
+
+    /// L-2026-11-18-32 (anh báo trên bản #143, tờ Hobby
+    /// Lobby): cổng cũ (P2-0/C-1) coi MỌI cờ ngoài V1/V2 là
+    /// "chặn duyệt" — tờ chỉ có đúng một cờ "Chưa rõ tiệm" bị
+    /// khoá cứng vĩnh viễn, dù Chi Tiết còn không có ô sửa tên
+    /// tiệm để anh tự gỡ. Nguyên tắc anh chốt: chủ app không
+    /// bao giờ bị khoá duyệt với tờ mình đã tự kiểm. Nay:
+    /// thiếu ảnh gốc là lớp duy nhất còn khoá (bằng chứng bắt
+    /// buộc — và tờ luôn có đường gắn lại ngay trong Chi
+    /// Tiết); mọi lớp còn lại đi đường duyệt-kèm-cờ có xác
+    /// nhận tường minh. Bộ cờ tự nó KHÔNG đổi: cờ vẫn sinh và
+    /// hiện nguyên như trước để accountant thấy.
+    static func approvalGate(flags: [String]) -> ApprovalGateDecision {
+        if flags.isEmpty { return .approveDirectly }
+        if flags.contains(where: { flagClass($0) == .missingOriginalImage }) {
+            return .blockedByMissingImage(flags: flags)
+        }
+        return .approveWithFlagConfirmation(flags: flags)
     }
 }

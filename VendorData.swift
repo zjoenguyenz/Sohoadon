@@ -211,6 +211,7 @@ final class VendorStore {
             line.text.filter { $0.isASCII && $0.isNumber }
         }.joined()
         var kindsByKey: [String: Set<String>] = [:]
+        var strongHitKeys: Set<String> = []
         for entry in entries {
             for anchor in entry.anchors {
                 let ok: Bool
@@ -219,15 +220,23 @@ final class VendorStore {
                 case "phrase", "address": ok = joined.contains(VendorData.normalize(anchor.value))
                 default: ok = false
                 }
-                if ok { kindsByKey[entry.key, default: []].insert(anchor.kind) }
+                if ok {
+                    kindsByKey[entry.key, default: []].insert(anchor.kind)
+                    if anchor.weight == "strong" { strongHitKeys.insert(entry.key) }
+                }
             }
         }
         var out: [VendorEntry] = []
         for entry in entries {
             guard let kinds = kindsByKey[entry.key] else { continue }
-            let hasStrong = entry.anchors.contains {
-                kinds.contains($0.kind) && $0.weight == "strong"
-            }
+            // Neo "strong" chỉ tính khi CHÍNH neo đó khớp. Cách cũ
+            // xét theo LOẠI neo (kinds.contains(kind) + tồn tại neo
+            // strong cùng loại) làm neo yếu vay sức mạnh của neo
+            // mạnh cùng loại: ZIP 74133 (weak, loại "address") của
+            // Home Depot một mình cũng đủ kết luận — sai luật ở
+            // đầu hàm này + WP5-SPEC (ca V7), và ép tranh chấp oan
+            // cho đường cứu neo của tờ Hobby Lobby (L-2026-11-18-31).
+            let hasStrong = strongHitKeys.contains(entry.key)
             if hasStrong || kinds.count >= 2 {
                 out.append(entry)
             }

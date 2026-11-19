@@ -67,6 +67,11 @@ struct ScanView: View {
     /// vào CÙNG importQueue của đường Files (không có đường nạp thứ hai).
     @Binding var externalImportURLs: [URL]
     @State private var showCamera = false
+    // S1: cover chụp mặc định là camera tự dựng (ScanCameraView);
+    // khi máy không dùng được camera tự dựng (không có camera /
+    // bị từ chối quyền) anh chọn đường lùi này thì đổi sang máy
+    // quét hệ thống trong cùng một cover.
+    @State private var useSystemScanner = false
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var pickerItem: PhotosPickerItem? = nil
@@ -94,6 +99,33 @@ struct ScanView: View {
     /// phục, truyền vào ReviewView để dựng lại các ô anh đã
     /// sửa; bản nháp mới ra đời thì presentDraft xoá về nil.
     @State private var restoredReviewEdits: ReviewEditsDTO? = nil
+
+    /// Máy quét của hệ thống (VisionKit) — giữ nguyên làm
+    /// ĐƯỜNG LÙI khi camera tự dựng không dùng được trên máy
+    /// (không có camera / bị từ chối quyền), và vẫn là đường
+    /// quét lại ảnh gốc ở màn chi tiết.
+    private var systemScannerCover: some View {
+        DocumentCameraView(
+            onScan: { scan in
+                showCamera = false
+                guard scan.pageCount > 0 else {
+                    errorText = "Chưa chụp được trang nào — anh thử lại giúp."
+                    return
+                }
+                // V3 (Pha 4): đọc MỌI trang của lượt quét
+                // (hoá đơn dài nhiều trang — nối chữ ở tầng
+                // ráp dòng của pipeline), thay giới hạn
+                // trang đầu của Build 1.
+                process(scan: scan)
+            },
+            onCancel: { showCamera = false },
+            onError: { error in
+                showCamera = false
+                errorText = "Quét thất bại: \(error.localizedDescription)"
+            }
+        )
+        .ignoresSafeArea()
+    }
 
     private var cameraSupported: Bool {
         VNDocumentCameraViewController.isSupported
@@ -197,27 +229,26 @@ struct ScanView: View {
             }
             .dsScreenBackground()
             .navigationTitle("Chụp Hoá Đơn")
-            .fullScreenCover(isPresented: $showCamera) {
-                DocumentCameraView(
-                    onScan: { scan in
-                        showCamera = false
-                        guard scan.pageCount > 0 else {
-                            errorText = "Chưa chụp được trang nào — anh thử lại giúp."
-                            return
-                        }
-                        // V3 (Pha 4): đọc MỌI trang của lượt quét
-                        // (hoá đơn dài nhiều trang — nối chữ ở tầng
-                        // ráp dòng của pipeline), thay giới hạn
-                        // trang đầu của Build 1.
-                        process(scan: scan)
-                    },
-                    onCancel: { showCamera = false },
-                    onError: { error in
-                        showCamera = false
-                        errorText = "Quét thất bại: \(error.localizedDescription)"
-                    }
-                )
-                .ignoresSafeArea()
+            .fullScreenCover(isPresented: $showCamera, onDismiss: {
+                useSystemScanner = false
+            }) {
+                if useSystemScanner {
+                    systemScannerCover
+                } else {
+                    // S1: đường chụp chính là camera tự dựng.
+                    ScanCameraView(
+                        onFinish: { images in
+                            showCamera = false
+                            guard !images.isEmpty else {
+                                errorText = "Chưa chụp được trang nào — anh thử lại giúp."
+                                return
+                            }
+                            process(cameraImages: images)
+                        },
+                        onCancel: { showCamera = false },
+                        onFallbackToSystemScanner: { useSystemScanner = true }
+                    )
+                }
             }
             .photosPicker(isPresented: $showPhotoPicker, selection: $pickerItem, matching: .images)
             .onChange(of: pickerItem) { _, newItem in
@@ -473,21 +504,81 @@ struct ScanView: View {
             names.append(name)
             images.append(image)
         }
-        guard let firstName = names.first else { return }
+        guard !names.isEmpty else { return }
         let pageCG = images.compactMap { ReceiptReader.uprightCGImage(from: $0) }
-        guard pageCG.count == images.count, let firstCG = pageCG.first else {
+        guard pageCG.count == images.count, !pageCG.isEmpty else {
             errorText = "Không dựng được ảnh đã quét để đọc."
             return
         }
-        runRead(request: ReadRequest(
-                    source: .documentScanner,
-                    imageFileName: firstName,
-                    image: firstCG,
-                    pageImages: pageCG,
-                    diagnosticsDirectory: ImageStore.directory,
-                    qualityGate: QualityGate()),
-                sourceType: .camera,
-                originalFileNames: names)
+        // S2: làm phẳng từng trang trước khi đọc (bản phẳng là
+        // đầu vào chính; trang nào không có góc tin cậy thì lùi
+        // về ảnh gốc như trước).
+        flattenThenRead(names: names, pageCG: pageCG)
+    }
+
+    /// S1: điểm vào của camera tự dựng — cùng giao kèo với
+    /// process(scan:): lưu MỌI trang nguyên gốc TRƯỚC (gốc là
+    /// bằng chứng), tất cả-hoặc-không; rồi làm phẳng + đọc.
+    private func process(cameraImages: [UIImage]) {
+        guard blockedDraft == nil else {
+            statusText = "Anh quyết định tờ đang bị chặn trước, rồi mới đọc tờ tiếp theo giúp."
+            return
+        }
+        var names: [String] = []
+        var images: [UIImage] = []
+        for image in cameraImages {
+            guard let name = ImageStore.saveJPEG(image) else {
+                for saved in names { ImageStore.delete(fileName: saved) }
+                errorText = "Không lưu được ảnh gốc vào máy — anh kiểm tra dung lượng trống giúp."
+                return
+            }
+            names.append(name)
+            images.append(image)
+        }
+        guard !names.isEmpty else { return }
+        let pageCG = images.compactMap { ReceiptReader.uprightCGImage(from: $0) }
+        guard pageCG.count == images.count, !pageCG.isEmpty else {
+            errorText = "Không dựng được ảnh đã chụp để đọc."
+            return
+        }
+        flattenThenRead(names: names, pageCG: pageCG)
+    }
+
+    /// S2: bước chung của HAI đường chụp (camera tự dựng + máy
+    /// quét hệ thống): mỗi trang thử tạo BẢN SCAN PHẲNG toàn
+    /// phân giải từ tứ giác phát hiện được và lưu kèm ảnh gốc
+    /// (quy ước tên ở FlatScan — KHÔNG đổi model). Trang nào có
+    /// bản phẳng thì bản phẳng là ảnh đọc của trang đó; không
+    /// có góc tin cậy -> giữ ảnh gốc (đường cũ). Đường nhập thư
+    /// viện ảnh / Files KHÔNG qua bước này: chúng giữ nguyên
+    /// pipeline cũ (ứng viên phối cảnh nội bộ vẫn phục vụ ở đó
+    /// như trước). Chạy nền; runRead tự lo phần còn lại.
+    private func flattenThenRead(names: [String], pageCG: [CGImage]) {
+        isProcessing = true
+        statusText = "Đang làm phẳng bản scan…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            var readPages: [CGImage] = []
+            for (index, cg) in pageCG.enumerated() {
+                var readCG = cg
+                if let flat = FlatScan.makeFlatImage(from: cg),
+                   FlatScan.saveFlatImage(flat,
+                                          forOriginal: names[index]) != nil {
+                    readCG = flat
+                }
+                readPages.append(readCG)
+            }
+            DispatchQueue.main.async {
+                runRead(request: ReadRequest(
+                            source: .documentScanner,
+                            imageFileName: names[0],
+                            image: readPages[0],
+                            pageImages: readPages,
+                            diagnosticsDirectory: ImageStore.directory,
+                            qualityGate: QualityGate()),
+                        sourceType: .camera,
+                        originalFileNames: names)
+            }
+        }
     }
 
     /// Đường ảnh đơn (chọn ảnh / file ảnh / trang PDF đã render):
@@ -558,6 +649,12 @@ struct ScanView: View {
                     for name in originalFileNames
                     where name != request.imageFileName {
                         ImageStore.delete(fileName: name)
+                    }
+                    // S2: bản scan phẳng đi kèm cũng là file của
+                    // lượt đọc rỗng này — dọn cùng, không để mồ côi.
+                    FlatScan.deleteFlat(forOriginal: request.imageFileName)
+                    for name in originalFileNames {
+                        FlatScan.deleteFlat(forOriginal: name)
                     }
                     statusText = nil
                     errorText = "Không đọc được chữ nào trong ảnh — anh chụp lại rõ hơn, đủ sáng giúp."

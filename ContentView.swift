@@ -168,6 +168,9 @@ struct TabShellView: View {
     /// đã sửa ở ContentView).
     @SceneStorage("glkeeper.selectedTab") private var selectedTab = 0
     @State private var seeded = false
+    /// P2-1: theo dõi foreground để kích lượt gương bắt kịp
+    /// khi anh quay lại app (thư mục/mạng khả dụng trở lại).
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -192,7 +195,21 @@ struct TabShellView: View {
                 .tag(4)
         }
         .tint(DS.brand)
-        .task { seedStarterCardIfNeeded() }
+        .task {
+            seedStarterCardIfNeeded()
+            // P2-1: lượt gương bắt kịp mỗi lần mở app (lớp
+            // phụ — chưa bật/chưa chọn thư mục thì thoát ngay,
+            // không ghi lỗi).
+            MirrorSync.requestSync(using: modelContext)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            // P2-1: app quay lại foreground -> bắt kịp gương
+            // (các thay đổi lúc app nền hoặc thư mục iCloud
+            // vừa khả dụng trở lại đều được quét bù ở đây).
+            if newPhase == .active {
+                MirrorSync.requestSync(using: modelContext)
+            }
+        }
         // WP3 bước 2: có file mở-từ-ngoài đang chờ -> nhảy thẳng sang
         // tab CHỤP để ScanView hút vào hàng chờ và mở màn Kiểm Lại.
         .onChange(of: pendingImportURLs) { _, urls in

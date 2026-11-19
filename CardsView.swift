@@ -17,6 +17,11 @@ struct CardsView: View {
     @State private var pendingKindChange: PendingKindChange? = nil
     /// N2-FIX: lưu thẻ thất bại — hiện alert, không nuốt lặng.
     @State private var saveFailed = false
+    /// P2-1: gương thư mục Files — trạng thái thật đọc từ
+    /// MirrorSettings (UserDefaults) mỗi lần vẽ; mirrorStateTick
+    /// là móc làm mới khi lượt gương nền báo đổi trạng thái.
+    @State private var showMirrorPicker = false
+    @State private var mirrorStateTick = 0
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
     private var archivedCards: [CardTail] { cardTails.filter { $0.archived } }
@@ -121,8 +126,67 @@ struct CardsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+
+                // P2-1 (§2.2): gương thư mục Files — lớp sao
+                // lưu PHỤ. Kho trên máy vẫn là gốc; gương lỗi
+                // chỉ hiện ở mục này, không chặn việc lưu.
+                Section {
+                    Toggle(isOn: mirrorToggleBinding) {
+                        Label("Gương thư mục Files", systemImage: "folder.badge.gearshape")
+                    }
+                    LabeledContent("Thư mục gương",
+                                   value: MirrorSettings.folderDisplayName ?? "Chưa chọn")
+                    LabeledContent("Trạng thái", value: mirrorStatusText)
+                    LabeledContent("Lần gương gần nhất", value: mirrorLastRunText)
+                    if let summary = MirrorSettings.lastSummary {
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let error = MirrorSettings.lastError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    Button {
+                        showMirrorPicker = true
+                    } label: {
+                        Label(MirrorSettings.isConnected ? "Đổi thư mục gương…" : "Chọn thư mục gương…",
+                              systemImage: "folder.badge.plus")
+                    }
+                    if MirrorSettings.isEnabled && MirrorSettings.isConnected {
+                        Button {
+                            MirrorSync.requestSync(using: modelContext)
+                        } label: {
+                            Label("Gương ngay", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                } header: {
+                    Text("Gương Files (bản sao phụ)")
+                } footer: {
+                    Text("App sao mỗi hoá đơn (ảnh gốc + dữ kiện) sang thư mục anh chọn trong một thư mục con GL-Keeper — chọn thư mục nằm trong iCloud Drive là có thêm bản sao mây của Apple ở cấp file. Xoá hoá đơn trên máy thì bản gương được CHUYỂN vào thư mục _deleted trong thư mục gương, không biến mất. Gương chạy nền sau mỗi thay đổi và mỗi lần mở app.")
+                }
             }
             .navigationTitle("Thẻ & Cài Đặt")
+            .onAppear { mirrorStateTick += 1 }
+            .onReceive(NotificationCenter.default.publisher(
+                for: MirrorSync.statusChangedNotification)) { _ in
+                mirrorStateTick += 1
+            }
+            .sheet(isPresented: $showMirrorPicker) {
+                MirrorFolderPicker(
+                    onPick: { url in
+                        MirrorSettings.adoptFolder(url)
+                        showMirrorPicker = false
+                        mirrorStateTick += 1
+                        MirrorSync.requestSync(using: modelContext)
+                    },
+                    onCancel: {
+                        showMirrorPicker = false
+                        mirrorStateTick += 1
+                    })
+                .ignoresSafeArea()
+            }
             .sheet(item: $formTarget) { target in
                 CardFormView(target: target, existingTails: cardTails) { data in
                     handleFormData(data)
@@ -317,10 +381,62 @@ struct CardsView: View {
                 refreshReceiptStatusFromFlags(receipt)
             }
         }
-        if !saveContextOrFalse(modelContext) {
+        if saveContextOrFalse(modelContext) {
+            // P2-1: xếp lại có thể đã đổi nhiều tờ — kích một
+            // lượt gương bắt kịp (lớp phụ, chạy nền).
+            MirrorSync.requestSync(using: modelContext)
+        } else {
             modelContext.rollback()
             saveFailed = true
         }
+    }
+
+    // MARK: P2-1 — trạng thái gương (đọc MirrorSettings)
+
+    /// Trạng thái nói thật theo cài đặt + lỗi lượt gần nhất;
+    /// đọc mirrorStateTick để SwiftUI vẽ lại khi lượt gương
+    /// nền phát thông báo đổi trạng thái.
+    private var mirrorStatusText: String {
+        _ = mirrorStateTick
+        if !MirrorSettings.isConnected {
+            return "Chưa nối — chưa chọn thư mục"
+        }
+        if MirrorSettings.lastError != nil {
+            return "Đã nối · lượt gần nhất có lỗi (xem dưới)"
+        }
+        return MirrorSettings.isEnabled ? "Đã nối · đang bật" : "Đã nối · đang tắt"
+    }
+
+    private var mirrorLastRunText: String {
+        _ = mirrorStateTick
+        guard let date = MirrorSettings.lastRunAt else {
+            return "Chưa gương lần nào"
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.dateFormat = "HH:mm dd/MM/yyyy"
+        return formatter.string(from: date)
+    }
+
+    /// Bật gương mà chưa có thư mục thì bật = mở bộ chọn thư
+    /// mục trước (chọn xong MirrorSettings tự bật); đã có thư
+    /// mục thì bật và gương ngay một lượt.
+    private var mirrorToggleBinding: Binding<Bool> {
+        Binding(
+            get: { MirrorSettings.isEnabled },
+            set: { newValue in
+                if newValue {
+                    if MirrorSettings.isConnected {
+                        MirrorSettings.isEnabled = true
+                        MirrorSync.requestSync(using: modelContext)
+                    } else {
+                        showMirrorPicker = true
+                    }
+                } else {
+                    MirrorSettings.isEnabled = false
+                }
+                mirrorStateTick += 1
+            })
     }
 }
 

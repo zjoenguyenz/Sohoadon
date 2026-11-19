@@ -1,6 +1,6 @@
 {
  "comment": "Vendor = DỮ LIỆU (DESIGN-FINAL §3.4 / M7). Seed: 9 hãng của WP5 (giữ nguyên tên hiển thị + tên khớp đã kiểm chứng) + T-Johnnys Seafood + Pan-Asia trích TỪ CORPUS ĐÓNG BĂNG (dòng header thật trong answers-lr.json / luồng A0 buổi đo 2026-11-11), không gõ từ trí nhớ. Neo phụ: địa chỉ/điện thoại/cụm chữ đọc từ chính các ca corpus ghi kèm ở trường note của từng neo. Thêm vendor mới = thêm mục dữ liệu + ca sinh nó thành fixture hồi quy + bump dataVersion — KHÔNG sửa code.",
- "dataVersion": "vendors-2026-11-13-v43",
+ "dataVersion": "vendors-2026-11-18-v44",
  "vendors": [
   {
    "anchors": [
@@ -234,6 +234,36 @@
     "PAN ASIA SUPERMARKET",
     "PAN ASIA",
     "PANASIA"
+   ],
+   "parserPath": "generic",
+   "printSemantics": null,
+   "signatureItems": []
+  },
+  {
+   "anchors": [
+    {
+     "kind": "address",
+     "note": "Dong '9717 E. 71st Street' doc tu anh bang chung ca L-2026-11-18-31 (to Hobby Lobby Tulsa, chup 2026-11-18).",
+     "value": "9717 E 71ST STREET",
+     "weight": "strong"
+    },
+    {
+     "kind": "phone",
+     "note": "Dong '(918) 254-0290' ngay duoi dia chi tren cung to L-2026-11-18-31.",
+     "value": "9182540290",
+     "weight": "strong"
+    },
+    {
+     "kind": "phrase",
+     "note": "Khau hieu in duoi logo 'Super Savings, Super Selection!' tren cung to L-2026-11-18-31 — neo yeu, chi di kem.",
+     "value": "SUPER SAVINGS SUPER SELECTION",
+     "weight": "weak"
+    }
+   ],
+   "displayName": "Hobby Lobby",
+   "key": "hobbylobby",
+   "matchNames": [
+    "HOBBY LOBBY"
    ],
    "parserPath": "generic",
    "printSemantics": null,

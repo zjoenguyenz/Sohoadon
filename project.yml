@@ -31,6 +31,18 @@ targets:
       # Chỉ target chính: bench không cần (không file bench nào
       # gọi các hàm này).
       - ReceiptLogic.swift
+      # P2-1: lớp gương thư mục Files (§2.2) — DTO Codable +
+      # engine đối chiếu manifest + bộ chọn thư mục cấp thấp.
+      # Chỉ target chính như ReceiptLogic: bench không có tầng
+      # model/UI nên không liên kết file này.
+      - MirrorSync.swift
+      # S1+S2 (gói camera tự dựng, SCAN-CARD-AUDIT mục 2.5):
+      # camera quét tự dựng kiểu Lens + bản scan phẳng lưu kèm
+      # ảnh gốc theo quy ước tên file (không đổi model). Chỉ
+      # target chính như MirrorSync — bench không có tầng
+      # camera/UI nên không liên kết hai file này.
+      - ScanCameraView.swift
+      - FlatScan.swift
       - CardsView.swift
       - DesignSystem.swift
       # --- Tập module đường đọc v3 (Pha 0-3, dùng CHUNG với
