@@ -157,11 +157,16 @@ enum TotalsArbiter {
         var budgetHit = false
 
         // ---- Pha 1: cửa sổ khối tổng ----
+        // L1-REPAIR: dòng tiêu đề cột (chỉ-nhãn + ≥2 từ tiêu
+        // đề) không mở cửa sổ — xem isColumnHeaderLine.
         var windowStart: Int? = nil
         for (i, l) in labels.enumerated()
-        where l.family == "SUBTOTAL" || l.family == "TOTAL"
+        where (l.family == "SUBTOTAL" || l.family == "TOTAL"
             || TotalsArbiter.isFuzzySubtotalLine(
-                text: lines[i].text, family: l.family) {
+                text: lines[i].text, family: l.family))
+            && !TotalsArbiter.isColumnHeaderLine(
+                text: lines[i].text, family: l.family,
+                labelOnly: l.labelOnly) {
             windowStart = i; break
         }
         if windowStart == nil {
@@ -724,6 +729,46 @@ enum TotalsArbiter {
     /// khoảng trắng) dài ≥ 7 và lệch đúng 1 phép sửa so với
     /// "SUBTOTAL". Quét toàn corpus đóng băng 116 luồng:
     /// ngoài ca 28 không dòng nào chạm điều kiện này.
+
+    // MARK: - L1-REPAIR: dòng tiêu đề cột không mở cửa sổ Pha 1
+
+    /// L1-REPAIR (WR-dollartree-1): dòng TIÊU ĐỀ CỘT của khối
+    /// món ("DESCRIPTION CTY PRICE TOTAL") chứa chữ "TOTAL"
+    /// → họ TOTAL → cửa sổ Pha 1 mở ngay tại đó, TRƯỚC toàn
+    /// bộ khối món; tầng món lấy cửa sổ theo windowStart nên
+    /// mọi dòng món nằm NGOÀI cửa sổ → 0 món ở cả hai bản
+    /// trước/sau L1 (bằng chứng: stream dump run #44, 10/10
+    /// set đều items=0). Khi L1 sửa đúng khối tổng (100 →
+    /// 500), hạng tử |Σmón − tạm tính| phình 100 → 500 và
+    /// cổng roigate tính hồi quy so với làn cũ (400). Luật
+    /// hẹp: dòng mở cửa sổ bị BỎ QUA khi nó là dòng chỉ-nhãn
+    /// (labelOnly — không token tiền) VÀ mang ≥ 2 từ tiêu đề
+    /// cột (DESCRIPTION/QTY/CTY/PRICE/AMOUNT/ITEM/CODE) —
+    /// dòng nhãn tổng thật ("TOTAL" đứng một mình, tiền ở
+    /// dòng sau) không mang chữ tiêu đề cột nên không chạm.
+    /// Bỏ qua = quét tiếp xuống dòng SUBTOTAL/TOTAL sau;
+    /// không có dòng sau thì giữ nguyên đường fallback cũ.
+    /// Quét sim 116 luồng đóng băng: luật chỉ đổi 2 luồng —
+    /// dollartree (món 0 → vào cửa sổ) và 40-mcdonalds-4
+    /// (món δ −499 → 0); 28/29-lowes và 06-kroger không đổi.
+    /// (Bản rộng "bỏ mọi dòng chỉ-nhãn" đổi 12 luồng, có ca
+    /// xấu đi rõ — ĐÃ LOẠI, xem L1-REPAIR-DOSSIER.)
+    private static let columnHeaderWords = ["DESCRIPTION", "QTY", "CTY",
+                                            "PRICE", "AMOUNT", "ITEM",
+                                            "CODE"]
+    static func isColumnHeaderLine(text: String, family: String,
+                                   labelOnly: Bool) -> Bool {
+        guard labelOnly, family == "SUBTOTAL" || family == "TOTAL"
+        else { return false }
+        let upper = text.uppercased()
+        var hits = 0
+        for w in columnHeaderWords where upper.contains(w) {
+            hits += 1
+            if hits >= 2 { return true }
+        }
+        return false
+    }
+
     private static func isFuzzySubtotalLine(text: String,
                                                 family: String) -> Bool {
         guard family == "NONE" else { return false }
@@ -792,12 +837,16 @@ enum TotalsArbiter {
         var budgetHit = false
 
         // Cửa sổ: cùng phép như lượt chính (lùi qua dòng
-        // chỉ-có-tiền đếm trên token CHÍNH).
+        // chỉ-có-tiền đếm trên token CHÍNH; dòng tiêu đề cột
+        // không mở cửa sổ — L1-REPAIR, xem isColumnHeaderLine).
         var windowStart: Int? = nil
         for (i, l) in labels.enumerated()
-        where l.family == "SUBTOTAL" || l.family == "TOTAL"
+        where (l.family == "SUBTOTAL" || l.family == "TOTAL"
             || TotalsArbiter.isFuzzySubtotalLine(
-                text: lines[i].text, family: l.family) {
+                text: lines[i].text, family: l.family))
+            && !TotalsArbiter.isColumnHeaderLine(
+                text: lines[i].text, family: l.family,
+                labelOnly: l.labelOnly) {
             windowStart = i; break
         }
         if windowStart == nil {
