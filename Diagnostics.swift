@@ -11,7 +11,7 @@ import UIKit
 // món nợ đó:
 //
 // - Append-only, thread-safe bằng hàng đợi serial riêng: mọi
-//   điểm gắn log (picker / gương / đọc / khởi động) chỉ gọi
+//   điểm gắn log (picker / gương / drive / đọc / khởi động) chỉ gọi
 //   DiagLog.log(...) — không tự đụng file.
 // - File nằm ở Documents/diagnostics.log (đi cùng kênh Files
 //   của app); vượt ~512 KB thì xoay vòng: bản hiện tại thành
@@ -21,10 +21,12 @@ import UIKit
 //   app chết giữa chừng vẫn còn dòng cuối chỉ chỗ chết.
 // - Xuất log (DiagLogSharePresenter ở dưới): nội dung đi qua
 //   bộ lọc thay tiền tố đường dẫn thư mục nhà bằng "~" TRƯỚC
-//   khi rời máy. App không giữ token/bí mật nào (không API
-//   key, không credential trong UserDefaults — các điểm gắn
-//   log chỉ ghi tên thư mục + domain/code của lỗi hệ thống),
-//   nên ngoài đường dẫn nhà ra không có gì khác phải lọc.
+//   khi rời máy. Token OAuth của Google Drive (P2-2) nằm ở
+//   Keychain và KHÔNG BAO GIỜ đi qua bộ log — các điểm gắn
+//   log chỉ ghi tên thư mục/số đếm + domain/code của lỗi hệ
+//   thống; email tài khoản cũng không ghi log (chỉ hiện ở
+//   Cài đặt), nên ngoài đường dẫn nhà ra không có gì khác
+//   phải lọc.
 //
 // File này CHỈ ở target app (như MirrorSync/FlatScan): bench
 // không liên kết — bench có màn thám tử riêng tự chứa trong
@@ -34,6 +36,7 @@ enum DiagLog {
     enum Category: String {
         case picker
         case mirror
+        case drive
         case read
         case app
     }

@@ -1131,6 +1131,7 @@ struct ReceiptDetailView: View {
                     // kho sẽ được đối chiếu manifest và chuyển
                     // bản gương vào _deleted/ (không xoá cứng).
                     MirrorSync.requestSync(using: modelContext)
+                    DriveSync.requestSync(using: modelContext)
                     dismiss()
                 } else {
                     modelContext.rollback()
@@ -1212,6 +1213,7 @@ struct ReceiptDetailView: View {
             reattachError = nil
             // P2-1: bằng chứng vừa đổi — kích lượt gương.
             MirrorSync.requestSync(using: modelContext)
+            DriveSync.requestSync(using: modelContext)
         } else {
             reattachError = "Ảnh đã lưu vào máy nhưng ghi nhận vào hoá đơn không thành công — anh thử gắn lại giúp."
         }
@@ -1297,6 +1299,7 @@ struct ReceiptDetailView: View {
             rescanError = nil
             // P2-1: bằng chứng vừa đổi — kích lượt gương.
             MirrorSync.requestSync(using: modelContext)
+            DriveSync.requestSync(using: modelContext)
             // S2: bộ bằng chứng vừa đổi — sinh bản scan phẳng
             // cho các trang quét mới ở nền (chỉ để hiển thị;
             // trang nào không có góc tin cậy thì không có bản
@@ -1396,6 +1399,7 @@ struct ReceiptDetailView: View {
             saveError = nil
             // P2-1: trạng thái duyệt vừa đổi — kích lượt gương.
             MirrorSync.requestSync(using: modelContext)
+            DriveSync.requestSync(using: modelContext)
         } else {
             receipt.status = oldStatus
             receipt.confirmedWithFlag = oldConfirmed
@@ -1612,6 +1616,7 @@ struct ReceiptDetailView: View {
         if saveContextOrFalse(modelContext) {
             // P2-1: số liệu vừa đọc lại — kích lượt gương.
             MirrorSync.requestSync(using: modelContext)
+            DriveSync.requestSync(using: modelContext)
             // Vẽ lại theo số mới: đồng bộ 3 state của khối Phân loại về đúng
             // giá trị vừa hạ cánh (kể cả khi gợi ý vừa đổi loại/mục).
             selectedKind = receipt.classification
@@ -1688,6 +1693,7 @@ struct ReceiptDetailView: View {
             saveError = nil
             // P2-1: thay đổi vừa lưu — kích lượt gương.
             MirrorSync.requestSync(using: modelContext)
+            DriveSync.requestSync(using: modelContext)
         } else {
             savedNote = false
             saveError = "Lưu thay đổi không thành công — số trên máy chưa đổi. Anh bấm Lưu lại giúp."
@@ -2552,5 +2558,6 @@ struct ReviewView: View {
         // hoá đơn mới thành công (lớp phụ — không chặn luồng
         // lưu, không ném lỗi về màn Kiểm Lại).
         MirrorSync.requestSync(using: modelContext)
+        DriveSync.requestSync(using: modelContext)
     }
 }

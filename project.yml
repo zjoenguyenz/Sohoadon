@@ -49,6 +49,12 @@ targets:
       # liên kết (bench có màn thám tử picker tự chứa trong
       # BenchView.swift).
       - Diagnostics.swift
+      # P2-2: đồng bộ Google Drive (§2.3) — OAuth + PKCE qua
+      # ASWebAuthenticationSession, token ở Keychain, engine
+      # đối chiếu manifest dùng CHUNG DTO/manifest với lớp
+      # gương. Chỉ target chính như MirrorSync — bench không
+      # có tầng model/UI nên không liên kết file này.
+      - DriveSync.swift
       - CardsView.swift
       - DesignSystem.swift
       # --- Tập module đường đọc v3 (Pha 0-3, dùng CHUNG với
@@ -100,6 +106,16 @@ targets:
         NSFaceIDUsageDescription: "App dùng Face ID để khoá sổ hoá đơn của anh; tắt được trong mục Cài đặt của app."
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        # P2-2: scheme callback OAuth Google = client ID đảo
+        # ngược theo từng thành phần (DriveConfig.oauthClientID
+        # trong DriveSync.swift sinh đúng chuỗi này ở
+        # callbackScheme) — HAI CHỖ PHẢI KHỚP NHAU. ĐÃ ĐIỀN
+        # client ID thật 2026-11-20 (Google Cloud project
+        # gl-keeper, client iOS gắn bundle com.nje.sohoadon).
+        CFBundleURLTypes:
+          - CFBundleURLName: "Google OAuth (GL-Keeper)"
+            CFBundleURLSchemes:
+              - com.googleusercontent.apps.743860596620-rn97516fmivkoa2njklujbda55scsbv2
         CFBundleDocumentTypes:
           - CFBundleTypeName: "Hoá đơn nạp vào GL-Keeper"
             CFBundleTypeRole: Viewer

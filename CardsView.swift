@@ -24,6 +24,9 @@ struct CardsView: View {
     /// LOGKIT (L-2026-11-19-39): móc làm mới riêng cho mục
     /// Log chẩn đoán (kích thước log đổi sau khi xoá).
     @State private var logStateTick = 0
+    /// P2-2: móc làm mới riêng cho mục Google Drive (trạng
+    /// thái đổi khi đăng nhập/đăng xuất/lượt đồng bộ báo về).
+    @State private var driveStateTick = 0
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
     private var archivedCards: [CardTail] { cardTails.filter { $0.archived } }
@@ -129,6 +132,55 @@ struct CardsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                // P2-2 (§2.3): Google Drive — đường sao lưu
+                // NGOÀI MÁY chính từ Gói 6 (Q1 anh quyết
+                // 2026-11-20, sau khi bộ chọn thư mục gương
+                // chết trên bản ký lại). App chỉ đụng thư
+                // mục GL-Keeper do chính nó tạo (scope
+                // drive.file); token nằm ở Keychain của máy.
+                Section {
+                    LabeledContent("Trạng thái", value: driveStatusText)
+                    if DriveAuth.isSignedIn {
+                        LabeledContent("Lần đồng bộ gần nhất",
+                                       value: driveLastRunText)
+                        if let summary = DriveSettings.lastSummary {
+                            Text(summary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let error = DriveSettings.lastError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        Button {
+                            DriveSync.requestSync(using: modelContext)
+                        } label: {
+                            Label("Đồng bộ ngay", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        Button(role: .destructive) {
+                            DriveAuth.signOut()
+                        } label: {
+                            Label("Đăng xuất Google", systemImage: "rectangle.portrait.and.arrow.right")
+                        }
+                    } else {
+                        if let error = DriveSettings.lastError {
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        Button {
+                            DriveAuth.signIn { _ in driveStateTick += 1 }
+                        } label: {
+                            Label("Đăng nhập Google", systemImage: "person.crop.circle.badge.checkmark")
+                        }
+                    }
+                } header: {
+                    Text("Google Drive (bản sao ngoài máy)")
+                } footer: {
+                    Text("Mỗi hoá đơn (ảnh gốc + dữ kiện) được app tự đồng bộ vào thư mục GL-Keeper trong Google Drive của anh — đồng bộ khi mở app và ngay sau mỗi thay đổi. Đăng nhập một lần; app chỉ thấy file do chính nó tạo, không thấy phần Drive còn lại. Xoá hoá đơn trên máy thì bản Drive được CHUYỂN vào thư mục _deleted trên Drive, không biến mất.")
+                }
+
                 // P2-1 (§2.2): gương thư mục Files — lớp sao
                 // lưu PHỤ. Kho trên máy vẫn là gốc; gương lỗi
                 // chỉ hiện ở mục này, không chặn việc lưu.
@@ -166,6 +218,7 @@ struct CardsView: View {
                     if MirrorSettings.isEnabled && MirrorSettings.isConnected {
                         Button {
                             MirrorSync.requestSync(using: modelContext)
+                            DriveSync.requestSync(using: modelContext)
                         } label: {
                             Label("Gương ngay", systemImage: "arrow.triangle.2.circlepath")
                         }
@@ -204,7 +257,7 @@ struct CardsView: View {
                 } header: {
                     Text("Log chẩn đoán")
                 } footer: {
-                    Text("Log chỉ ghi sự kiện kỹ thuật trên máy (mở app, bộ chọn thư mục, lượt gương) kèm giờ — không ghi nội dung hoá đơn. Khi xuất, đường dẫn thư mục nhà được thay bằng \"~\" trước khi rời máy; app không giữ token hay bí mật nào.")
+                    Text("Log chỉ ghi sự kiện kỹ thuật trên máy (mở app, bộ chọn thư mục, lượt gương, lượt đồng bộ Drive) kèm giờ — không ghi nội dung hoá đơn, không ghi token. Khi xuất, đường dẫn thư mục nhà được thay bằng \"~\" trước khi rời máy; token Google nằm ở Keychain của máy và không bao giờ vào log.")
                 }
             }
             .navigationTitle("Thẻ & Cài Đặt")
@@ -212,6 +265,10 @@ struct CardsView: View {
             .onReceive(NotificationCenter.default.publisher(
                 for: MirrorSync.statusChangedNotification)) { _ in
                 mirrorStateTick += 1
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: DriveSync.statusChangedNotification)) { _ in
+                driveStateTick += 1
             }
             .sheet(item: $formTarget) { target in
                 CardFormView(target: target, existingTails: cardTails) { data in
@@ -411,6 +468,7 @@ struct CardsView: View {
             // P2-1: xếp lại có thể đã đổi nhiều tờ — kích một
             // lượt gương bắt kịp (lớp phụ, chạy nền).
             MirrorSync.requestSync(using: modelContext)
+            DriveSync.requestSync(using: modelContext)
         } else {
             modelContext.rollback()
             saveFailed = true
@@ -475,6 +533,36 @@ struct CardsView: View {
         return "\(result) — \(formatter.string(from: date))"
     }
 
+    // MARK: P2-2 — trạng thái Drive (đọc DriveSettings)
+
+    /// Trạng thái Drive nói thật: chưa đăng nhập / đã đăng
+    /// nhập (kèm email nếu lấy được) / lượt gần nhất có lỗi.
+    /// Đọc driveStateTick để vẽ lại khi có thông báo đổi.
+    private var driveStatusText: String {
+        _ = driveStateTick
+        guard DriveAuth.isSignedIn else {
+            return "Chưa đăng nhập"
+        }
+        if DriveSettings.lastError != nil {
+            return "Đã đăng nhập · lượt gần nhất có lỗi (xem dưới)"
+        }
+        if let email = DriveSettings.accountEmail {
+            return "Đã đăng nhập · \(email)"
+        }
+        return "Đã đăng nhập"
+    }
+
+    private var driveLastRunText: String {
+        _ = driveStateTick
+        guard let date = DriveSettings.lastRunAt else {
+            return "Chưa đồng bộ lần nào"
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.dateFormat = "HH:mm dd/MM/yyyy"
+        return formatter.string(from: date)
+    }
+
     /// Mở bộ chọn thư mục gương bằng đường trình UIKit thuần
     /// (L-2026-11-19-36: KHÔNG qua .sheet SwiftUI — bản 146
     /// thao tác chọn bị nuốt, delegate không chạy). Chọn xong:
@@ -485,6 +573,7 @@ struct CardsView: View {
                 MirrorSettings.adoptFolder(url)
                 mirrorStateTick += 1
                 MirrorSync.requestSync(using: modelContext)
+                DriveSync.requestSync(using: modelContext)
             },
             onCancel: {
                 mirrorStateTick += 1
@@ -509,6 +598,7 @@ struct CardsView: View {
                     if MirrorSettings.isConnected {
                         MirrorSettings.isEnabled = true
                         MirrorSync.requestSync(using: modelContext)
+                        DriveSync.requestSync(using: modelContext)
                     } else {
                         presentMirrorFolderPicker()
                     }
