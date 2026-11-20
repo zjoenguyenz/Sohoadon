@@ -1531,20 +1531,32 @@ enum DriveEngine {
             return false
         }
         let fm = FileManager.default
-        func evidenceIntact(sourceName: String,
+                func evidenceIntact(sourceName: String,
                             mirrorName: String) -> Bool {
-            guard let remote = filesByName[mirrorName] else {
-                return false
-            }
-            // Nguồn trên máy đã mất: không còn kích thước để
-            // so — sự tồn tại của bản Drive là mức kiểm tối
-            // đa còn làm được (phong bì receipt.json đã ghi
-            // missing trung thực từ lượt xử lý đầy đủ).
+            // Kiểm NGUỒN TRÊN MÁY TRƯỚC (vá
+            // L-2026-11-20-41): nguồn đã mất thì KHÔNG BAO
+            // GIỜ được tải lên (uploadOneEvidence chỉ trả
+            // ref missing, không tải) — đích vắng chính là
+            // gương đúng trạng thái mất, phong bì
+            // receipt.json đã ghi missing trung thực từ
+            // lượt xử lý đầy đủ. Đích còn = bản sao bonus
+            // từ thời file còn tồn tại, giữ nguyên. Cả hai
+            // đều nguyên vẹn vô điều kiện. (Trước đây guard
+            // đòi đích tồn tại chạy trước nên ca nguồn mất
+            // + đích vắng không bao giờ qua verify, mọi
+            // lượt xử lý lại toàn bộ các tờ đó.)
             guard let attributes = try? fm.attributesOfItem(
                       atPath: ctx.imageDirectory
                           .appendingPathComponent(sourceName).path),
                   let size = attributes[.size] as? Int else {
                 return true
+            }
+            // Nguồn còn: giữ nguyên luật cũ — đích phải
+            // tồn tại VÀ đúng kích thước; vắng hoặc lệch
+            // -> không nguyên vẹn, rơi xuống đường đầy
+            // đủ để tự chữa.
+            guard let remote = filesByName[mirrorName] else {
+                return false
             }
             return remote.sizeBytes == size
         }
