@@ -21,6 +21,9 @@ struct CardsView: View {
     /// MirrorSettings (UserDefaults) mỗi lần vẽ; mirrorStateTick
     /// là móc làm mới khi lượt gương nền báo đổi trạng thái.
     @State private var mirrorStateTick = 0
+    /// LOGKIT (L-2026-11-19-39): móc làm mới riêng cho mục
+    /// Log chẩn đoán (kích thước log đổi sau khi xoá).
+    @State private var logStateTick = 0
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
     private var archivedCards: [CardTail] { cardTails.filter { $0.archived } }
@@ -171,6 +174,37 @@ struct CardsView: View {
                     Text("Gương Files (bản sao phụ)")
                 } footer: {
                     Text("App sao mỗi hoá đơn (ảnh gốc + dữ kiện) sang thư mục anh chọn trong một thư mục con GL-Keeper — chọn thư mục nằm trong iCloud Drive là có thêm bản sao mây của Apple ở cấp file. Xoá hoá đơn trên máy thì bản gương được CHUYỂN vào thư mục _deleted trong thư mục gương, không biến mất. Gương chạy nền sau mỗi thay đổi và mỗi lần mở app.")
+                }
+
+                // LOGKIT (L-2026-11-19-39): bộ log chẩn đoán
+                // trong app — luật cứng 2026-11-18. Log ghi
+                // sự kiện bộ chọn thư mục / gương / mở app
+                // ngay trên máy; xuất qua phiếu chia sẻ UIKit
+                // thuần (không ShareLink) sau khi đã lọc
+                // đường dẫn nhà.
+                Section {
+                    LabeledContent("Kích thước log hiện tại",
+                                   value: logSizeText)
+                    NavigationLink {
+                        DiagnosticsLogView()
+                    } label: {
+                        Label("Xem log", systemImage: "doc.text.magnifyingglass")
+                    }
+                    Button {
+                        DiagLogSharePresenter.presentShare()
+                    } label: {
+                        Label("Xuất log", systemImage: "square.and.arrow.up")
+                    }
+                    Button(role: .destructive) {
+                        DiagLog.clear()
+                        logStateTick += 1
+                    } label: {
+                        Label("Xoá log", systemImage: "trash")
+                    }
+                } header: {
+                    Text("Log chẩn đoán")
+                } footer: {
+                    Text("Log chỉ ghi sự kiện kỹ thuật trên máy (mở app, bộ chọn thư mục, lượt gương) kèm giờ — không ghi nội dung hoá đơn. Khi xuất, đường dẫn thư mục nhà được thay bằng \"~\" trước khi rời máy; app không giữ token hay bí mật nào.")
                 }
             }
             .navigationTitle("Thẻ & Cài Đặt")
@@ -457,6 +491,13 @@ struct CardsView: View {
             })
     }
 
+    /// Kích thước file log chẩn đoán hiện tại; đọc
+    /// logStateTick để vẽ lại sau khi xoá log.
+    private var logSizeText: String {
+        _ = logStateTick
+        return DiagLog.currentSizeText
+    }
+
     /// Bật gương mà chưa có thư mục thì bật = mở bộ chọn thư
     /// mục trước (chọn xong MirrorSettings tự bật); đã có thư
     /// mục thì bật và gương ngay một lượt.
@@ -622,5 +663,34 @@ struct CardFormView: View {
         )
         onComplete(data)
         dismiss()
+    }
+}
+
+// MARK: - Màn xem log chẩn đoán (LOGKIT — L-2026-11-19-39)
+
+/// Đọc toàn văn file log ngay trong app: cuộn dọc, chữ
+/// monospace nhỏ, chọn/copy được. Nạp lại mỗi lần mở màn và
+/// khi anh bấm "Nạp lại" (log vẫn ghi tiếp trong lúc xem).
+private struct DiagnosticsLogView: View {
+    @State private var text: String = ""
+
+    var body: some View {
+        ScrollView {
+            Text(text.isEmpty
+                 ? "Log đang trống — chưa có sự kiện nào được ghi."
+                 : text)
+                .font(.system(.caption2, design: .monospaced))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .textSelection(.enabled)
+        }
+        .navigationTitle("Log chẩn đoán")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { text = DiagLog.readAllText() }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Nạp lại") { text = DiagLog.readAllText() }
+            }
+        }
     }
 }

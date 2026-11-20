@@ -68,6 +68,13 @@ struct ContentView: View {
             pendingImportURLs.append(url)
         }
         .onAppear {
+            // LOGKIT (L-2026-11-19-39): một dòng mở app kèm
+            // dấu bản bộ đọc + phiên bản app — điểm neo thời
+            // gian cho mọi dòng log sau trong phiên.
+            let info = Bundle.main.infoDictionary
+            let appVersion = info?["CFBundleShortVersionString"] as? String ?? "?"
+            let appBuild = info?["CFBundleVersion"] as? String ?? "?"
+            DiagLog.log(.app, "mở app — bộ đọc \(ReadCoreVersion.parserVersion) · app \(appVersion) (\(appBuild))")
             // Khoá đang tắt thì cây hiện ngay từ đầu — ghi nhận
             // đã dựng để lần bật khoá sau đó (giữa phiên) cũng
             // chỉ phủ lên, không tháo cây.

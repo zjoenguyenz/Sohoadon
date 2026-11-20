@@ -36,6 +36,10 @@ struct BenchView: View {
     @State private var replayStatus: String = ""
     @State private var showDiagImporter: Bool = false
     @State private var resultFileURL: URL? = nil
+    // Picker Probe (bậc 2 thang chẩn đoán Gói 1 — L-38):
+    // khung sự kiện của bộ chọn thư mục TRẦN, in ngay trên
+    // màn này để anh chụp lại.
+    @State private var probeOutput: String = ""
 
     private var imageNames: [String] {
         // CI-FIX-4 (2026-11-12): XcodeGen LAM PHANG tai nguyen vao
@@ -109,6 +113,15 @@ struct BenchView: View {
     private func loadStageLog() {
         stageLogText = (try? String(contentsOf: Self.stageLogURL,
                                     encoding: .utf8)) ?? ""
+    }
+
+    /// Cộng một dòng sự kiện Picker Probe kèm mốc giờ
+    /// (HH:mm:ss) vào khung trên màn. Mọi callback của
+    /// PickerProbe đều về main nên cộng thẳng vào @State.
+    private func probeEvent(_ line: String) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        probeOutput += "[\(formatter.string(from: Date()))] \(line)\n"
     }
 
     var body: some View {
@@ -229,6 +242,35 @@ struct BenchView: View {
                             }
                         }
                         replayStatus = "Phần C: đã replay \(n) file chẩn đoán."
+                    }
+                }
+
+                // Picker Probe: bộ chọn thư mục TRẦN — không
+                // qua presenter của app, không gương, không
+                // bookmark; chỉ trình picker và in MỌI sự
+                // kiện lên khung dưới để phân biệt "present
+                // bị nuốt" với "delegate không chạy" (ca
+                // L-36/L-38). Không đụng đường tự kiểm A/B/D.
+                Section("Picker Probe — thám tử bộ chọn thư mục (L-36)") {
+                    Button {
+                        probeEvent("anh bấm nút Mở bộ chọn (trần)")
+                        PickerProbe.present { line in
+                            probeEvent(line)
+                        }
+                    } label: {
+                        Label("Mở bộ chọn thư mục (trần)",
+                              systemImage: "folder.badge.questionmark")
+                            .font(.body.bold())
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    if !probeOutput.isEmpty {
+                        Text(probeOutput)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                        Button("Xoá khung sự kiện", role: .destructive) {
+                            probeOutput = ""
+                        }
                     }
                 }
 
@@ -488,6 +530,101 @@ struct BenchView: View {
                 """
         } catch {
             documentsOutput = "DocumentsEngine ném lỗi: \(error)"
+        }
+    }
+}
+
+/// Picker Probe — bộ chọn thư mục TRẦN của BenchShell (bậc 2
+/// thang chẩn đoán Gói 1, ca L-2026-11-19-38): dựng thẳng
+/// UIDocumentPickerViewController(forOpeningContentTypes:
+/// [.folder], asCopy: false), delegate là coordinator giữ
+/// tĩnh, trình bằng UIKit thuần từ view controller trên cùng.
+/// TỰ CHỨA trong file bench — không dùng presenter, không
+/// dùng MirrorSettings, không tạo bookmark, không gương:
+/// mục đích duy nhất là quan sát thô các sự kiện của picker
+/// trên đúng bản cài đã ký (phân biệt present-bị-nuốt /
+/// picker-hiện-nhưng-Open-câm / delegate-chạy-được) qua khung
+/// sự kiện in trên màn BenchView cho anh chụp lại.
+enum PickerProbe {
+    private static var activeCoordinator: Coordinator?
+
+    static func present(report: @escaping (String) -> Void) {
+        DispatchQueue.main.async {
+            guard activeCoordinator == nil else {
+                report("present bị chặn: đang có một picker probe mở")
+                return
+            }
+            guard let presenter = topPresenter() else {
+                report("topPresenter = nil — không có cửa sổ để trình")
+                return
+            }
+            let coordinator = Coordinator(report: report)
+            activeCoordinator = coordinator
+            let picker = UIDocumentPickerViewController(
+                forOpeningContentTypes: [UTType.folder], asCopy: false)
+            picker.delegate = coordinator
+            picker.allowsMultipleSelection = false
+            presenter.present(picker, animated: true)
+            report("đã gọi present(picker) từ VC trên cùng")
+            // Nhịp kiểm 0,6 s như presenter của app: phân
+            // biệt picker đang hiện / đã xong qua delegate /
+            // present bị nuốt. Nếu bị nuốt thì nhả chốt giữ
+            // coordinator để anh bấm thử lại được ngay (khung
+            // sự kiện vẫn còn nguyên dòng kết luận bị nuốt).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                if picker.presentingViewController != nil {
+                    report("sau 0,6s: picker CÓ presentingViewController — đang hiện")
+                } else if PickerProbe.activeCoordinator === coordinator {
+                    PickerProbe.activeCoordinator = nil
+                    report("sau 0,6s: picker KHÔNG có presentingViewController — present bị nuốt, delegate sẽ không bao giờ chạy")
+                } else {
+                    report("sau 0,6s: picker đã kết thúc qua delegate")
+                }
+            }
+        }
+    }
+
+    /// View controller trên cùng của cửa sổ khoá thuộc scene
+    /// đang foreground — tự chứa ở đây, không mượn code app.
+    private static func topPresenter() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive }
+            ?? scenes.first
+        guard let root = scene?.windows
+            .first(where: { $0.isKeyWindow })?.rootViewController
+            ?? scene?.windows.first?.rootViewController else {
+            return nil
+        }
+        var top = root
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        return top
+    }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        var report: (String) -> Void
+
+        init(report: @escaping (String) -> Void) {
+            self.report = report
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController,
+                            didPickDocumentsAt urls: [URL]) {
+            defer { PickerProbe.activeCoordinator = nil }
+            guard let url = urls.first else {
+                report("didPick NHƯNG urls RỖNG")
+                return
+            }
+            report("didPick: \(url.lastPathComponent)")
+        }
+
+        func documentPickerWasCancelled(
+            _ controller: UIDocumentPickerViewController
+        ) {
+            defer { PickerProbe.activeCoordinator = nil }
+            report("documentPickerWasCancelled — picker đã đóng qua đường huỷ")
         }
     }
 }

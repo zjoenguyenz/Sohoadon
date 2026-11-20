@@ -395,6 +395,10 @@ enum MirrorSettings {
     /// bền + bật gương. Tạo bookmark hỏng -> ghi lỗi thật,
     /// KHÔNG giả vờ đã nối (luật B-2).
     static func adoptFolder(_ url: URL) {
+        // LOGKIT (L-2026-11-19-39): chỉ cộng lời gọi log —
+        // logic nhận thư mục giữ nguyên từng chữ.
+        DiagLog.log(.mirror,
+                    "adoptFolder bắt đầu: \(url.lastPathComponent)")
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -406,7 +410,12 @@ enum MirrorSettings {
             isEnabled = true
             lastError = nil
             lastErrorAt = nil
+            DiagLog.log(.mirror,
+                        "adoptFolder: tạo bookmark THÀNH CÔNG cho \(url.lastPathComponent)")
         } catch {
+            let nsError = error as NSError
+            DiagLog.log(.mirror,
+                        "adoptFolder: tạo bookmark THẤT BẠI — \(nsError.domain) code=\(nsError.code)")
             lastError = "Không lưu được quyền truy cập thư mục đã chọn — anh thử chọn lại giúp."
             lastErrorAt = Date()
         }
@@ -497,6 +506,10 @@ enum MirrorWriter {
     static func runPass(snapshots: [MirrorReceiptSnapshot],
                         bookmarkData: Data,
                         imageDirectory: URL) {
+        // LOGKIT (L-2026-11-19-39): chỉ cộng lời gọi log —
+        // logic lượt gương giữ nguyên từng chữ.
+        DiagLog.log(.mirror,
+                    "runPass bắt đầu: \(snapshots.count) hoá đơn")
         var isStale = false
         let folderURL: URL
         do {
@@ -504,7 +517,12 @@ enum MirrorWriter {
                 resolvingBookmarkData: bookmarkData,
                 options: [.withoutUI], relativeTo: nil,
                 bookmarkDataIsStale: &isStale)
+            DiagLog.log(.mirror,
+                        "runPass: resolve bookmark OK (stale: \(isStale))")
         } catch {
+            let nsError = error as NSError
+            DiagLog.log(.mirror,
+                        "runPass: resolve bookmark THẤT BẠI — \(nsError.domain) code=\(nsError.code)")
             MirrorSettings.recordFailure(
                 "Mất quyền truy cập thư mục gương — anh chọn lại thư mục trong Thẻ & Cài Đặt giúp.")
             return
@@ -520,14 +538,25 @@ enum MirrorWriter {
                relativeTo: nil) {
             MirrorSettings.bookmarkData = fresh
             MirrorSettings.folderDisplayName = folderURL.lastPathComponent
+            DiagLog.log(.mirror,
+                        "runPass: bookmark stale — đã làm mới")
         }
         do {
             let outcome = try performPass(root: folderURL,
                                           snapshots: snapshots,
                                           imageDirectory: imageDirectory)
+            DiagLog.log(.mirror,
+                        "runPass kết thúc: \(outcome.summary)")
+            if let passError = outcome.error {
+                DiagLog.log(.mirror,
+                            "runPass lỗi lẻ: \(passError)")
+            }
             MirrorSettings.recordPass(summary: outcome.summary,
                                       error: outcome.error)
         } catch {
+            let nsError = error as NSError
+            DiagLog.log(.mirror,
+                        "runPass THẤT BẠI cấp lượt — \(nsError.domain) code=\(nsError.code)")
             MirrorSettings.recordFailure(
                 "Gương chưa chạy được: \(error.localizedDescription) — lượt sau app sẽ tự thử lại.")
         }
@@ -593,6 +622,10 @@ enum MirrorWriter {
             } catch {
                 // Lỗi lẻ một tờ: ghi nhận và đi tiếp — một tờ
                 // hỏng không được giết cả lượt gương.
+                // LOGKIT: cộng dòng log domain+code của lỗi lẻ.
+                let nsError = error as NSError
+                DiagLog.log(.mirror,
+                            "gương tờ \(snapshot.folderID) lỗi — \(nsError.domain) code=\(nsError.code)")
                 failedReceipts += 1
             }
         }
@@ -624,6 +657,10 @@ enum MirrorWriter {
                     // vẫn được ghi ở bước 3), KHÔNG đánh dấu
                     // deleted: entry giữ "active" để lượt sau
                     // thử chuyển lại (kiểm duyệt vòng 1, L3).
+                    // LOGKIT: cộng dòng log domain+code của lỗi lẻ.
+                    let nsError = error as NSError
+                    DiagLog.log(.mirror,
+                                "chuyển _deleted tờ \(id) lỗi — \(nsError.domain) code=\(nsError.code)")
                     failedDeletes += 1
                     continue
                 }
@@ -822,6 +859,9 @@ enum MirrorFolderPickerPresenter {
 
     static func present(onPick: @escaping (URL) -> Void,
                         onCancel: @escaping () -> Void) {
+        // LOGKIT (L-2026-11-19-39): chỉ cộng lời gọi log ở
+        // mọi chặng của lượt trình — logic giữ nguyên từng chữ.
+        DiagLog.log(.picker, "present() được gọi")
         // Lùi một nhịp runloop: nút bấm nằm trong List của
         // SwiftUI — trình ngay trong cùng nhịp sự kiện là đúng
         // cơ chế nuốt thao tác đã dính ở bản 146.
@@ -834,17 +874,25 @@ enum MirrorFolderPickerPresenter {
             // L-36). Picker modal chỉ có hai lối ra (chọn/huỷ),
             // cả hai đều nhả biến tĩnh bằng defer nên chốt này
             // không thể gây kẹt.
-            guard activeCoordinator == nil else { return }
+            guard activeCoordinator == nil else {
+                DiagLog.log(.picker,
+                            "present bị chặn bởi khoá tái nhập (đang có picker mở)")
+                return
+            }
             guard let presenter = topPresenter() else {
                 // Không có cửa sổ nào để trình: bộ chọn không
                 // hề hiện và sẽ không có phản hồi nào tới — ghi
                 // loại "không có phản hồi" (cùng kết cục quan
                 // sát được như đường tự nhả 0,6 s ở dưới).
+                DiagLog.log(.picker,
+                            "topPresenter = nil — không có cửa sổ để trình")
                 MirrorSettings.recordPickerOutcome(.noResponse,
                                                    folderName: nil)
                 onCancel()
                 return
             }
+            DiagLog.log(.picker,
+                        "topPresenter có: \(type(of: presenter))")
             let coordinator = Coordinator(onPick: onPick,
                                           onCancel: onCancel)
             activeCoordinator = coordinator
@@ -853,6 +901,7 @@ enum MirrorFolderPickerPresenter {
             picker.delegate = coordinator
             picker.allowsMultipleSelection = false
             presenter.present(picker, animated: true)
+            DiagLog.log(.picker, "đã gọi present(picker)")
             // Lối thoát thứ ba (kiểm duyệt L36 vòng 2): nếu
             // UIKit NUỐT lệnh present (VC đích đang giữa một
             // chuyển cảnh đóng/mở modal khác) thì picker không
@@ -873,9 +922,22 @@ enum MirrorFolderPickerPresenter {
                     // này là present BỊ NUỐT — ghi loại "không
                     // có phản hồi"; hành vi anh thấy giữ nguyên
                     // (vẫn gọi onCancel như trước).
+                    // LOGKIT: cộng dòng log kết quả nhịp kiểm.
+                    DiagLog.log(.picker,
+                                "nhịp kiểm 0,6s: picker KHÔNG có presentingViewController — present bị nuốt, tự nhả chốt")
                     MirrorSettings.recordPickerOutcome(.noResponse,
                                                        folderName: nil)
                     onCancel()
+                } else if picker.presentingViewController != nil {
+                    // LOGKIT: chỉ cộng dòng log — nhánh này
+                    // không đổi trạng thái nào.
+                    DiagLog.log(.picker,
+                                "nhịp kiểm 0,6s: picker đang hiện (có presentingViewController)")
+                } else {
+                    // LOGKIT: picker đã kết thúc qua delegate
+                    // trước nhịp kiểm — chỉ cộng dòng log.
+                    DiagLog.log(.picker,
+                                "nhịp kiểm 0,6s: picker đã kết thúc qua delegate trước nhịp kiểm")
                 }
             }
         }
@@ -917,6 +979,8 @@ enum MirrorFolderPickerPresenter {
                 // Picker trả về rỗng: không thư mục nào được
                 // chọn — đi đường huỷ như trước và ghi theo
                 // đúng đường đó.
+                // LOGKIT: cộng dòng log nhánh rỗng.
+                DiagLog.log(.picker, "didPick NHƯNG urls rỗng")
                 MirrorSettings.recordPickerOutcome(.cancelled,
                                                    folderName: nil)
                 onCancel()
@@ -926,6 +990,9 @@ enum MirrorFolderPickerPresenter {
             // chọn được thư mục này"; bước nhận thư mục
             // (adoptFolder) thành hay bại nằm ở lastError,
             // không trộn vào bản ghi này.
+            // LOGKIT: cộng dòng log didPick (chỉ tên thư mục).
+            DiagLog.log(.picker,
+                        "didPick: \(url.lastPathComponent)")
             MirrorSettings.recordPickerOutcome(
                 .picked, folderName: url.lastPathComponent)
             onPick(url)
@@ -935,6 +1002,8 @@ enum MirrorFolderPickerPresenter {
             _ controller: UIDocumentPickerViewController
         ) {
             defer { MirrorFolderPickerPresenter.activeCoordinator = nil }
+            // LOGKIT: cộng dòng log huỷ.
+            DiagLog.log(.picker, "documentPickerWasCancelled")
             MirrorSettings.recordPickerOutcome(.cancelled,
                                                folderName: nil)
             onCancel()

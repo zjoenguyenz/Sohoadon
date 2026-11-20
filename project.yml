@@ -43,6 +43,12 @@ targets:
       # camera/UI nên không liên kết hai file này.
       - ScanCameraView.swift
       - FlatScan.swift
+      # LOGKIT (L-2026-11-19-39): bộ log chẩn đoán trong app —
+      # luật cứng 2026-11-18 (mọi app phải có đường lấy log
+      # ra). Chỉ target chính như MirrorSync: bench không
+      # liên kết (bench có màn thám tử picker tự chứa trong
+      # BenchView.swift).
+      - Diagnostics.swift
       - CardsView.swift
       - DesignSystem.swift
       # --- Tập module đường đọc v3 (Pha 0-3, dùng CHUNG với
