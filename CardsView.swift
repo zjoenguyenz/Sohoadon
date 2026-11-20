@@ -20,7 +20,6 @@ struct CardsView: View {
     /// P2-1: gương thư mục Files — trạng thái thật đọc từ
     /// MirrorSettings (UserDefaults) mỗi lần vẽ; mirrorStateTick
     /// là móc làm mới khi lượt gương nền báo đổi trạng thái.
-    @State private var showMirrorPicker = false
     @State private var mirrorStateTick = 0
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
@@ -149,7 +148,7 @@ struct CardsView: View {
                             .foregroundStyle(.red)
                     }
                     Button {
-                        showMirrorPicker = true
+                        presentMirrorFolderPicker()
                     } label: {
                         Label(MirrorSettings.isConnected ? "Đổi thư mục gương…" : "Chọn thư mục gương…",
                               systemImage: "folder.badge.plus")
@@ -172,20 +171,6 @@ struct CardsView: View {
             .onReceive(NotificationCenter.default.publisher(
                 for: MirrorSync.statusChangedNotification)) { _ in
                 mirrorStateTick += 1
-            }
-            .sheet(isPresented: $showMirrorPicker) {
-                MirrorFolderPicker(
-                    onPick: { url in
-                        MirrorSettings.adoptFolder(url)
-                        showMirrorPicker = false
-                        mirrorStateTick += 1
-                        MirrorSync.requestSync(using: modelContext)
-                    },
-                    onCancel: {
-                        showMirrorPicker = false
-                        mirrorStateTick += 1
-                    })
-                .ignoresSafeArea()
             }
             .sheet(item: $formTarget) { target in
                 CardFormView(target: target, existingTails: cardTails) { data in
@@ -418,6 +403,22 @@ struct CardsView: View {
         return formatter.string(from: date)
     }
 
+    /// Mở bộ chọn thư mục gương bằng đường trình UIKit thuần
+    /// (L-2026-11-19-36: KHÔNG qua .sheet SwiftUI — bản 146
+    /// thao tác chọn bị nuốt, delegate không chạy). Chọn xong:
+    /// nhận thư mục, dậy lại giao diện, gương ngay một lượt.
+    private func presentMirrorFolderPicker() {
+        MirrorFolderPickerPresenter.present(
+            onPick: { url in
+                MirrorSettings.adoptFolder(url)
+                mirrorStateTick += 1
+                MirrorSync.requestSync(using: modelContext)
+            },
+            onCancel: {
+                mirrorStateTick += 1
+            })
+    }
+
     /// Bật gương mà chưa có thư mục thì bật = mở bộ chọn thư
     /// mục trước (chọn xong MirrorSettings tự bật); đã có thư
     /// mục thì bật và gương ngay một lượt.
@@ -430,7 +431,7 @@ struct CardsView: View {
                         MirrorSettings.isEnabled = true
                         MirrorSync.requestSync(using: modelContext)
                     } else {
-                        showMirrorPicker = true
+                        presentMirrorFolderPicker()
                     }
                 } else {
                     MirrorSettings.isEnabled = false

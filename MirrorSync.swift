@@ -744,42 +744,95 @@ enum MirrorWriter {
     }
 }
 
-// MARK: Bộ chọn thư mục cấp thấp (UIDocumentPicker — KHÔNG fileImporter)
+// MARK: Bộ chọn thư mục — trình bằng UIKit thuần từ VC trên cùng
 //
-// Bài học Test 0 (Models.swift + TEAM.md): SwiftUI fileImporter
-// CHỌN THƯ MỤC tự huỷ im lặng trên máy anh. Đường chọn thư mục
-// của gương đi qua UIDocumentPickerViewController bọc
-// UIViewControllerRepresentable — cùng kỷ luật cấp thấp với
-// đường đọc file của ScanView.
+// Bài học L-2026-11-19-36 (bản 146 trên máy anh, ký lại bằng
+// KravaSigner): bọc UIDocumentPickerViewController trong .sheet
+// SwiftUI (UIViewControllerRepresentable) thì cửa sổ chọn hiện
+// lên nhưng thao tác bấm Open BỊ NUỐT — không đóng, không kết
+// quả, không lỗi, delegate không bao giờ chạy, ở MỌI thư mục
+// (Receipts / iCloud Drive / On My iPhone đều vậy). Cùng triệu
+// chứng đã ghi nhận ở các bản cài sideload: ngữ cảnh trình diễn
+// do SwiftUI quản bị dỡ ngay dưới picker nên lệnh chọn không
+// tới được delegate.
+// Cách trình đúng: tạo picker và PRESENT bằng UIKit thuần từ
+// view controller trên cùng của cửa sổ chính; coordinator được
+// GIỮ TĨNH tới khi picker đóng; lùi một nhịp runloop để không
+// đụng nhịp dỡ ngữ cảnh của nút bấm vừa bấm. Kỷ luật cấp thấp
+// giữ nguyên: KHÔNG fileImporter (Test 0 — tự huỷ im lặng).
 
-struct MirrorFolderPicker: UIViewControllerRepresentable {
-    var onPick: (URL) -> Void
-    var onCancel: () -> Void
+enum MirrorFolderPickerPresenter {
+    /// Coordinator của lượt chọn đang mở. Delegate của picker
+    /// là weak nên phải có tham chiếu mạnh giữ nó sống tới khi
+    /// picker báo xong; nhả ngay trong callback.
+    private static var activeCoordinator: Coordinator?
 
-    func makeUIViewController(
-        context: Context
-    ) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [UTType.folder], asCopy: false)
-        picker.delegate = context.coordinator
-        picker.allowsMultipleSelection = false
-        return picker
+    static func present(onPick: @escaping (URL) -> Void,
+                        onCancel: @escaping () -> Void) {
+        // Lùi một nhịp runloop: nút bấm nằm trong List của
+        // SwiftUI — trình ngay trong cùng nhịp sự kiện là đúng
+        // cơ chế nuốt thao tác đã dính ở bản 146.
+        DispatchQueue.main.async {
+            // Khoá tái nhập (kiểm duyệt L36 vòng 1): hai thao
+            // tác mở rất nhanh không được sinh hai picker — lần
+            // mở sau ghi đè biến tĩnh sẽ làm coordinator của
+            // picker trước mất tham chiếu mạnh, delegate chết và
+            // Open của picker đó chết theo (đúng triệu chứng
+            // L-36). Picker modal chỉ có hai lối ra (chọn/huỷ),
+            // cả hai đều nhả biến tĩnh bằng defer nên chốt này
+            // không thể gây kẹt.
+            guard activeCoordinator == nil else { return }
+            guard let presenter = topPresenter() else {
+                onCancel()
+                return
+            }
+            let coordinator = Coordinator(onPick: onPick,
+                                          onCancel: onCancel)
+            activeCoordinator = coordinator
+            let picker = UIDocumentPickerViewController(
+                forOpeningContentTypes: [UTType.folder], asCopy: false)
+            picker.delegate = coordinator
+            picker.allowsMultipleSelection = false
+            presenter.present(picker, animated: true)
+            // Lối thoát thứ ba (kiểm duyệt L36 vòng 2): nếu
+            // UIKit NUỐT lệnh present (VC đích đang giữa một
+            // chuyển cảnh đóng/mở modal khác) thì picker không
+            // hề hiện, cả hai callback delegate không bao giờ
+            // chạy — biến tĩnh sẽ kẹt và khoá mở trùng chặn mọi
+            // lần mở sau tới khi khởi động lại app. Sau khoảng
+            // thời gian trình diễn chuẩn, tự kiểm lại: picker
+            // không có presentingViewController mà biến tĩnh
+            // vẫn là coordinator của lượt này thì tự nhả chốt.
+            // (presentingViewController được UIKit gán ngay khi
+            // bắt đầu trình, trước khi hoạt ảnh chạy xong, nên
+            // nhịp kiểm này không bắn nhầm picker đang mở.)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                if picker.presentingViewController == nil,
+                   MirrorFolderPickerPresenter.activeCoordinator === coordinator {
+                    MirrorFolderPickerPresenter.activeCoordinator = nil
+                    onCancel()
+                }
+            }
+        }
     }
 
-    func updateUIViewController(
-        _ viewController: UIDocumentPickerViewController,
-        context: Context
-    ) {
-        // Làm mới closure trên Coordinator thay vì giữ bản
-        // chụp tại thời điểm tạo (kiểm duyệt vòng 1, N3):
-        // view được SwiftUI dựng lại với closure mới thì
-        // delegate phải thấy closure mới đó.
-        context.coordinator.onPick = onPick
-        context.coordinator.onCancel = onCancel
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick, onCancel: onCancel)
+    /// View controller trên cùng của cửa sổ khoá thuộc scene
+    /// đang foreground (không có thì lấy scene cửa sổ đầu tiên).
+    private static func topPresenter() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive }
+            ?? scenes.first
+        guard let root = scene?.windows
+            .first(where: { $0.isKeyWindow })?.rootViewController
+            ?? scene?.windows.first?.rootViewController else {
+            return nil
+        }
+        var top = root
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        return top
     }
 
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
@@ -794,6 +847,7 @@ struct MirrorFolderPicker: UIViewControllerRepresentable {
 
         func documentPicker(_ controller: UIDocumentPickerViewController,
                             didPickDocumentsAt urls: [URL]) {
+            defer { MirrorFolderPickerPresenter.activeCoordinator = nil }
             guard let url = urls.first else {
                 onCancel()
                 return
@@ -804,6 +858,7 @@ struct MirrorFolderPicker: UIViewControllerRepresentable {
         func documentPickerWasCancelled(
             _ controller: UIDocumentPickerViewController
         ) {
+            defer { MirrorFolderPickerPresenter.activeCoordinator = nil }
             onCancel()
         }
     }
