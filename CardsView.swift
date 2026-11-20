@@ -136,6 +136,13 @@ struct CardsView: View {
                     LabeledContent("Thư mục gương",
                                    value: MirrorSettings.folderDisplayName ?? "Chưa chọn")
                     LabeledContent("Trạng thái", value: mirrorStatusText)
+                    // Gói 1 (điểm yếu 2.6): dấu vết của lần mở
+                    // bộ chọn thư mục gần nhất — chỉ hiện khi
+                    // đã từng mở ít nhất một lần.
+                    if MirrorSettings.lastPickerOutcome != nil {
+                        LabeledContent("Lần mở bộ chọn gần nhất",
+                                       value: mirrorLastPickerText)
+                    }
                     LabeledContent("Lần gương gần nhất", value: mirrorLastRunText)
                     if let summary = MirrorSettings.lastSummary {
                         Text(summary)
@@ -401,6 +408,37 @@ struct CardsView: View {
         formatter.locale = Locale(identifier: "vi_VN")
         formatter.dateFormat = "HH:mm dd/MM/yyyy"
         return formatter.string(from: date)
+    }
+
+    /// Dòng "Lần mở bộ chọn gần nhất" (Gói 1 — điểm yếu
+    /// 2.6): kết quả lần mở bộ chọn thư mục vừa rồi kèm giờ,
+    /// đọc từ bản ghi bền của MirrorSettings. Ba kết quả
+    /// phân biệt rõ: chọn được thư mục (kèm tên) / anh tự
+    /// huỷ / bộ chọn không có phản hồi. Chưa từng mở thì
+    /// CardsView không hiện dòng này (điều kiện ở chỗ gọi).
+    private var mirrorLastPickerText: String {
+        _ = mirrorStateTick
+        guard let outcome = MirrorSettings.lastPickerOutcome,
+              let date = MirrorSettings.lastPickerAt else {
+            return "Chưa có"
+        }
+        let result: String
+        switch outcome {
+        case .picked:
+            if let name = MirrorSettings.lastPickerFolderName {
+                result = "Đã chọn thư mục “\(name)”"
+            } else {
+                result = "Đã chọn thư mục"
+            }
+        case .cancelled:
+            result = "Đã huỷ"
+        case .noResponse:
+            result = "Không có phản hồi"
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.dateFormat = "HH:mm dd/MM/yyyy"
+        return "\(result) — \(formatter.string(from: date))"
     }
 
     /// Mở bộ chọn thư mục gương bằng đường trình UIKit thuần

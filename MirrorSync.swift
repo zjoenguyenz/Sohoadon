@@ -295,6 +295,9 @@ enum MirrorSettings {
     private static let lastSummaryKey = "glkeeper.mirror.lastSummary"
     private static let lastErrorKey = "glkeeper.mirror.lastError"
     private static let lastErrorAtKey = "glkeeper.mirror.lastErrorAt"
+    private static let lastPickerOutcomeKey = "glkeeper.mirror.lastPickerOutcome"
+    private static let lastPickerAtKey = "glkeeper.mirror.lastPickerAt"
+    private static let lastPickerFolderKey = "glkeeper.mirror.lastPickerFolder"
 
     static var isEnabled: Bool {
         get { UserDefaults.standard.bool(forKey: enabledKey) }
@@ -331,6 +334,41 @@ enum MirrorSettings {
     static var lastErrorAt: Date? {
         get { UserDefaults.standard.object(forKey: lastErrorAtKey) as? Date }
         set { UserDefaults.standard.set(newValue, forKey: lastErrorAtKey) }
+    }
+
+    /// Loại kết quả một lần mở bộ chọn thư mục (Gói 1 — điểm
+    /// yếu 2.6 trong bản đánh giá): picked = anh chọn được
+    /// thư mục; cancelled = anh tự đóng bộ chọn; noResponse
+    /// = lệnh trình bị nuốt, bộ chọn không hề hiện.
+    enum PickerOutcome: String {
+        case picked
+        case cancelled
+        case noResponse
+    }
+
+    /// Kết quả lần mở bộ chọn thư mục gần nhất (lưu bằng mã
+    /// máy; UI dịch sang tiếng Việt khi hiển thị).
+    static var lastPickerOutcome: PickerOutcome? {
+        get {
+            UserDefaults.standard.string(forKey: lastPickerOutcomeKey)
+                .flatMap { PickerOutcome(rawValue: $0) }
+        }
+        set {
+            UserDefaults.standard.set(newValue?.rawValue,
+                                      forKey: lastPickerOutcomeKey)
+        }
+    }
+
+    static var lastPickerAt: Date? {
+        get { UserDefaults.standard.object(forKey: lastPickerAtKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: lastPickerAtKey) }
+    }
+
+    /// Tên thư mục của lần chọn thành công gần nhất (chỉ có
+    /// nghĩa khi lastPickerOutcome == .picked).
+    static var lastPickerFolderName: String? {
+        get { UserDefaults.standard.string(forKey: lastPickerFolderKey) }
+        set { UserDefaults.standard.set(newValue, forKey: lastPickerFolderKey) }
     }
 
     /// Đã nối = có bookmark thư mục. Mất quyền truy cập được
@@ -392,6 +430,21 @@ enum MirrorSettings {
     static func recordFailure(_ message: String) {
         lastError = message
         lastErrorAt = Date()
+        postStatusChanged()
+    }
+
+    /// Ghi kết quả một lần mở bộ chọn thư mục — gọi từ MỌI
+    /// lối thoát của MirrorFolderPickerPresenter (chọn xong /
+    /// anh tự huỷ / trình bị nuốt) để mỗi lần mở đều để lại
+    /// dấu vết quan sát được (điểm yếu 2.6: trước đây một lần
+    /// mở kết thúc ra sao không ai biết — ca L-36 phải chẩn
+    /// đoán qua video quay màn hình). Ghi xong phát thông
+    /// báo đổi trạng thái theo cùng mẫu các hàm record*.
+    static func recordPickerOutcome(_ outcome: PickerOutcome,
+                                    folderName: String?) {
+        lastPickerOutcome = outcome
+        lastPickerAt = Date()
+        lastPickerFolderName = folderName
         postStatusChanged()
     }
 }
@@ -783,6 +836,12 @@ enum MirrorFolderPickerPresenter {
             // không thể gây kẹt.
             guard activeCoordinator == nil else { return }
             guard let presenter = topPresenter() else {
+                // Không có cửa sổ nào để trình: bộ chọn không
+                // hề hiện và sẽ không có phản hồi nào tới — ghi
+                // loại "không có phản hồi" (cùng kết cục quan
+                // sát được như đường tự nhả 0,6 s ở dưới).
+                MirrorSettings.recordPickerOutcome(.noResponse,
+                                                   folderName: nil)
                 onCancel()
                 return
             }
@@ -810,6 +869,12 @@ enum MirrorFolderPickerPresenter {
                 if picker.presentingViewController == nil,
                    MirrorFolderPickerPresenter.activeCoordinator === coordinator {
                     MirrorFolderPickerPresenter.activeCoordinator = nil
+                    // Tách khỏi huỷ tay (điểm yếu 2.6): đường
+                    // này là present BỊ NUỐT — ghi loại "không
+                    // có phản hồi"; hành vi anh thấy giữ nguyên
+                    // (vẫn gọi onCancel như trước).
+                    MirrorSettings.recordPickerOutcome(.noResponse,
+                                                       folderName: nil)
                     onCancel()
                 }
             }
@@ -849,9 +914,20 @@ enum MirrorFolderPickerPresenter {
                             didPickDocumentsAt urls: [URL]) {
             defer { MirrorFolderPickerPresenter.activeCoordinator = nil }
             guard let url = urls.first else {
+                // Picker trả về rỗng: không thư mục nào được
+                // chọn — đi đường huỷ như trước và ghi theo
+                // đúng đường đó.
+                MirrorSettings.recordPickerOutcome(.cancelled,
+                                                   folderName: nil)
                 onCancel()
                 return
             }
+            // Ghi TRƯỚC onPick: kết quả của bộ chọn là "đã
+            // chọn được thư mục này"; bước nhận thư mục
+            // (adoptFolder) thành hay bại nằm ở lastError,
+            // không trộn vào bản ghi này.
+            MirrorSettings.recordPickerOutcome(
+                .picked, folderName: url.lastPathComponent)
             onPick(url)
         }
 
@@ -859,6 +935,8 @@ enum MirrorFolderPickerPresenter {
             _ controller: UIDocumentPickerViewController
         ) {
             defer { MirrorFolderPickerPresenter.activeCoordinator = nil }
+            MirrorSettings.recordPickerOutcome(.cancelled,
+                                               folderName: nil)
             onCancel()
         }
     }
