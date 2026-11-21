@@ -1111,22 +1111,54 @@ struct ReceiptDetailView: View {
                 let mainName = receipt.imageFileName
                 let extraNames = receipt.originalImageFileNames
                     .filter { $0 != mainName }
+                let deletedID = receipt.stableID.isEmpty
+                    ? "(chưa có stableID)" : receipt.stableID
                 modelContext.delete(receipt)
                 if saveContextOrFalse(modelContext) {
-                    ImageStore.delete(fileName: mainName)
-                    // V3 (Pha 4): dọn cả file phụ chẩn đoán của tờ —
-                    // không để hồ sơ mồ côi trong thư mục bằng chứng.
-                    ImageStore.delete(fileName: DiagnosticsStore.fileName(
-                        forImageFileName: mainName))
-                    for name in extraNames {
-                        ImageStore.delete(fileName: name)
+                    // L-2026-11-20-42: xoá file bằng chứng
+                    // qua cổng kiểm tra tham chiếu chéo — tờ
+                    // vừa xoá đã ra khỏi sổ nên fetch lúc này
+                    // cho đúng tập hoá đơn CÒN LẠI; file nào
+                    // còn tờ khác tham chiếu thì GIỮ (bỏ qua),
+                    // file nào hết tham chiếu mới xoá thật
+                    // (kèm bản kho an toàn + .ocrdiag + -flat).
+                    // Mọi lần xoá/bỏ qua đều ghi log integrity
+                    // trong deleteReceiptEvidence. Đọc sổ lỗi
+                    // -> coi như còn tham chiếu ở mọi file
+                    // (hướng an toàn: giữ bằng chứng, lượt kiểm
+                    // kê sau tự đối chiếu lại).
+                    var stillReferenced: Set<String>
+                    do {
+                        let remaining = try modelContext.fetch(
+                            FetchDescriptor<Receipt>())
+                        stillReferenced = Set(remaining.flatMap {
+                            $0.allOriginalImageFileNames })
+                    } catch {
+                        stillReferenced = Set([mainName] + extraNames)
                     }
-                    // S2: bản scan phẳng đi kèm các ảnh gốc này
-                    // cũng là file của tờ — dọn cùng.
-                    FlatScan.deleteFlat(forOriginal: mainName)
-                    for name in extraNames {
-                        FlatScan.deleteFlat(forOriginal: name)
+                    // L-2026-11-20-42 (rà soát R1 ghế A-2):
+                    // bản chụp NHÁP còn sống cũng là một tham
+                    // chiếu — hoá đơn nhận THẲNG tên file của
+                    // nháp lúc lưu (save(): imageFileName =
+                    // draft.imageFileName, originalImage
+                    // FileNames = draft.originalFileNames),
+                    // và bản chụp chỉ bị xoá qua onDone của
+                    // ReviewView nên app bị giết giữa chừng là
+                    // bản chụp sống lại CÙNG tên với tờ đã lưu.
+                    // Tên nào nháp còn giữ thì KHÔNG xoá file:
+                    // nháp khôi phục không được trỏ vào hư vô.
+                    // Accessor đồng bộ có sẵn PendingDraftStore
+                    // .load() (ScanView/CardsView vẫn gọi vậy).
+                    if let snapshot = PendingDraftStore.load() {
+                        stillReferenced.insert(snapshot.imageFileName)
+                        stillReferenced.formUnion(
+                            snapshot.originalFileNames)
                     }
+                    ImageIntegrity.deleteReceiptEvidence(
+                        mainName: mainName,
+                        extraNames: extraNames,
+                        receiptID: deletedID,
+                        stillReferenced: stillReferenced)
                     // P2-1: kích lượt gương — tờ vừa xoá khỏi
                     // kho sẽ được đối chiếu manifest và chuyển
                     // bản gương vào _deleted/ (không xoá cứng).

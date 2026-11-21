@@ -39,9 +39,9 @@ enum DiagLog {
         case drive
         case read
         case app
-// L-2026-11-20-42: kiểm kê + kho an toàn ảnh gốc
-        // (ImageIntegrity.swift) — khôi phục/chép bổ sung/
-        // mất mới/mất hẳn và mọi lần xoá file bằng chứng.
+        /// L-2026-11-20-42: kiểm kê + kho an toàn ảnh gốc
+        /// (ImageIntegrity.swift) — khôi phục/chép bổ sung/
+        /// mất mới/mất hẳn và mọi lần xoá file bằng chứng.
         case integrity
     }
 

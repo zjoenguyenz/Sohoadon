@@ -27,6 +27,9 @@ struct CardsView: View {
     /// P2-2: móc làm mới riêng cho mục Google Drive (trạng
     /// thái đổi khi đăng nhập/đăng xuất/lượt đồng bộ báo về).
     @State private var driveStateTick = 0
+    /// L-2026-11-20-42: móc làm mới riêng cho dòng kiểm kê
+    /// ảnh gốc (trạng thái đổi sau mỗi lượt kiểm kê mở app).
+    @State private var integrityStateTick = 0
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
     private var archivedCards: [CardTail] { cardTails.filter { $0.archived } }
@@ -140,6 +143,18 @@ struct CardsView: View {
                 // drive.file); token nằm ở Keychain của máy.
                 Section {
                     LabeledContent("Trạng thái", value: driveStatusText)
+                    // L-2026-11-20-42: dòng đếm ảnh gốc lấy
+                    // từ KIỂM KÊ ĐỘC LẬP mỗi lần mở app —
+                    // KHÔNG mượn bộ đếm của lượt đồng bộ
+                    // (sau vá L-41 đường verify của Drive
+                    // không đếm lại ảnh mất, dòng đồng bộ
+                    // không còn là nguồn sự thật cho việc
+                    // đủ/thiếu ảnh gốc).
+                    LabeledContent("Ảnh gốc", value: integrityStatusText)
+                    if IntegritySettings.lastCheckAt != nil {
+                        LabeledContent("Kiểm kê gần nhất",
+                                       value: integrityLastCheckText)
+                    }
                     if DriveAuth.isSignedIn {
                         LabeledContent("Lần đồng bộ gần nhất",
                                        value: driveLastRunText)
@@ -269,6 +284,10 @@ struct CardsView: View {
             .onReceive(NotificationCenter.default.publisher(
                 for: DriveSync.statusChangedNotification)) { _ in
                 driveStateTick += 1
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: ImageIntegrity.statusChangedNotification)) { _ in
+                integrityStateTick += 1
             }
             .sheet(item: $formTarget) { target in
                 CardFormView(target: target, existingTails: cardTails) { data in
@@ -556,6 +575,34 @@ struct CardsView: View {
         _ = driveStateTick
         guard let date = DriveSettings.lastRunAt else {
             return "Chưa đồng bộ lần nào"
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "vi_VN")
+        formatter.dateFormat = "HH:mm dd/MM/yyyy"
+        return formatter.string(from: date)
+    }
+
+    // MARK: L-2026-11-20-42 — trạng thái kiểm kê ảnh gốc
+
+    /// Dòng "Ảnh gốc": đủ N/N khi không file tham chiếu nào
+    /// mất hẳn; có mất thì nêu số thiếu + số đã tự khôi phục
+    /// từ kho an toàn ở lượt kiểm gần nhất. Đọc
+    /// integrityStateTick để vẽ lại khi kiểm kê báo đổi.
+    private var integrityStatusText: String {
+        _ = integrityStateTick
+        guard let summary = IntegritySettings.lastSummary else {
+            return "Chưa kiểm kê"
+        }
+        if summary.missingCount == 0 {
+            return "đủ \(summary.presentCount)/\(summary.referencedCount)"
+        }
+        return "thiếu \(summary.missingCount) · đã tự khôi phục \(summary.restoredCount)"
+    }
+
+    private var integrityLastCheckText: String {
+        _ = integrityStateTick
+        guard let date = IntegritySettings.lastCheckAt else {
+            return "Chưa kiểm kê"
         }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "vi_VN")

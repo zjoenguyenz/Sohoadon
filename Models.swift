@@ -500,7 +500,6 @@ enum ImageStore {
         } catch {
             return nil
         }
-    
     }
 
     /// WP3: lưu file gốc NGUYÊN BYTE (PDF) vào cùng thư mục bằng chứng.
