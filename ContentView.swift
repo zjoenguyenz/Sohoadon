@@ -204,20 +204,37 @@ struct TabShellView: View {
         .tint(DS.brand)
         .task {
             seedStarterCardIfNeeded()
-            // P2-1: lượt gương bắt kịp mỗi lần mở app (lớp
-            // phụ — chưa bật/chưa chọn thư mục thì thoát ngay,
-            // không ghi lỗi).
-            MirrorSync.requestSync(using: modelContext)
-            DriveSync.requestSync(using: modelContext)
-        }
+                // P2-1: lượt gương bắt kịp mỗi lần mở app (lớp
+                // phụ — chưa bật/chưa chọn thư mục thì thoát ngay,
+                // không ghi lỗi).
+            // L-2026-11-20-42: kiểm kê ảnh gốc chạy TRƯỚC
+            // các trigger đồng bộ lúc mở app — kho chính mất
+            // file mà kho an toàn còn thì khôi phục/bổ sung
+            // xong mới tới lượt gương/Drive, để đồng bộ luôn
+            // nhìn thấy bộ bằng chứng đã lành. Completion của
+            // kiểm kê bắn hai trigger như cũ (kiểm kê lỗi thì
+            // vẫn bắn — lớp bảo vệ không chặn đồng bộ).
+            ImageIntegrity.runLaunchAudit(using: modelContext) {
+                MirrorSync.requestSync(using: modelContext)
+                DriveSync.requestSync(using: modelContext)
+            }
+            }
         .onChange(of: scenePhase) { _, newPhase in
             // P2-1: app quay lại foreground -> bắt kịp gương
             // (các thay đổi lúc app nền hoặc thư mục iCloud
             // vừa khả dụng trở lại đều được quét bù ở đây).
-            if newPhase == .active {
-                MirrorSync.requestSync(using: modelContext)
-                DriveSync.requestSync(using: modelContext)
-            }
+            // L-2026-11-20-42 (rà soát R1 ghế A-3 + C-2):
+               // đường này cũng qua CÙNG cổng kiểm kê như .task
+               // ở trên — file mất trong lúc app ở nền được khôi
+               // phục/bổ sung TRƯỚC, completion mới bắn hai
+               // trigger đồng bộ; các lượt kiểm tự xếp hàng trên
+               // auditQueue serial nên không chạy chồng nhau.
+                                   if newPhase == .active {
+                    ImageIntegrity.runLaunchAudit(using: modelContext) {
+                                       MirrorSync.requestSync(using: modelContext)
+                        DriveSync.requestSync(using: modelContext)
+                    }
+                    }
         }
         // WP3 bước 2: có file mở-từ-ngoài đang chờ -> nhảy thẳng sang
         // tab CHỤP để ScanView hút vào hàng chờ và mở màn Kiểm Lại.
