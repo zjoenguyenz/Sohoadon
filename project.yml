@@ -55,6 +55,12 @@ targets:
       # gương. Chỉ target chính như MirrorSync — bench không
       # có tầng model/UI nên không liên kết file này.
       - DriveSync.swift
+      # L-2026-11-20-42: bảo vệ ảnh gốc — kho an toàn ở
+      # Application Support/OriginalVault + kiểm kê mỗi lần
+      # mở app (planner thuần vào harness như ReceiptLogic;
+      # phần keo SwiftData bọc #if canImport(UIKit)). Chỉ
+      # target chính như DriveSync — bench không liên kết.
+      - ImageIntegrity.swift
       - CardsView.swift
       - DesignSystem.swift
       # --- Tập module đường đọc v3 (Pha 0-3, dùng CHUNG với
