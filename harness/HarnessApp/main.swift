@@ -314,6 +314,18 @@ func dumpImageRun(name: String, run: ImageRun, dir: URL) {
     let d = run.outcome.diagnostics
     let obj: [String: Any] = [
         "image": name,
+        // F8 (FL-317): census MỌI ứng viên của lượt đọc —
+        // kind/biến đổi/điểm/thắng + số mảnh thô + số dòng ráp,
+        // để kết án tầng sụp (OCR vs chọn ứng viên) trên đường
+        // thật thay vì chỉ nhìn ứng viên thắng.
+        "candidates": d.candidates.map { c -> [String: Any] in
+            ["kind": c.kind, "transform": c.transformDesc,
+             "gate": c.gateVerdict ?? "",
+             "score": c.scoreTotal ?? -999999,
+             "winner": c.winner ? 1 : 0,
+             "fragments": c.fragmentCount ?? -1,
+             "lines": c.lineCount ?? -1]
+        },
         "fragmentCensus": boxCensus(run.fragBoxes),
         "fragments": d.fragments.map {
             ["text": $0.text, "confidence": $0.confidence,

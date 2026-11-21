@@ -1155,5 +1155,40 @@ enum HarnessUnitTests {
             knownPresent: [])
         check("IG10-thu-tu-ten-file",
               ig10.map { $0.fileName } == ["a.jpg", "b.jpg"])
+
+        // TR01 — hình học dải cứu FL-317 (bản sao probeTiles):
+        // 4 dải phủ kín khung; dải mép cao 0.28 (0.25 + nở
+        // 0.03 một phía), dải giữa cao 0.31 (nở cả hai phía);
+        // hai dải kề nhau chồng lấn.
+        let bands = ReceiptReader.tiledRescueBands()
+        check("TR01-bon-dai-phu-kin-chong-lan",
+              bands.count == 4
+                  && abs(bands[0].minY) < 1e-9
+                  && abs(bands[3].maxY - 1.0) < 1e-9
+                  && abs(bands[0].height - 0.28) < 1e-9
+                  && abs(bands[1].height - 0.31) < 1e-9
+                  && bands[1].minY < bands[0].maxY
+                  && bands[2].minY < bands[1].maxY
+                  && bands[3].minY < bands[2].maxY)
+        // TR02 — remap hộp đầy dải trả đúng dải.
+        let band1 = bands[1]
+        let full = ReceiptReader.remapTiledBox(
+            CGRect(x: 0, y: 0, width: 1, height: 1), band: band1)
+        check("TR02-remap-day-dai",
+              abs(full.minX - band1.minX) < 1e-9
+                  && abs(full.minY - band1.minY) < 1e-9
+                  && abs(full.width - band1.width) < 1e-9
+                  && abs(full.height - band1.height) < 1e-9)
+        // TR03 — remap hộp giữa dải theo đúng tỉ lệ: dải 2
+        // (đếm từ đáy) = [0.47, 0.78], cao 0.31; hộp
+        // (0.5, 0.5, 0.25, 0.1) -> (0.5, 0.625, 0.25, 0.031).
+        let mid = ReceiptReader.remapTiledBox(
+            CGRect(x: 0.5, y: 0.5, width: 0.25, height: 0.1),
+            band: bands[2])
+        check("TR03-remap-giua-dai",
+              abs(mid.minX - 0.5) < 1e-9
+                  && abs(mid.minY - 0.625) < 1e-9
+                  && abs(mid.width - 0.25) < 1e-9
+                  && abs(mid.height - 0.031) < 1e-9)
     }
 }
