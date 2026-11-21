@@ -489,10 +489,18 @@ enum ImageStore {
         let url = directory.appendingPathComponent(name)
         do {
             try data.write(to: url)
+            // L-2026-11-20-42: phễu ghi ảnh gốc DUY NHẤT của
+            // app (mọi đường quét/nhập/gắn lại đều qua đây) —
+            // chép thêm một bản vào kho an toàn ở Application
+            // Support. Best-effort: chép kho hỏng chỉ ghi log,
+            // KHÔNG đổi kết quả của đường lưu chính.
+            OriginalVault.backfill(fileName: name,
+                                   mainDirectory: directory)
             return name
         } catch {
             return nil
         }
+    
     }
 
     /// WP3: lưu file gốc NGUYÊN BYTE (PDF) vào cùng thư mục bằng chứng.
@@ -503,6 +511,10 @@ enum ImageStore {
         let url = directory.appendingPathComponent(name)
         do {
             try data.write(to: url)
+            // L-2026-11-20-42: như saveJPEG — bản sao kho an
+            // toàn best-effort ngay tại phễu ghi.
+            OriginalVault.backfill(fileName: name,
+                                   mainDirectory: directory)
             return name
         } catch {
             return nil
