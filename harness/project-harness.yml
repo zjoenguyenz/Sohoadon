@@ -57,6 +57,12 @@ targets:
       #   receiptHasOriginalImage) + formatMoney.
       - ../PendingDraft.swift
       - ../ReceiptLogic.swift
+      # L-2026-11-20-42: planner kiểm kê ảnh gốc THUẦN
+      # Foundation (IntegrityPlanner) — harness biên dịch để
+      # test IG01… chạy bằng Swift thật. Phần keo SwiftData/
+      # UIKit của file nằm sau #if canImport(UIKit) nên
+      # không lọt vào harness macOS.
+      - ../ImageIntegrity.swift
       # G5 (sửa cổng đo — việc gốc của vụ "100 lượt xanh giả"):
       # ReadPipeline.swift NAY VÀO harness. File chỉ chạm UIKit
       # ở 3 điểm (import, uprightCGImage(UIImage),
