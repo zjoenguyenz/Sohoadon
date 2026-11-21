@@ -761,7 +761,13 @@ enum ReadCoreVersion {
     /// (D-V4-3) và bật cổng chất lượng theo từng tờ với trạng
     /// thái .block thật (D-V4-2). Tem cũ của thế hệ v3 là
     /// "core-v3-2" (bản giao 2026-11-13, harness run #21).
-    static let parserVersion = "core-v4-1"
+    /// core-v4-2 (gói RESCUE, FL-317): thêm ĐƯỜNG CỨU DẢI NGANG
+    /// có cổng (ứng viên "tiledRescue": 4 dải ngang chồng 12%,
+    /// phóng ×2 — chỉ sinh khi đường chính đói chữ hoàn toàn:
+    /// thắng-tạm 0 món, không subtotal, không total, chưa khép
+    /// E1) + census F8 trong hồ sơ chẩn đoán (fragmentCount/
+    /// lineCount từng ứng viên). Cách đọc cũ không đổi.
+    static let parserVersion = "core-v4-2"
 }
 
 /// Yêu cầu đọc (DESIGN-DETAIL §1.3, cụ thể hoá cho các đường
@@ -1145,6 +1151,13 @@ enum ReceiptReader {
                 if let run = runCandidate(step: step, images: [img],
                                           engine: engine, core: req.core) {
                     runs.append(run)
+                    // Gói RESCUE (FL-317): gập như mọi case khác
+                    // — cổng cứu phía dưới là nơi tiêu thụ đầu
+                    // tiên của anyE1Closed sau vòng chuỗi, nên
+                    // cờ phải gồm cả ứng viên cuối này thì điều
+                    // kiện "chưa ứng viên nào khép E1" mới đúng
+                    // từng chữ.
+                    anyE1Closed = anyE1Closed || run.evaluation.e1Closed
                 }
             default:
                 continue
@@ -1157,6 +1170,31 @@ enum ReceiptReader {
         guard !runs.isEmpty else {
             return finishEmpty(req: req, identity: identity,
                                input: input, started: started)
+        }
+
+        // FL-317 — ĐƯỜNG CỨU DẢI NGANG CÓ CỔNG (gói RESCUE,
+        // hồ sơ RESCUE-DIFF.md): chỉ SINH ứng viên cứu khi
+        // đường chính đói chữ HOÀN TOÀN theo đúng chữ ký đã
+        // kết án trên corpus run #66 — tờ một trang, không
+        // ứng viên nào khép E1, và ứng viên thắng-tạm có
+        // 0 món ∧ không subtotal ∧ không total (rà 40 luồng
+        // run #66: khớp đúng hai ca đói chữ 01-walmart-1 và
+        // 02-walmart-2; 38 ca khác đều có ít nhất một dấu
+        // hiệu sống). Cổng chỉ quyết việc
+        // SINH — ứng viên cứu vẫn phải tự thắng bằng điểm
+        // §3.6 như mọi ứng viên khác ở pickWinner dưới đây.
+        if !multiPage, !anyE1Closed {
+            let preIndex = CandidateScorer.pickWinner(
+                runs.map { $0.evaluation })
+            let pre = runs[preIndex]
+            if pre.parsed.items.isEmpty,
+               pre.parsed.totalCents == nil,
+               pre.parsed.subtotalCents == nil,
+               let rescue = runTiledRescueCandidate(
+                   image: pages[0], engine: engine, core: req.core) {
+                runs.append(rescue)
+                flags.append("tiled-rescue-produced")
+            }
         }
 
         stageBreadcrumb?("scoring")
@@ -1268,7 +1306,9 @@ enum ReceiptReader {
                 gateVerdict: run.gateVerdict,
                 scoreComponents: run.scoreComponents,
                 scoreTotal: run.scoreTotal,
-                winner: i == winnerIndex))
+                winner: i == winnerIndex,
+                fragmentCount: run.fragments.count,
+                lineCount: run.assembly.lines.count))
         }
 
         return finalize(req: req, outcome: outcome,
@@ -1374,6 +1414,109 @@ enum ReceiptReader {
                             scoreTotal: scored.total,
                             scoreComponents: scored.components,
                             stitchStatus: stitchStatus)
+    }
+
+    // MARK: - Đường cứu dải ngang (FL-317, gói RESCUE)
+
+    /// Hình học dải của đường cứu — BẢN SAO ĐÚNG của cách
+    /// thắng đã đo ở ocrprobe run #67 (probeTiles, tiles4-x2:
+    /// khép đúng GT ca 02-walmart-2 — 163 mảnh, 8772/135/
+    /// 8907): ảnh chia 4 phần ngang bằng nhau; mỗi dải NỞ
+    /// thêm 12% chiều cao dải về mỗi phía trong khung (dải
+    /// mép chỉ nở vào trong) nên phủ kín khung và hai dải kề
+    /// nhau chồng lấn 24% chiều cao dải ở đường nối. Dải ở
+    /// đây đếm từ ĐÁY lên theo toạ độ Vision chuẩn hoá gốc
+    /// dưới-trái (probe đếm từ đỉnh xuống theo pixel — cùng
+    /// một phép chia, ráp dòng sắp xếp lại theo vị trí nên
+    /// thứ tự đọc không đổi kết quả).
+    /// Internal (không private) để unit test TR01 đo trực tiếp.
+    static func tiledRescueBands() -> [CGRect] {
+        let bandCount = 4
+        let bandH = 1.0 / Double(bandCount)
+        let grow = bandH * 0.12
+        return (0..<bandCount).map { t in
+            let lo = t == 0 ? 0.0 : Double(t) * bandH - grow
+            let hi = t == bandCount - 1
+                ? 1.0 : Double(t + 1) * bandH + grow
+            return CGRect(x: 0, y: lo, width: 1.0, height: hi - lo)
+        }
+    }
+
+    /// Ánh xạ hộp mảnh từ hệ toạ độ của DẢI (chuẩn hoá trong
+    /// dải) về hệ toàn khung. Internal để unit test TR02/TR03
+    /// đo trực tiếp.
+    static func remapTiledBox(_ box: CGRect, band: CGRect) -> CGRect {
+        CGRect(
+            x: Double(band.minX) + Double(box.minX) * Double(band.width),
+            y: Double(band.minY) + Double(box.minY) * Double(band.height),
+            width: Double(box.width) * Double(band.width),
+            height: Double(box.height) * Double(band.height))
+    }
+
+    /// Chạy ứng viên cứu: cắt từng dải + phóng ×2 (cropForROI)
+    /// -> engine chính đọc -> ánh xạ hộp về toàn khung -> ráp
+    /// LineAssembly -> parse -> chấm §3.6, đúng kỷ luật của
+    /// runCandidate. Lỗi ở bất kỳ dải nào -> nil (fail-closed,
+    /// đường chính giữ nguyên kết quả của nó).
+    private static func runTiledRescueCandidate(
+        image: CGImage, engine: ClassicTextEngine, core: ReadCore)
+        -> CandidateRun? {
+        stageBreadcrumb?("ocr-tiledRescue")
+        var fragments: [Fragment] = []
+        var nextID = 1
+        do {
+            for (tile, band) in tiledRescueBands().enumerated() {
+                guard let crop = cropForROI(image, band: band,
+                                            upscale: 2.0)
+                else { return nil }
+                let frags = try engine.recognize(in: crop, region: nil)
+                for var f in frags {
+                    // id của engine khởi động lại mỗi lượt đọc:
+                    // đánh số lại liên tục để id duy nhất trong
+                    // toàn ứng viên (span trỏ đúng mảnh).
+                    f.id = nextID
+                    nextID += 1
+                    f.box = remapTiledBox(f.box, band: band)
+                    f.passID = "tiledRescue"
+                    f.tileIndex = tile
+                    fragments.append(f)
+                }
+            }
+        } catch {
+            return nil
+        }
+        stageBreadcrumb?("tiled-rescue-recognize-done")
+        let assembly = LineAssembly.assemble(fragments)
+        let lines = assembly.lines.map {
+            OCRLine(text: $0.text, confidence: $0.confidence)
+        }
+        let boxes: [CGRect?] = assembly.lines.map { $0.box }
+        let parsed = parseWithCore(core, lines: lines, boxes: boxes)
+        // QualityMap của chính ứng viên này — cùng cách dựng
+        // như runCandidate (bản đồ trên ảnh GỐC toàn khung vì
+        // hộp dòng đã ánh xạ về toàn khung).
+        var candidateQualityMap: [QualityMapEntry] = []
+        if let grid = LuminanceGrid.fromImage(image) {
+            let thresholds = QualityThresholds()
+            candidateQualityMap = assembly.lines.map {
+                grid.qualityMapEntry(for: $0.box, thresholds: thresholds)
+            }
+        }
+        let evaluation = makeEvaluation(parsed: parsed,
+                                        assembly: assembly,
+                                        isOriginal: false,
+                                        qualityMap: candidateQualityMap)
+        let scored = CandidateScorer.score(evaluation)
+        return CandidateRun(
+            step: CandidateStep(
+                kind: "tiledRescue",
+                transformDesc: "tiles4-x2-overlap12",
+                note: "đường cứu FL-317 — chỉ sinh khi đường "
+                    + "chính đói chữ hoàn toàn (cổng ở "
+                    + "finishImagePath)"),
+            image: image, fragments: fragments, assembly: assembly,
+            parsed: parsed, evaluation: evaluation,
+            scoreTotal: scored.total, scoreComponents: scored.components)
     }
 
     /// CandidateEvaluation từ kết quả F4 của ứng viên (công thức

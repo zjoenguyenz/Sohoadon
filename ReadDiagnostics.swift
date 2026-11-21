@@ -130,12 +130,17 @@ struct DiagConfig: Codable, Equatable {
 /// Một ứng viên ảnh của F1 (gốc/phối cảnh/tăng cường/nắn) + điểm
 /// chọn của hàm điểm ứng viên (F3-2 — ĐO-Ở-PHA-2 ở bản chốt).
 struct DiagCandidate: Codable, Equatable {
-    var kind: String                // "original" | "perspective" | "dewarp" | "shadowRemoved" | "enhanced" | "binarized"
+    var kind: String                // "original" | "perspective" | "dewarp" | "shadowRemoved" | "enhanced" | "binarized" | "tiledRescue"
     var transformDesc: String       // tứ giác / tham số lọc — mô tả biến đổi (§1.5)
     var gateVerdict: String? = nil  // verdict cổng tứ giác D-2.3 nếu có
     var scoreComponents: [String: Double] = [:]
     var scoreTotal: Double? = nil
     var winner: Bool = false
+    // F8 (FL-317): census của ứng viên — số mảnh thô engine trả
+    // + số dòng sau ráp. Tuỳ chọn (nil) để hồ sơ chẩn đoán do
+    // bản cũ ghi vẫn giải mã được nguyên vẹn.
+    var fragmentCount: Int? = nil
+    var lineCount: Int? = nil
 }
 
 /// Một ô của QualityMap — điểm chất lượng CÓ VỊ TRÍ (DESIGN-FINAL
