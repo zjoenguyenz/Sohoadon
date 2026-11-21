@@ -40,6 +40,7 @@ enum HarnessUnitTests {
         runApprovalGateTests(check)
         runVariantRescueTests(check)
         runQualityGateTests(check)
+        runIntegrityPlannerTests(check)
         return lines
     }
 
@@ -1014,5 +1015,145 @@ enum HarnessUnitTests {
         } else {
             check("QG22-dto-json-cu-escalated-false", false)
         }
+    }
+
+    // MARK: - L-2026-11-20-42: planner kiểm kê ảnh gốc (thuần)
+    //
+    // IntegrityPlanner (ImageIntegrity.swift) quyết định ở
+    // mức TÊN FILE: bản đồ tham chiếu (tên file -> tập id
+    // hoá đơn còn tham chiếu) + tập file ở kho chính + tập
+    // file ở kho an toàn + tập "đã biết còn" ở kho chính từ
+    // lần kiểm trước. Bốn loại hành động phải phủ đủ: khôi
+    // phục từ kho an toàn / chép bổ sung vào kho / mất hẳn /
+    // mất mới. Ca file CHUNG hai hoá đơn kiểm ở mức file:
+    // một hoá đơn biến mất khỏi bản đồ KHÔNG biến file còn
+    // nguyên thành "mất" cho hoá đơn còn lại.
+
+    private static func runIntegrityPlannerTests(
+        _ check: (String, Bool) -> Void) {
+
+        // IG01 — file đủ ở cả hai kho -> không hành động.
+        let ig01 = IntegrityPlanner.plan(
+            references: ["a.jpg": ["R1"], "b.pdf": ["R2"]],
+            mainFiles: ["a.jpg", "b.pdf"],
+            vaultFiles: ["a.jpg", "b.pdf"],
+            knownPresent: ["a.jpg", "b.pdf"])
+        check("IG01-du-hai-kho-khong-hanh-dong", ig01.isEmpty)
+
+        // IG02 — kho chính có, kho an toàn thiếu -> chép
+        // bổ sung đúng một hành động.
+        let ig02 = IntegrityPlanner.plan(
+            references: ["a.jpg": ["R1"]],
+            mainFiles: ["a.jpg"],
+            vaultFiles: [],
+            knownPresent: ["a.jpg"])
+        check("IG02-thieu-vault-chep-bo-sung",
+              ig02 == [.backfillVault(fileName: "a.jpg")])
+
+        // IG03 — kho chính mất, kho an toàn còn -> khôi
+        // phục; file chưa từng "biết còn" nên không kèm
+        // nhãn mất mới.
+        let ig03 = IntegrityPlanner.plan(
+            references: ["a.jpg": ["R1"]],
+            mainFiles: [],
+            vaultFiles: ["a.jpg"],
+            knownPresent: [])
+        check("IG03-mat-chinh-con-vault-khoi-phuc",
+              ig03 == [.restoreFromVault(fileName: "a.jpg")])
+
+        // IG04 — mất cả hai kho, chưa từng biết còn ->
+        // mất hẳn, KHÔNG nhãn mất mới (không có căn cứ
+        // nói nó vừa mất).
+        let ig04 = IntegrityPlanner.plan(
+            references: ["a.jpg": ["R1"]],
+            mainFiles: [],
+            vaultFiles: [],
+            knownPresent: [])
+        check("IG04-mat-ca-hai-chua-biet",
+              ig04 == [.missingUnrecoverable(fileName: "a.jpg")])
+
+        // IG05 — mất cả hai kho, lần kiểm trước còn ở kho
+        // chính -> mất hẳn + MẤT MỚI (ca bắt vụ mất ở lần
+        // mở app kế tiếp).
+        let ig05 = IntegrityPlanner.plan(
+            references: ["a.jpg": ["R1"]],
+            mainFiles: [],
+            vaultFiles: [],
+            knownPresent: ["a.jpg"])
+        check("IG05-mat-ca-hai-la-mat-moi",
+              ig05 == [.missingUnrecoverable(fileName: "a.jpg"),
+                       .newlyLost(fileName: "a.jpg")])
+
+        // IG06 — mất kho chính nhưng cứu được từ kho an
+        // toàn, lần trước còn -> khôi phục + MẤT MỚI (sự
+        // kiện mất vẫn phải để lại dấu vết dù đã cứu).
+        let ig06 = IntegrityPlanner.plan(
+            references: ["a.jpg": ["R1"]],
+            mainFiles: [],
+            vaultFiles: ["a.jpg"],
+            knownPresent: ["a.jpg"])
+        check("IG06-cuu-duoc-van-la-mat-moi",
+              ig06 == [.restoreFromVault(fileName: "a.jpg"),
+                       .newlyLost(fileName: "a.jpg")])
+
+        // IG07 — file được HAI hoá đơn cùng tham chiếu,
+        // kiểm ở mức file:
+        // (a) cả hai còn tham chiếu, file đủ -> im lặng.
+        let ig07a = IntegrityPlanner.plan(
+            references: ["s.jpg": ["R1", "R2"]],
+            mainFiles: ["s.jpg"],
+            vaultFiles: ["s.jpg"],
+            knownPresent: ["s.jpg"])
+        check("IG07a-file-chung-con-du", ig07a.isEmpty)
+        // (b) một hoá đơn đã bị xoá khỏi bản đồ (tờ còn
+        // lại vẫn tham chiếu), file còn ở kho chính ->
+        // KHÔNG tính mất; chỉ chép bổ sung vào kho an
+        // toàn đang thiếu.
+        let ig07b = IntegrityPlanner.plan(
+            references: ["s.jpg": ["R2"]],
+            mainFiles: ["s.jpg"],
+            vaultFiles: [],
+            knownPresent: ["s.jpg"])
+        check("IG07b-xoa-mot-to-file-chung-khong-mat",
+              ig07b == [.backfillVault(fileName: "s.jpg")])
+        // (c) file chung mất cả hai kho -> đúng MỘT hành
+        // động mất hẳn cho file, không nhân đôi theo số
+        // hoá đơn tham chiếu.
+        let ig07c = IntegrityPlanner.plan(
+            references: ["s.jpg": ["R1", "R2"]],
+            mainFiles: [],
+            vaultFiles: [],
+            knownPresent: [])
+        check("IG07c-file-chung-mat-mot-hanh-dong",
+              ig07c == [.missingUnrecoverable(fileName: "s.jpg")])
+
+        // IG08 — file mồ côi (không hoá đơn nào tham
+        // chiếu) dù có mặt ở kho -> planner không xét,
+        // không sinh hành động.
+        let ig08 = IntegrityPlanner.plan(
+            references: ["a.jpg": ["R1"]],
+            mainFiles: ["a.jpg", "orphan.jpg"],
+            vaultFiles: ["a.jpg", "orphan.jpg"],
+            knownPresent: ["a.jpg", "orphan.jpg"])
+        check("IG08-file-mo-coi-khong-xet", ig08.isEmpty)
+
+        // IG09 — không có tham chiếu nào -> không hành
+        // động (kho trống tham chiếu là trạng thái hợp lệ).
+        check("IG09-khong-tham-chieu",
+              IntegrityPlanner.plan(
+                references: [:],
+                mainFiles: ["x.jpg"],
+                vaultFiles: [],
+                knownPresent: ["x.jpg"]).isEmpty)
+
+        // IG10 — hành động sắp theo tên file tăng dần
+        // (ổn định cho log + test).
+        let ig10 = IntegrityPlanner.plan(
+            references: ["b.jpg": ["R1"], "a.jpg": ["R2"]],
+            mainFiles: [],
+            vaultFiles: [],
+            knownPresent: [])
+        check("IG10-thu-tu-ten-file",
+              ig10.map { $0.fileName } == ["a.jpg", "b.jpg"])
     }
 }
