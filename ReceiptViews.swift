@@ -538,7 +538,6 @@ struct ReceiptDetailView: View {
     // gốc" chỉ hiện khi tờ không còn file gốc nào tải được).
     @State private var showReattachPicker = false
     @State private var reattachPickerItem: PhotosPickerItem? = nil
-    @State private var showReattachImporter = false
     @State private var reattachError: String? = nil
     // SCANPRO: chụp lại bản gốc bằng máy quét tài liệu ngay tại màn
     // Chi Tiết — dùng cho cả tờ đã có ảnh (muốn bản quét phẳng, rõ
@@ -736,7 +735,32 @@ struct ReceiptDetailView: View {
                     }
                     Button {
                         reattachError = nil
-                        showReattachImporter = true
+                        // L-2026-11-20-45: trình picker bằng
+                        // UIKit thuần ở chế độ SAO CHÉP qua
+                        // ReceiptFilePickerPresenter (dùng chung
+                        // với tab CHỤP) — .fileImporter của
+                        // SwiftUI (mở tại chỗ) chết ở nút Open
+                        // trên bản ký lại KravaSigner y hệt nút
+                        // nạp file ở ScanView (L-2026-11-20-43).
+                        DiagLog.log(.app, "GẮN LẠI: mở bộ chọn file gắn lại ảnh gốc")
+                        ReceiptFilePickerPresenter.present(
+                            onPick: { urls in
+                                if let url = urls.first {
+                                    DiagLog.log(.app, "GẮN LẠI: đã chọn file \(url.lastPathComponent)")
+                                    attachReattachedFile(url: url)
+                                }
+                            },
+                            onCancel: {
+                                // Huỷ chọn: giữ nguyên hành vi
+                                // cũ của .fileImporter — không
+                                // báo lỗi, không đổi trạng thái
+                                // (lượt chọn đã có dòng log
+                                // "NẠP FILE:" ở presenter).
+                            },
+                            onFailure: { error in
+                                reattachError = "Không nạp được file: \(error.localizedDescription)"
+                            },
+                            allowsMultiple: false)
                     } label: {
                         Label("Gắn lại từ Files (ảnh / PDF)", systemImage: "folder")
                     }
@@ -1173,8 +1197,10 @@ struct ReceiptDetailView: View {
             Button("Huỷ", role: .cancel) {}
         }
         // IMGFIX: hai ngõ gắn lại ảnh gốc — bám đúng mẫu ScanView đang
-        // dùng (PhotosPicker cho ảnh; fileImporter chọn FILE, không
-        // chọn thư mục — bài học Test 0 ở TEAM.md).
+        // dùng (PhotosPicker cho ảnh; ReceiptFilePickerPresenter chọn
+        // FILE ở nút bấm phía trên, không chọn thư mục — bài học
+        // Test 0 ở TEAM.md; presenter thay .fileImporter từ
+        // L-2026-11-20-45).
         .photosPicker(isPresented: $showReattachPicker, selection: $reattachPickerItem, matching: .images)
         .onChange(of: reattachPickerItem) { _, newItem in
             guard let newItem else { return }
@@ -1186,18 +1212,6 @@ struct ReceiptDetailView: View {
                     reattachError = "Không mở được ảnh đã chọn."
                 }
                 reattachPickerItem = nil
-            }
-        }
-        .fileImporter(isPresented: $showReattachImporter,
-                      allowedContentTypes: [.pdf, .jpeg, .png, .heic],
-                      allowsMultipleSelection: false) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    attachReattachedFile(url: url)
-                }
-            case .failure(let error):
-                reattachError = "Không nạp được file: \(error.localizedDescription)"
             }
         }
         // SCANPRO: mở máy quét tài liệu toàn màn hình — bám đúng mẫu

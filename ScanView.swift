@@ -66,6 +66,12 @@ struct ScanView: View {
     /// ContentView nhận qua onOpenURL rồi truyền xuống đây; ScanView hút
     /// vào CÙNG importQueue của đường Files (không có đường nạp thứ hai).
     @Binding var externalImportURLs: [URL]
+    /// L-2026-11-20-44 (đính chính): tín hiệu mở khoá TƯỜNG MINH từ
+    /// ContentView (tăng 1 mỗi lần mở khoá thành công) — ScanView
+    /// nghe tick này để hút file chờ đã qua cổng khoá, vì thay đổi
+    /// của binding cổng tự-tính không phát hiện tin cậy được bằng
+    /// .onChange(of: externalImportURLs).
+    var unlockTick: Int
     @State private var showCamera = false
     // S1: cover chụp mặc định là camera tự dựng (ScanCameraView);
     // khi máy không dùng được camera tự dựng (không có camera /
@@ -73,7 +79,6 @@ struct ScanView: View {
     // quét hệ thống trong cùng một cover.
     @State private var useSystemScanner = false
     @State private var showPhotoPicker = false
-    @State private var showFileImporter = false
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var isProcessing = false
     @State private var statusText: String? = nil
@@ -182,7 +187,37 @@ struct ScanView: View {
 
                     Button {
                         errorText = nil
-                        showFileImporter = true
+                        // Gói 3 (L-2026-11-20-43, Q10a): trình
+                        // picker bằng UIKit thuần ở chế độ SAO
+                        // CHÉP qua ReceiptFilePickerPresenter —
+                        // .fileImporter của SwiftUI (mở tại chỗ)
+                        // chết ở nút Open trên bản ký lại
+                        // KravaSigner y hệt bộ chọn thư mục L-36.
+                        ReceiptFilePickerPresenter.present(
+                            onPick: { urls in
+                                // G3 (luật bền hoá): sao NGAY
+                                // các URL được chọn vào thư mục
+                                // chờ của app (PendingImports)
+                                // rồi mới xếp hàng — hàng đợi từ
+                                // đây là danh sách file CỦA APP
+                                // trên đĩa, sống qua giết app.
+                                // Nối vào hàng chờ sẵn có thay vì
+                                // thay thế — thay thế sẽ làm rơi
+                                // lặng các file đang chờ trên đĩa.
+                                importQueue.append(
+                                    contentsOf: stageExternalURLs(urls))
+                                processNextImportedFile()
+                            },
+                            onCancel: {
+                                // Huỷ chọn: giữ nguyên hành vi cũ
+                                // của .fileImporter — không báo
+                                // lỗi, không đổi trạng thái (lượt
+                                // chọn đã có dòng log [app] tiền tố
+                                // "NẠP FILE:" ở presenter).
+                            },
+                            onFailure: { error in
+                                errorText = "Không nạp được file: \(error.localizedDescription)"
+                            })
                     } label: {
                         Label("Nạp file (PDF / ảnh tải về)", systemImage: "folder")
                             .frame(maxWidth: .infinity)
@@ -263,29 +298,14 @@ struct ScanView: View {
                     pickerItem = nil
                 }
             }
-            // WP3: nạp từ Files — CHỌN FILE (không phải chọn thư mục; bài học
-            // Test 0 ở TEAM.md lỗi #3 là chọn thư mục của chính app bị huỷ im
-            // lặng — chế độ chọn file này vẫn phải có bài kiểm riêng trên máy
-            // anh ở mốc M1, ghi ở WP3-GATE.md). Cho chọn nhiều file một lúc.
-            .fileImporter(isPresented: $showFileImporter,
-                          allowedContentTypes: [.pdf, .jpeg, .png, .heic],
-                          allowsMultipleSelection: true) { result in
-                switch result {
-                case .success(let urls):
-                    // G3 (luật bền hoá): file từ bộ chọn Files là
-                    // URL bảo mật theo PHIÊN — tiến trình chết là
-                    // quyền truy cập chết theo. Sao NGAY vào thư
-                    // mục chờ của app (PendingImports) rồi mới xếp
-                    // hàng: hàng đợi từ đây là danh sách file CỦA
-                    // APP trên đĩa, sống qua giết app. Nối vào
-                    // hàng chờ sẵn có thay vì thay thế — thay thế
-                    // sẽ làm rơi lặng các file đang chờ trên đĩa.
-                    importQueue.append(contentsOf: stageExternalURLs(urls))
-                    processNextImportedFile()
-                case .failure(let error):
-                    errorText = "Không nạp được file: \(error.localizedDescription)"
-                }
-            }
+            // WP3 + Gói 3 (L-2026-11-20-43): nạp từ Files KHÔNG
+            // còn qua .fileImporter ở đây — nút "Nạp file (PDF /
+            // ảnh tải về)" ở trên gọi thẳng
+            // ReceiptFilePickerPresenter (UIKit thuần, chế độ
+            // sao chép, chọn nhiều file một lúc) vì .fileImporter
+            // chết ở nút Open trên bản ký lại. Đường sau nạp
+            // (stageExternalURLs -> importQueue ->
+            // processNextImportedFile) giữ nguyên từng chữ.
             .sheet(item: $draft, onDismiss: { processNextImportedFile() }) { d in
                 // P-DRAFT (L-2026-11-13-14): onDone của ReviewView
                 // CHỈ cháy ở đúng hai điểm — lưu thành công (cuối
@@ -303,6 +323,11 @@ struct ScanView: View {
             // WP3 bước 2: file tới qua onOpenURL trong lúc màn Chụp đã
             // hiện -> hút ngay vào hàng chờ chung.
             .onChange(of: externalImportURLs) { _, _ in consumeExternalImports() }
+            // L-2026-11-20-44 (đính chính): tín hiệu mở khoá tường
+            // minh — file chờ lúc app khoá chỉ hiện ra sau khi mở
+            // khoá (binding cổng tự-tính, .onChange ở trên không
+            // cháy tin cậy) -> tick tăng thì hút lại file chờ.
+            .onChange(of: unlockTick) { _, _ in consumeExternalImports() }
             // Lần đầu màn Chụp hiện: hút file đã chờ sẵn (anh mở file khi
             // app đang khoá Face ID / đang ở tab khác) + quét thư mục
             // Inbox phòng trường hợp hệ thống chép file vào trước khi
@@ -825,8 +850,10 @@ struct ScanView: View {
     // MARK: - WP3: nạp file từ Files (CODE-AUDIT F1)
 
     /// Lấy file tiếp theo trong hàng chờ — chỉ chạy khi không có bản nháp
-    /// nào đang mở và không có OCR nào đang chạy. Được gọi từ: kết quả
-    /// fileImporter, lúc đóng màn Review (onDismiss), và các nhánh lỗi của
+    /// nào đang mở và không có OCR nào đang chạy. Được gọi từ: kết quả của
+    /// ReceiptFilePickerPresenter qua onPick, đường hút file mở-từ-ngoài
+    /// (consumeExternalImports) và các lượt quét bù Inbox/PendingImports,
+    /// lúc đóng màn Review (onDismiss), và các nhánh lỗi/thoát sớm của
     /// đường nạp file (để một file hỏng không chặn cả lô).
     private func processNextImportedFile() {
         guard draft == nil, blockedDraft == nil, !isProcessing, !importQueue.isEmpty else { return }
@@ -982,6 +1009,181 @@ struct ScanView: View {
             cg.translateBy(x: 0, y: size.height)
             cg.scaleBy(x: size.width / bounds.width, y: -size.height / bounds.height)
             page.draw(with: .cropBox, to: cg)
+        }
+    }
+}
+
+
+// MARK: - Gói 3: trình chọn file nạp (UIKit thuần, chế độ SAO CHÉP)
+//
+// L-2026-11-20-43 + Q10a (kế hoạch đã duyệt — Gói 3 trong
+// study/APP-ASSESSMENT-AND-PLAN.md): đường nạp file cũ dùng
+// .fileImporter của SwiftUI, tức mở file TẠI CHỖ — hệ thống
+// phải cấp quyền tại chỗ cho danh tính app, và trên bản cài
+// ký lại KravaSigner bước cấp quyền đó chết ở nút Open y hệt
+// bộ chọn thư mục của gương (L-2026-11-19-36, hồ sơ
+// PICKER-RERESEARCH.md): picker hiện, duyệt được, bấm Open
+// không tác dụng, callback không bao giờ chạy. Anh xác nhận
+// đúng triệu chứng này trên bản #159 (2026-11-20).
+// Trình ở đây theo đúng mẫu MirrorFolderPickerPresenter
+// (trình từ view controller trên cùng, coordinator giữ tĩnh
+// tới callback, khoá tái nhập, nhịp tự nhả 0,6 s) nhưng ở chế
+// độ SAO CHÉP (asCopy: true): hệ thống chép file anh chọn vào
+// vùng của app rồi mới trao URL — một hình cấp quyền khác hẳn
+// grant tại chỗ, và là hình chưa từng đo trên máy anh (mục
+// "chưa kiểm được" trong IMPORT-DIFF.md).
+// Kỷ luật log của gói: MỌI kết cục của một lượt chọn đều ghi
+// DiagLog [app] tiền tố "NẠP FILE:" — đã trình / đã chọn (kèm
+// tên file) / bị huỷ / lỗi / không có view controller để
+// trình. Một lượt chết không được phép câm lặng nữa (bài học
+// L-36: picker chết mà app không để lại một dòng log nào).
+
+enum ReceiptFilePickerPresenter {
+    /// Coordinator của lượt chọn đang mở. Delegate của picker
+    /// là weak nên phải có tham chiếu mạnh giữ nó sống tới khi
+    /// picker báo xong; nhả ngay trong callback.
+    private static var activeCoordinator: Coordinator?
+
+    /// allowsMultiple: điểm gọi ở tab CHỤP giữ mặc định true
+    /// (nạp nhiều file một lượt); màn Chi Tiết gắn lại ảnh gốc
+    /// (ReceiptViews, L-2026-11-20-45) truyền false — chỉ lấy
+    /// đúng một file cho một tờ. Tham số đặt CUỐI với mặc định
+    /// để điểm gọi cũ không đổi một chữ.
+    static func present(onPick: @escaping ([URL]) -> Void,
+                        onCancel: @escaping () -> Void,
+                        onFailure: @escaping (Error) -> Void,
+                        allowsMultiple: Bool = true) {
+        DiagLog.log(.app, "NẠP FILE: present() được gọi")
+        // Lùi một nhịp runloop như mẫu gương: nút bấm nằm
+        // trong ngữ cảnh SwiftUI — trình ngay trong cùng nhịp
+        // sự kiện là cơ chế nuốt thao tác đã dính ở L-36.
+        DispatchQueue.main.async {
+            // Khoá tái nhập (cùng kỷ luật bản gương): hai lần
+            // bấm rất nhanh không được sinh hai picker — lần mở
+            // sau ghi đè biến tĩnh sẽ làm coordinator của
+            // picker trước mất tham chiếu mạnh, delegate chết
+            // theo. Mọi lối ra của một lượt (chọn / huỷ / lỗi /
+            // present bị nuốt) đều nhả biến tĩnh nên chốt này
+            // không thể gây kẹt.
+            guard activeCoordinator == nil else {
+                DiagLog.log(.app,
+                            "NẠP FILE: present bị chặn bởi khoá tái nhập (đang có picker mở)")
+                return
+            }
+            guard let presenter = topPresenter() else {
+                // Không có cửa sổ nào để trình: picker không hề
+                // hiện và sẽ không có phản hồi nào tới — đây là
+                // LỖI của lượt (không phải anh huỷ): báo lên UI
+                // qua onFailure đúng câu chữ của nhánh .failure
+                // ở .fileImporter cũ.
+                let error = NSError(
+                    domain: "GLKeeper.FileImport", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey:
+                        "Không tìm được cửa sổ để mở bộ chọn file"])
+                DiagLog.log(.app,
+                            "NẠP FILE: lỗi — không tìm được view controller để trình: \(error.localizedDescription)")
+                onFailure(error)
+                return
+            }
+            DiagLog.log(.app,
+                        "NẠP FILE: topPresenter có: \(type(of: presenter))")
+            let coordinator = Coordinator(onPick: onPick,
+                                          onCancel: onCancel)
+            activeCoordinator = coordinator
+            let picker = UIDocumentPickerViewController(
+                forOpeningContentTypes: [.pdf, .jpeg, .png, .heic],
+                asCopy: true)
+            picker.delegate = coordinator
+            picker.allowsMultipleSelection = allowsMultiple
+            presenter.present(picker, animated: true)
+            DiagLog.log(.app, "NẠP FILE: đã gọi present(picker)")
+            // Lối thoát phụ (cùng mẫu gương): nếu UIKit NUỐT
+            // lệnh present (VC đích đang giữa một chuyển cảnh
+            // đóng/mở modal khác) thì cả hai callback delegate
+            // không bao giờ chạy — biến tĩnh kẹt sẽ chặn mọi
+            // lần mở sau. Sau nhịp trình diễn chuẩn, tự kiểm:
+            // picker không có presentingViewController mà biến
+            // tĩnh vẫn là coordinator của lượt này thì tự nhả
+            // chốt và đi đường huỷ.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                if picker.presentingViewController == nil,
+                   ReceiptFilePickerPresenter.activeCoordinator === coordinator {
+                    ReceiptFilePickerPresenter.activeCoordinator = nil
+                    DiagLog.log(.app,
+                                "NẠP FILE: nhịp kiểm 0,6s — picker KHÔNG có presentingViewController, present bị nuốt, tự nhả chốt (đi đường huỷ)")
+                    onCancel()
+                } else if picker.presentingViewController != nil {
+                    DiagLog.log(.app,
+                                "NẠP FILE: nhịp kiểm 0,6s — picker đang hiện (có presentingViewController)")
+                } else {
+                    DiagLog.log(.app,
+                                "NẠP FILE: nhịp kiểm 0,6s — picker đã kết thúc qua delegate trước nhịp kiểm")
+                }
+            }
+        }
+    }
+
+    /// View controller trên cùng của cửa sổ khoá thuộc scene
+    /// đang foreground — cùng thuật toán với
+    /// MirrorFolderPickerPresenter.topPresenter.
+    private static func topPresenter() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive }
+            ?? scenes.first
+        guard let root = scene?.windows
+            .first(where: { $0.isKeyWindow })?.rootViewController
+            ?? scene?.windows.first?.rootViewController else {
+            return nil
+        }
+        var top = root
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        return top
+    }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        var onPick: ([URL]) -> Void
+        var onCancel: () -> Void
+
+        init(onPick: @escaping ([URL]) -> Void,
+             onCancel: @escaping () -> Void) {
+            self.onPick = onPick
+            self.onCancel = onCancel
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController,
+                            didPickDocumentsAt urls: [URL]) {
+            defer { ReceiptFilePickerPresenter.activeCoordinator = nil }
+            guard !urls.isEmpty else {
+                // Picker trả về rỗng: không file nào được
+                // chọn — đi đường huỷ như mẫu gương.
+                DiagLog.log(.app,
+                            "NẠP FILE: didPick NHƯNG urls rỗng — đi đường huỷ")
+                onCancel()
+                return
+            }
+            // Chế độ asCopy: các URL ở đây trỏ vào bản sao hệ
+            // thống đã chép vào vùng của app. Đường sau nạp
+            // (stageExternalURLs) sao tiếp vào PendingImports
+            // như cũ — thêm một lần sao là vô hại, đổi lại
+            // hàng chờ bền không phụ thuộc tuổi thọ của bản
+            // sao tạm này.
+            let names = urls.map { $0.lastPathComponent }
+                .joined(separator: ", ")
+            DiagLog.log(.app,
+                        "NẠP FILE: đã chọn \(urls.count) file: \(names)")
+            onPick(urls)
+        }
+
+        func documentPickerWasCancelled(
+            _ controller: UIDocumentPickerViewController
+        ) {
+            defer { ReceiptFilePickerPresenter.activeCoordinator = nil }
+            DiagLog.log(.app,
+                        "NẠP FILE: bị huỷ (documentPickerWasCancelled)")
+            onCancel()
         }
     }
 }

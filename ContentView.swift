@@ -34,6 +34,16 @@ struct ContentView: View {
     /// Files; app đang khoá Face ID thì URL chờ ở đây, mở khoá xong mới
     /// truyền xuống (không đọc file khi chưa qua cổng khoá).
     @State private var pendingImportURLs: [URL] = []
+    /// L-2026-11-20-44 (đính chính): bộ đếm lần mở khoá THÀNH CÔNG
+    /// trong phiên — tín hiệu TƯỜNG MINH cho đường nạp file. Khi
+    /// mở khoá, giá trị của binding gatedImportURLs lật [] -> [url]
+    /// chỉ qua hàm get tự-tính; .onChange ở TabShellView/ScanView
+    /// không cháy tin cậy cho thay đổi kiểu đó, và cây giao diện
+    /// nay giữ nguyên khi khoá (G3) nên không onAppear nào cứu —
+    /// URL chờ thành vô hình. Mỗi lần unlocked lật lên true thì
+    /// tick tăng 1 (xem .onChange(of: unlocked) ở body), cây dưới
+    /// nghe tick để nhảy tab + hút file chờ đã qua cổng.
+    @State private var unlockTick = 0
 
     /// Binding truyền xuống cây giao diện, CỔNG theo trạng thái
     /// khoá: đang khoá thì cây chỉ thấy danh sách rỗng (URL chờ
@@ -51,7 +61,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if !lockEnabled || treeMounted {
-                TabShellView(lockNote: lockNote, pendingImportURLs: gatedImportURLs)
+                TabShellView(lockNote: lockNote, pendingImportURLs: gatedImportURLs, unlockTick: unlockTick)
             }
             if lockEnabled && !unlocked {
                 // Lớp phủ khoá: nền ĐẶC toàn màn (không nhìn
@@ -65,6 +75,10 @@ struct ContentView: View {
             }
         }
         .onOpenURL { url in
+            // L-2026-11-20-44: để lại dấu vết cho đường chia sẻ/
+            // open-in — lượt nhận URL nào cũng có một dòng log,
+            // không còn ca "app mở mà không biết file có tới".
+            DiagLog.log(.app, "NẠP FILE: nhận URL mở-từ-ngoài: \(url.lastPathComponent)")
             pendingImportURLs.append(url)
         }
         .onAppear {
@@ -94,6 +108,14 @@ struct ContentView: View {
             // thực ngay cho khớp trạng thái, thay vì chờ chu kỳ
             // nền lần tới.
             if newValue { authenticateIfNeeded() }
+        }
+        .onChange(of: unlocked) { _, newValue in
+            // L-2026-11-20-44 (đính chính): mỗi lần mở khoá thành
+            // công thì tăng tick — TabShellView/ScanView nghe tick
+            // này để hút file mở-từ-ngoài đang chờ qua cổng khoá,
+            // thay vì trông vào .onChange của binding tự-tính
+            // gatedImportURLs (không cháy tin cậy, xem unlockTick).
+            if newValue { unlockTick += 1 }
         }
     }
 
@@ -167,6 +189,10 @@ struct TabShellView: View {
     var lockNote: String? = nil
     /// WP3 bước 2: hàng chờ file mở-từ-ngoài, truyền thẳng xuống ScanView.
     @Binding var pendingImportURLs: [URL]
+    /// L-2026-11-20-44 (đính chính): bộ đếm lần mở khoá thành công
+    /// từ ContentView — tín hiệu tường minh để nhảy tab Chụp khi
+    /// có file chờ vừa qua cổng khoá (xem .onChange(of: unlockTick)).
+    var unlockTick: Int
     @Environment(\.modelContext) private var modelContext
     /// G3: vị trí tab theo @SceneStorage — sống qua việc hệ
     /// thống thu hồi cảnh và qua khởi động lại, thay vì @State
@@ -189,7 +215,7 @@ struct TabShellView: View {
                 .tabItem { Label("Hoá Đơn", systemImage: "doc.text.fill") }
                 .tag(1)
 
-            ScanView(externalImportURLs: $pendingImportURLs)
+            ScanView(externalImportURLs: $pendingImportURLs, unlockTick: unlockTick)
                 .tabItem { Label("CHỤP", systemImage: "camera.fill") }
                 .tag(2)
 
@@ -239,7 +265,36 @@ struct TabShellView: View {
         // WP3 bước 2: có file mở-từ-ngoài đang chờ -> nhảy thẳng sang
         // tab CHỤP để ScanView hút vào hàng chờ và mở màn Kiểm Lại.
         .onChange(of: pendingImportURLs) { _, urls in
-            if !urls.isEmpty { selectedTab = 2 }
+            if !urls.isEmpty {
+                DiagLog.log(.app, "NẠP FILE: nhảy tab Chụp vì có file chờ (onChange)")
+                selectedTab = 2
+            }
+        }
+        // L-2026-11-20-44 (đính chính): tín hiệu mở khoá TƯỜNG MINH —
+        // file chia sẻ vào lúc app đang khoá thì binding cổng chỉ
+        // thấy []; lúc mở khoá xong, giá trị lật qua hàm get tự-tính
+        // nên .onChange(of: pendingImportURLs) ở trên không cháy
+        // tin cậy. Tick tăng là sự kiện có thật: có file chờ thì
+        // nhảy tab Chụp ngay (ScanView nghe cùng tick để hút file).
+        .onChange(of: unlockTick) { _, _ in
+            if !pendingImportURLs.isEmpty {
+                selectedTab = 2
+                DiagLog.log(.app, "NẠP FILE: mở khoá xong — nhảy tab Chụp vì có file chờ")
+            }
+        }
+        // L-2026-11-20-44: ca MỞ LẠNH từ share sheet — app chưa chạy,
+        // URL tới qua .onOpenURL TRƯỚC khi TabShellView hiện lần đầu.
+        // .onChange không cháy cho giá trị đã có sẵn lúc view hiện,
+        // nên cú nhảy của WP3 không bao giờ tới: ScanView không được
+        // dựng, file nằm chờ vô hạn, app mở lên như không có gì.
+        // .onAppear lấp đúng lỗ này: view vừa hiện mà danh sách chờ
+        // (đã qua cổng khoá ở binding gatedImportURLs) không rỗng
+        // thì nhảy ngay sang tab Chụp cho ScanView hút file.
+        .onAppear {
+            if !pendingImportURLs.isEmpty {
+                DiagLog.log(.app, "NẠP FILE: nhảy tab Chụp vì có file chờ (onAppear)")
+                selectedTab = 2
+            }
         }
     }
 
