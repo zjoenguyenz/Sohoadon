@@ -54,12 +54,13 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: "full = tat ca cac cong (mac dinh) | streams = chi cong luong V4-0 | gate100 = phien GATE100-v2"
+        description: "full = tat ca cac cong (mac dinh) | streams = chi cong luong V4-0 | gate100 = phien GATE100-v2 | ocrprobe = phep do doc thu Layer-2"
         type: choice
         options:
           - full
           - streams
           - gate100
+          - ocrprobe
         default: full
 
 jobs:
@@ -232,6 +233,37 @@ jobs:
           set -o pipefail
           "$BIN" roigate --dir BenchImages --gt bench-gt.json 2>&1 | tee gate100-bench-roigate.log
           grep -q "SURVIVED roigate" gate100-bench-roigate.log
+      - name: OCRPROBE — giải mã 3 ảnh đo (chỉ khi job=ocrprobe)
+        if: inputs.job == 'ocrprobe'
+        run: |
+          python3 - <<'PYEOF'
+          import base64, glob, os, subprocess
+          os.makedirs("Gate100Images", exist_ok=True)
+          for name in ["01-walmart-1.webp", "02-walmart-2.jpg", "36-costco-1.jpg"]:
+              parts = sorted(glob.glob(f"Gate100B64/{name}.b64.part*"))
+              if parts:
+                  blob = b"".join(open(p, "rb").read() for p in parts)
+              else:
+                  blob = open(f"Gate100B64/{name}.b64", "rb").read()
+              data = base64.b64decode(blob)
+              out = os.path.join("Gate100Images", name)
+              with open(out, "wb") as fh:
+                  fh.write(data)
+              stem, ext = os.path.splitext(out)
+              if ext.lower() in (".webp", ".png"):
+                  subprocess.run(["sips", "-s", "format", "jpeg", out,
+                                  "--out", stem + ".jpg"], check=True,
+                                 capture_output=True)
+                  os.remove(out)
+          print("decoded 3 probe images")
+          PYEOF
+          ls Gate100Images
+      - name: OCRPROBE — pin đọc thử Layer-2 (chỉ khi job=ocrprobe)
+        if: inputs.job == 'ocrprobe'
+        run: |
+          set -o pipefail
+          "$BIN" ocrprobe Gate100Images/02-walmart-2.jpg Gate100Images/01-walmart-1.jpg Gate100Images/36-costco-1.jpg 2>&1 | tee ocrprobe.log
+          grep -q "OCRPROBE-DONE" ocrprobe.log
       - name: Lưu bằng chứng (luồng thật + log)
         if: always()
         uses: actions/upload-artifact@v4
@@ -254,3 +286,4 @@ jobs:
             gate100-images.log
             gate100-roigate.log
             gate100-bench-roigate.log
+            ocrprobe.log
