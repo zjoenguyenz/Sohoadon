@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import CoreImage
 import ImageIO
 import Vision
 
@@ -70,6 +71,14 @@ import Vision
 //       UnitTests.swift. In UNITTEST PASS/FAIL từng ca +
 //       UNITTESTS-DONE; thoát 1 nếu có FAIL, khép bằng
 //       "SURVIVED unittests" khi sạch.
+//   ocrprobe FILE [FILE...]
+//       PHÉP ĐO LAYER-2 (2026-11-20): pin đọc thử trên ảnh
+//       thật — toàn khung ở nhiều hệ số phóng, engine phụ
+//       (sàn chiều cao chữ thấp), và CHIA DẢI NGANG có
+//       chồng lấn (đọc từng dải, ghép mảnh về toạ độ toàn
+//       khung, ráp dòng + parseV4 như app). In OCRPROBE /
+//       OCRPROBE-PARSE từng chiến lược, khép bằng
+//       "OCRPROBE-DONE". Chỉ ĐO — không phải cổng.
 //
 // Mọi chế độ chạm parse đều in dòng cuối "SURVIVED ..." — CI
 // grep dòng này; thiếu nó + mã thoát/signal != 0 = tái hiện.
@@ -530,6 +539,110 @@ func mutationTable() -> [(id: String, body: Mutation)] {
 
 // MARK: - Điều phối chế độ
 
+// MARK: - ocrprobe: dụng cụ đo đọc thử (Layer-2, 2026-11-20)
+
+/// Phóng ảnh bằng nội suy chất lượng cao (cùng phép của
+/// cropForROI trong ReadPipeline, viết lại tại chỗ cho driver).
+func probeUpscale(_ image: CGImage, factor: Double) -> CGImage {
+    guard factor > 1.05 else { return image }
+    let outW = Int((Double(image.width) * factor).rounded())
+    let outH = Int((Double(image.height) * factor).rounded())
+    guard let ctx = CGContext(
+        data: nil, width: outW, height: outH,
+        bitsPerComponent: 8, bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return image }
+    ctx.interpolationQuality = .high
+    ctx.draw(image, in: CGRect(x: 0, y: 0, width: outW, height: outH))
+    return ctx.makeImage() ?? image
+}
+
+/// Tăng tương phản cho một crop (bản driver của biến thể
+/// enhancedContrast: bỏ màu + nâng tương phản) — CoreImage.
+func probeContrast(_ image: CGImage) -> CGImage {
+    let ci = CIImage(cgImage: image)
+    guard let filter = CIFilter(name: "CIColorControls") else { return image }
+    filter.setValue(ci, forKey: kCIInputImageKey)
+    filter.setValue(0.0, forKey: kCIInputSaturationKey)
+    filter.setValue(1.3, forKey: kCIInputContrastKey)
+    guard let out = filter.outputImage else { return image }
+    let ctx = CIContext(options: nil)
+    return ctx.createCGImage(out, from: out.extent) ?? image
+}
+
+/// Đọc một ảnh bằng một engine, nuốt lỗi thành [] (đo, không cổng).
+func probeRecognize(_ engine: ClassicTextEngine, _ image: CGImage) -> [Fragment] {
+    (try? engine.recognize(in: image, region: nil)) ?? []
+}
+
+/// Chia ảnh thành n dải ngang chồng lấn, đọc từng dải, ghép
+/// mảnh về toạ độ chuẩn hoá TOÀN KHUNG (gốc dưới-trái như
+/// Vision). overlapFrac tính theo chiều cao một dải; upscale
+/// áp lên từng crop trước khi đọc; contrast tăng tương phản
+/// từng crop trước khi đọc.
+func probeTiles(_ image: CGImage, bands n: Int, overlapFrac: Double,
+                upscale: Double, contrast: Bool,
+                engine: ClassicTextEngine) -> [Fragment] {
+    let W = image.width, H = image.height
+    guard n >= 1, W >= 2, H >= 2 else { return [] }
+    let tileH = Double(H) / Double(n)
+    var out: [Fragment] = []
+    var nextID = 0
+    for i in 0..<n {
+        let grow = tileH * overlapFrac
+        let yTop = max(0.0, Double(i) * tileH - (i > 0 ? grow : 0))
+        let yBot = min(Double(H), Double(i + 1) * tileH + (i < n - 1 ? grow : 0))
+        let rect = CGRect(x: 0, y: yTop, width: Double(W),
+                          height: yBot - yTop).integral
+        guard rect.height >= 2, var crop = image.cropping(to: rect)
+        else { continue }
+        if contrast { crop = probeContrast(crop) }
+        if upscale > 1.05 { crop = probeUpscale(crop, factor: upscale) }
+        let frags = probeRecognize(engine, crop)
+        // Hộp Vision của crop: chuẩn hoá gốc dưới-trái CỦA
+        // CROP. Đáy crop trong hệ toàn khung (gốc dưới):
+        let cropBottomBL = 1.0 - (Double(rect.maxY) / Double(H))
+        let cropHFrac = Double(rect.height) / Double(H)
+        for f in frags {
+            let b = f.box
+            let mapped = CGRect(x: b.minX,
+                                y: cropBottomBL + b.minY * cropHFrac,
+                                width: b.width,
+                                height: b.height * cropHFrac)
+            out.append(Fragment(id: nextID, text: f.text,
+                                alternates: f.alternates,
+                                confidence: f.confidence, box: mapped,
+                                passID: "ocrprobe", tileIndex: i,
+                                regionID: nil))
+            nextID += 1
+        }
+    }
+    return out
+}
+
+/// In một dòng kết quả đo: số mảnh + vài chữ đầu làm mẫu.
+func probeReport(file: String, strat: String, frags: [Fragment]) {
+    let sample = frags.prefix(6).map {
+        $0.text.replacingOccurrences(of: "\n", with: " ")
+    }.joined(separator: " | ")
+    print("OCRPROBE file=\(file) strat=\(strat) frags=\(frags.count) sample=[\(sample)]")
+}
+
+/// Ráp dòng + parseV4 trên tập mảnh đã ghép, in kết quả khép sổ.
+func probeParse(file: String, strat: String, frags: [Fragment]) {
+    let assembly = LineAssembly.assemble(frags)
+    let lines = assembly.lines.map {
+        OCRLine(text: $0.text, confidence: $0.confidence,
+                alternates: $0.alternates)
+    }
+    let boxes: [CGRect?] = assembly.lines.map { $0.box }
+    let parsed = ReceiptParser.parseV4(lines: lines, boxes: boxes)
+    print("OCRPROBE-PARSE file=\(file) strat=\(strat) lines=\(assembly.lines.count) "
+        + "dedupeDropped=\(assembly.dedupeDropped) \(parseSummary(parsed)) "
+        + "arb=\(parsed.arbiterStatus ?? "nil")")
+}
+
 let mode = args.first ?? "probe"
 
 switch mode {
@@ -983,6 +1096,63 @@ case "roigate":
     }
     print("SURVIVED roigate")
 
+case "ocrprobe":
+    // PHÉP ĐO LAYER-2 (2026-11-20): ca 02-walmart-2 (và ca
+    // anh em 01-walmart-1) — hoá đơn dài trên ảnh nhỏ, đường
+    // app chỉ vớt 2 mảnh chữ. Pin này thử các cách đọc cứu
+    // trên ĐÚNG engine của app để kết án bằng số mảnh + kết
+    // quả khép sổ, trước khi bất kỳ cách nào vào app.
+    requireDataLoaded()
+    let paths = Array(args.dropFirst())
+    if paths.isEmpty { fail("ocrprobe cần ít nhất 1 đường ảnh") }
+    let mainEngine = ClassicTextEngine()
+    let altEngine = ClassicTextEngine(minimumTextHeight: 0.01)
+    for path in paths {
+        let url = URL(fileURLWithPath: path)
+        let name = url.lastPathComponent
+        guard let cg = loadCGImage(url) else {
+            print("OCRPROBE file=\(name) LOAD-FAILED")
+            continue
+        }
+        print("OCRPROBE file=\(name) size=\(cg.width)x\(cg.height)")
+        probeReport(file: name, strat: "full-main-x1",
+                    frags: probeRecognize(mainEngine, cg))
+        probeReport(file: name, strat: "full-main-x2",
+                    frags: probeRecognize(mainEngine,
+                                           probeUpscale(cg, factor: 2)))
+        probeReport(file: name, strat: "full-main-x3",
+                    frags: probeRecognize(mainEngine,
+                                           probeUpscale(cg, factor: 3)))
+        probeReport(file: name, strat: "full-alt-x1",
+                    frags: probeRecognize(altEngine, cg))
+        probeReport(file: name, strat: "full-alt-x2",
+                    frags: probeRecognize(altEngine,
+                                           probeUpscale(cg, factor: 2)))
+        for n in [2, 3, 4, 6] {
+            for up in [1.0, 2.0] {
+                let frags = probeTiles(cg, bands: n, overlapFrac: 0.12,
+                                       upscale: up, contrast: false,
+                                       engine: mainEngine)
+                let strat = "tiles\(n)-main-x\(Int(up))"
+                probeReport(file: name, strat: strat, frags: frags)
+                if up == 2.0 || n == 4 {
+                    probeParse(file: name, strat: strat, frags: frags)
+                }
+            }
+        }
+        let cFrags = probeTiles(cg, bands: 4, overlapFrac: 0.12,
+                                upscale: 1.0, contrast: true,
+                                engine: mainEngine)
+        probeReport(file: name, strat: "tiles4-contrast-x1", frags: cFrags)
+        probeParse(file: name, strat: "tiles4-contrast-x1", frags: cFrags)
+        let aFrags = probeTiles(cg, bands: 4, overlapFrac: 0.12,
+                                upscale: 1.0, contrast: false,
+                                engine: altEngine)
+        probeReport(file: name, strat: "tiles4-alt-x1", frags: aFrags)
+        probeParse(file: name, strat: "tiles4-alt-x1", frags: aFrags)
+    }
+    print("OCRPROBE-DONE")
+
 default:
-    fail("chế độ không rõ: \(mode) — probe|images|roigate|fixture|fuzz|streams|unittests")
+    fail("chế độ không rõ: \(mode) — probe|images|roigate|fixture|fuzz|streams|unittests|ocrprobe")
 }
