@@ -604,6 +604,20 @@ struct ReviewEditsDTO: Codable, Equatable {
     /// giữ true để applySuggestionOnce KHÔNG chạy lại và ghi
     /// đè lựa chọn anh đã sửa (kiểm trùng vẫn chạy ở attemptSave).
     var suggestionApplied: Bool
+    /// PHA 2: mốc hạ cánh gần nhất theo trường tiền + loại hàng
+    /// đã áp tại lúc chụp. Khôi phục phải giữ đúng mốc này —
+    /// thiếu nó, reland sau khôi phục sẽ coi ước tính đã tính
+    /// lại là số gõ tay và làm rơi nhãn "ước tính". Optional:
+    /// bản chụp cũ (chưa có hai trường này) vẫn giải mã được.
+    var landingTexts: [String: String]? = nil
+    var landingAppliedCategoryRaw: String? = nil
+    /// PHA 2: hai chuỗi CHÚ THÍCH hạ cánh (chi tiết phép suy +
+    /// dòng khu vực/suất) tại lúc chụp — khôi phục phải hiện lại
+    /// đúng chú thích của loại đã tính lại, không phải chú thích
+    /// gốc của lần đọc (số đã theo loại mới mà chú thích còn loại
+    /// cũ là ghi nhãn sai). Optional như hai trường trên.
+    var landingDetail: String? = nil
+    var landingAreaText: String? = nil
 }
 
 // MARK: - G3: DTO cho QualityOutcome (CaptureIntake.swift)

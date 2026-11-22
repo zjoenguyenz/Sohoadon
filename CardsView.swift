@@ -30,6 +30,12 @@ struct CardsView: View {
     /// L-2026-11-20-42: móc làm mới riêng cho dòng kiểm kê
     /// ảnh gốc (trạng thái đổi sau mỗi lượt kiểm kê mở app).
     @State private var integrityStateTick = 0
+    /// PHA 2 (L-2026-11-21-47): cài đặt thuế — trạng thái thật
+    /// đọc từ TaxSettings (UserDefaults) mỗi lần màn hiện.
+    @State private var taxLandingEnabled = TaxSettings.landingEnabled
+    @State private var taxDefaultAreaID = TaxSettings.defaultAreaID
+    @State private var taxPortions: [TaxAreaPortion] =
+        TaxSettings.effectiveTable.portions
 
     private var activeCards: [CardTail] { cardTails.filter { !$0.archived } }
     private var archivedCards: [CardTail] { cardTails.filter { $0.archived } }
@@ -244,6 +250,35 @@ struct CardsView: View {
                     Text("App sao mỗi hoá đơn (ảnh gốc + dữ kiện) sang thư mục anh chọn trong một thư mục con GL-Keeper — chọn thư mục nằm trong iCloud Drive là có thêm bản sao mây của Apple ở cấp file. Xoá hoá đơn trên máy thì bản gương được CHUYỂN vào thư mục _deleted trong thư mục gương, không biến mất. Gương chạy nền sau mỗi thay đổi và mỗi lần mở app.")
                 }
 
+                // PHA 2 (L-2026-11-21-47): cài đặt cơ chế hạ
+                // cánh bằng thuế — khu mặc định + bảng thuế.
+                Section {
+                    Toggle("Tự ước tính số thiếu bằng thuế (tờ khó đọc)",
+                           isOn: $taxLandingEnabled)
+                        .onChange(of: taxLandingEnabled) { _, newValue in
+                            TaxSettings.landingEnabled = newValue
+                        }
+                    Picker("Khu vực mặc định (khi mất ZIP và chưa học được tiệm)",
+                           selection: $taxDefaultAreaID) {
+                        ForEach(taxPortions, id: \.id) { portion in
+                            Text(portion.displayName).tag(portion.id)
+                        }
+                    }
+                    .onChange(of: taxDefaultAreaID) { _, newValue in
+                        TaxSettings.defaultAreaID = newValue
+                    }
+                    NavigationLink {
+                        TaxAreaListView()
+                    } label: {
+                        Label("Bảng thuế theo khu vực",
+                              systemImage: "percent")
+                    }
+                } header: {
+                    Text("Thuế Oklahoma")
+                } footer: {
+                    Text("Tờ quá mờ không đọc khép được: app lấy khu vực theo ZIP in trên tờ (mất ZIP thì theo tiệm đã học, rồi tới khu mặc định này), áp suất theo loại hàng và suy ra số còn thiếu — số suy ra luôn gắn nhãn ƯỚC TÍNH ở màn Kiểm Lại để anh duyệt. Bảng hạt giống từ Cục Thuế Oklahoma (OTC), hiệu lực 10/2026 – 03/2027.")
+                }
+
                 // LOGKIT (L-2026-11-19-39): bộ log chẩn đoán
                 // trong app — luật cứng 2026-11-18. Log ghi
                 // sự kiện bộ chọn thư mục / gương / mở app
@@ -276,7 +311,12 @@ struct CardsView: View {
                 }
             }
             .navigationTitle("Thẻ & Cài Đặt")
-            .onAppear { mirrorStateTick += 1 }
+            .onAppear {
+                mirrorStateTick += 1
+                taxLandingEnabled = TaxSettings.landingEnabled
+                taxDefaultAreaID = TaxSettings.defaultAreaID
+                taxPortions = TaxSettings.effectiveTable.portions
+            }
             .onReceive(NotificationCenter.default.publisher(
                 for: MirrorSync.statusChangedNotification)) { _ in
                 mirrorStateTick += 1
@@ -829,5 +869,138 @@ private struct DiagnosticsLogView: View {
                 Button("Nạp lại") { text = DiagLog.readAllText() }
             }
         }
+    }
+}
+
+// MARK: - Pha 2 (L-2026-11-21-47): bảng thuế theo khu vực
+
+struct TaxAreaListView: View {
+    @State private var portions: [TaxAreaPortion] =
+        TaxSettings.effectiveTable.portions
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(portions, id: \.id) { portion in
+                    NavigationLink {
+                        TaxAreaEditorView(portion: portion)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(portion.displayName)
+                            Text("Đầy đủ \(TaxLanding.formatPct(portion.fullPct))% · Thực phẩm \(TaxLanding.formatPct(portion.groceryPct))%")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } footer: {
+                Text("Mỗi khu gồm ba phần: bang + quận + thành phố. Thực phẩm được miễn phần bang nên chỉ tính quận + thành phố. Bấm vào một khu để sửa từng phần trăm.")
+            }
+        }
+        .navigationTitle("Bảng thuế theo khu vực")
+        .onAppear { portions = TaxSettings.effectiveTable.portions }
+    }
+}
+
+struct TaxAreaEditorView: View {
+    let portion: TaxAreaPortion
+
+    @State private var stateText: String
+    @State private var countyText: String
+    @State private var cityText: String
+    @Environment(\.dismiss) private var dismiss
+
+    init(portion: TaxAreaPortion) {
+        self.portion = portion
+        _stateText = State(initialValue: TaxLanding.formatPct(portion.statePct))
+        _countyText = State(initialValue: TaxLanding.formatPct(portion.countyPct))
+        _cityText = State(initialValue: TaxLanding.formatPct(portion.cityPct))
+    }
+
+    private func parsePct(_ text: String) -> Double? {
+        Double(text.replacingOccurrences(of: ",", with: "."))
+    }
+
+    private var fullPct: Double? {
+        guard let s = parsePct(stateText),
+              let c = parsePct(countyText),
+              let t = parsePct(cityText) else { return nil }
+        return s + c + t
+    }
+
+    private var groceryPct: Double? {
+        guard let c = parsePct(countyText),
+              let t = parsePct(cityText) else { return nil }
+        return c + t
+    }
+
+    /// Mỗi phần phải nằm trong 0–15% — chặn lỗi gõ thừa số 0
+    /// (4.5 thành 45) làm hỏng mọi ước tính của khu về sau.
+    private var partsValid: Bool {
+        [stateText, countyText, cityText].allSatisfy { text in
+            guard let v = parsePct(text) else { return false }
+            return v >= 0 && v <= 15
+        }
+    }
+
+    var body: some View {
+        Form {
+            Section("Ba phần thuế (%) — anh nhập từng phần, app cộng") {
+                HStack {
+                    Text("Bang (State)")
+                    Spacer()
+                    pctField($stateText)
+                }
+                HStack {
+                    Text("Quận (County)")
+                    Spacer()
+                    pctField($countyText)
+                }
+                HStack {
+                    Text("Thành phố (City)")
+                    Spacer()
+                    pctField($cityText)
+                }
+            }
+            Section("Suất gộp app sẽ áp") {
+                LabeledContent("Đầy đủ (hàng thường, nhà hàng)",
+                               value: fullPct.map {
+                                   "\(TaxLanding.formatPct($0))%"
+                               } ?? "—")
+                LabeledContent("Thực phẩm (chỉ quận + thành phố)",
+                               value: groceryPct.map {
+                                   "\(TaxLanding.formatPct($0))%"
+                               } ?? "—")
+            }
+            Section {
+                if !partsValid {
+                    Text("Mỗi phần thuế phải là số từ 0% đến 15% — anh kiểm tra lại giúp (gõ thừa một số 0 là suất nhảy gấp mười lần).")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                Button("Lưu phần trăm khu này") {
+                    guard let s = parsePct(stateText),
+                          let c = parsePct(countyText),
+                          let t = parsePct(cityText) else { return }
+                    var edited = portion
+                    edited.statePct = s
+                    edited.countyPct = c
+                    edited.cityPct = t
+                    TaxSettings.setOverride(edited)
+                    dismiss()
+                }
+                .disabled(!partsValid)
+            } footer: {
+                Text("Số đã sửa được lưu trên máy và áp cho mọi lần đọc sau, cho tới khi anh sửa lại.")
+            }
+        }
+        .navigationTitle(portion.displayName)
+    }
+
+    private func pctField(_ binding: Binding<String>) -> some View {
+        TextField("0.0", text: binding)
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.trailing)
+            .frame(width: 90)
     }
 }

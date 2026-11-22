@@ -1500,7 +1500,8 @@ struct ReceiptDetailView: View {
                                confidence: ReceiptParser
                                    .recoveredLineConfidence) },
             diagnosticsDirectory: receipt.imageFileName.isEmpty
-                ? nil : ImageStore.directory))
+                ? nil : ImageStore.directory,
+            taxLandingContext: TaxLandingContextBuilder.make()))
         let result = outcome.result
 
         // --- Trường máy đọc, ánh xạ như save() ---
@@ -1770,6 +1771,22 @@ struct ReviewView: View {
     /// nguyên là tổng IN; tip lưu riêng, số đã trả suy ra.
     @State private var tipText: String = ""
     @State private var suggestionApplied = false
+    /// PHA 2 (L-2026-11-21-47): hạ cánh bằng thuế — các trường
+    /// đang là số ƯỚC TÍNH ("subtotal" | "taxes" | "total"), mô tả
+    /// phép suy, loại hàng đang áp và khu vực đã áp (picker tính
+    /// lại tại chỗ khi anh đổi loại).
+    @State private var landingFields: Set<String> = []
+    @State private var landingDetail: String = ""
+    @State private var landingCategory: TaxCategory = .general
+    @State private var landingAreaText: String = ""
+    /// Chữ tiền hạ cánh GẦN NHẤT theo trường — mốc để reland biết
+    /// ô nào anh đã gõ tay đè (không tính lại đè, luật §3.7) và để
+    /// save() đối chiếu userEnteredFieldNames đúng mốc.
+    @State private var landingTexts: [String: String] = [:]
+    /// Loại hàng THẬT SỰ đã áp (nil = chưa áp loại nào — hạ cánh
+    /// Pha A không cần suất); hồ sơ tiệm chỉ học giá trị này, không
+    /// học giá trị mặc định hiển thị của picker.
+    @State private var landingAppliedCategory: TaxCategory? = nil
     @State private var showDuplicateAlert = false
     @State private var duplicateCount = 0
     /// N2-FIX: kiểm tra trùng THẤT BẠI (fetch lỗi) — khác hẳn
@@ -1818,6 +1835,50 @@ struct ReviewView: View {
         _taxText = State(initialValue: r.taxes.isEmpty ? "" : centsToDollarsText(r.taxTotalCents))
         _totalText = State(initialValue: centsToDollarsText(r.totalCents))
         _selectedCategory = State(initialValue: Categories.defaultValue(for: .unknown))
+        // PHA 2: trạng thái hạ cánh suy từ provenance của bản đọc
+        // (kind "tax-landing"); loại/khu đang áp tính lại bằng
+        // chính lõi TaxLanding trên bản đọc đã bóc đỉnh ước tính,
+        // để picker ở dưới khớp đúng phép suy đã chạy.
+        let prov = draft.provenance
+        let derivedKeys = prov.filter { $0.value.kind == "tax-landing" }
+            .map { $0.key }
+        var fields0 = Set<String>()
+        if derivedKeys.contains("subtotal") { fields0.insert("subtotal") }
+        if derivedKeys.contains("total") { fields0.insert("total") }
+        if derivedKeys.contains(where: { $0.hasPrefix("tax[") }) {
+            fields0.insert("taxes")
+        }
+        _landingFields = State(initialValue: fields0)
+        _landingDetail = State(initialValue:
+            prov.values.first { $0.kind == "tax-landing" }?.detail ?? "")
+        var texts0: [String: String] = [:]
+        if fields0.contains("subtotal") {
+            texts0["subtotal"] = centsToDollarsText(r.subtotalCents)
+        }
+        if fields0.contains("taxes") {
+            texts0["taxes"] = r.taxes.isEmpty
+                ? "" : centsToDollarsText(r.taxTotalCents)
+        }
+        if fields0.contains("total") {
+            texts0["total"] = centsToDollarsText(r.totalCents)
+        }
+        _landingTexts = State(initialValue: texts0)
+        if !fields0.isEmpty {
+            let base = ReviewView.strippedForRelanding(r, provenance: prov)
+            let ctx = TaxLandingContextBuilder.make()
+            if let out = TaxLanding.evaluate(base, context: ctx),
+               out.report.attempted,
+               let cat = out.report.category {
+                _landingCategory = State(initialValue: cat)
+                _landingAppliedCategory = State(initialValue: cat)
+                if let areaID = out.report.areaID,
+                   let area = ctx.table.portion(id: areaID),
+                   let rate = out.report.ratePct {
+                    _landingAreaText = State(initialValue:
+                        "\(area.displayName) · \(TaxLanding.formatPct(rate))%")
+                }
+            }
+        }
         if let edits = restoredEdits {
             _vendorText = State(initialValue: edits.vendorText)
             _dateValue = State(initialValue: edits.dateValue)
@@ -1829,6 +1890,26 @@ struct ReviewView: View {
             _purposeText = State(initialValue: edits.purposeText)
             _reasonText = State(initialValue: edits.reasonText)
             _suggestionApplied = State(initialValue: edits.suggestionApplied)
+            // PHA 2: khôi phục đúng MỐC hạ cánh đã chụp cùng lớp
+            // sửa (nếu có) — thay mốc suy từ draft gốc, để reland
+            // sau khôi phục không làm rơi nhãn "ước tính" của các
+            // số đã tính lại trước khi chụp.
+            if let lt = edits.landingTexts {
+                _landingTexts = State(initialValue: lt)
+            }
+            if let raw = edits.landingAppliedCategoryRaw,
+               let cat = TaxCategory(rawValue: raw) {
+                _landingAppliedCategory = State(initialValue: cat)
+                _landingCategory = State(initialValue: cat)
+            }
+            // Chú thích hạ cánh khôi phục theo đúng bản chụp —
+            // khớp với số/loại vừa khôi phục ở trên.
+            if let detail = edits.landingDetail {
+                _landingDetail = State(initialValue: detail)
+            }
+            if let areaText = edits.landingAreaText {
+                _landingAreaText = State(initialValue: areaText)
+            }
         }
     }
 
@@ -1984,16 +2065,25 @@ struct ReviewView: View {
                     }
                     HStack {
                         Text("Subtotal")
+                        if landingFields.contains("subtotal") {
+                            estimateChip
+                        }
                         Spacer()
                         moneyField($subtotalText)
                     }
                     HStack {
                         Text("Thuế (Tax)")
+                        if landingFields.contains("taxes") {
+                            estimateChip
+                        }
                         Spacer()
                         moneyField($taxText)
                     }
                     HStack {
                         Text("TỔNG (Total)").bold()
+                        if landingFields.contains("total") {
+                            estimateChip
+                        }
                         Spacer()
                         moneyField($totalText)
                     }
@@ -2017,6 +2107,34 @@ struct ReviewView: View {
                         Text("Độ tin cậy của tổng tiền: \(Int(draft.result.totalConfidence * 100))%")
                             .font(.caption)
                             .foregroundStyle(draft.result.totalConfidence < 0.85 ? .orange : .secondary)
+                    }
+                    // PHA 2 (L-47): khối hạ cánh bằng thuế — nói rõ
+                    // số nào là ước tính, phép suy đã dùng, và cho
+                    // anh đổi loại hàng để tính lại tại chỗ (tiệm
+                    // chỉ gợi ý; anh chốt ở đây).
+                    if !landingFields.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Một số số trên tờ này là ƯỚC TÍNH bằng cơ chế thuế (tờ khó đọc): \(landingDetail)")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                            if !landingAreaText.isEmpty {
+                                Text("Khu vực áp thuế: \(landingAreaText)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Picker("Loại hàng", selection: $landingCategory) {
+                                Text("Hàng thường").tag(TaxCategory.general)
+                                Text("Thực phẩm").tag(TaxCategory.grocery)
+                                Text("Đồ ăn chế biến").tag(TaxCategory.prepared)
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: landingCategory) { _, newValue in
+                                reland(category: newValue)
+                            }
+                            Text("Đổi loại hàng chỉ tính lại các số ƯỚC TÍNH; số đọc từ giấy không đổi.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     // WP5 bước 3: nguồn tên tiệm + gợi ý nấc 3 (WP5-SPEC mục
                     // 3/5/6) — nhãn nhỏ dưới các số tiền, KHÔNG che số; cảnh
@@ -2218,6 +2336,105 @@ struct ReviewView: View {
             .foregroundStyle(present ? .green : .secondary)
     }
 
+    // MARK: - Pha 2: hạ cánh bằng thuế ở Kiểm Lại
+
+    private var estimateChip: some View {
+        Text("ước tính")
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.orange.opacity(0.15))
+            .foregroundStyle(.orange)
+            .clipShape(Capsule())
+    }
+
+    /// Bản đọc THÔ: bóc các đỉnh đã hạ cánh (theo provenance) để
+    /// tính lại phép suy từ đúng các số đọc thật.
+    static func strippedForRelanding(
+        _ r: ParseResult, provenance: [String: FieldProvenance]
+    ) -> ParseResult {
+        var base = r
+        if provenance["subtotal"]?.kind == "tax-landing" {
+            base.subtotalCents = nil
+        }
+        if provenance["total"]?.kind == "tax-landing" {
+            base.totalCents = nil
+        }
+        base.taxes = r.taxes.enumerated().compactMap { idx, line in
+            provenance["tax[\(idx)]"]?.kind == "tax-landing" ? nil : line
+        }
+        return base
+    }
+
+    /// Mốc đối chiếu "anh có sửa tay không" cho một trường tiền:
+    /// trường đang là ước tính → số hạ cánh GẦN NHẤT; còn lại →
+    /// số máy đọc. Ước tính tính lại theo picker không bị ghi
+    /// thành số anh nhập trong userEnteredFieldNames.
+    private func landedBaselineCents(field: String,
+                                     readValue: Int?) -> Int? {
+        if landingFields.contains(field),
+           let text = landingTexts[field] {
+            return dollarsTextToCents(text)
+        }
+        return readValue
+    }
+
+    /// Anh đổi loại hàng → tính lại CHỈ các số ước tính từ neo đọc
+    /// thật (số đọc từ giấy không bao giờ bị hàm này chạm tới, vì
+    /// bản thô giữ nguyên chúng và lõi chỉ điền đỉnh thiếu).
+    private func reland(category: TaxCategory) {
+        let base = ReviewView.strippedForRelanding(
+            draft.result, provenance: draft.provenance)
+        var ctx = TaxLandingContextBuilder.make()
+        ctx.forcedCategory = category
+        guard let out = TaxLanding.evaluate(base, context: ctx),
+              out.report.attempted else { return }
+        let rep = out.report
+        var fields = Set<String>()
+        // Luật §3.7: số anh đã GÕ TAY đè lên ước tính thì KHÔNG
+        // tính lại đè — ô nào còn giữ đúng chữ hạ cánh gần nhất
+        // mới được viết lại; ô đã sửa tay rời khỏi landingFields
+        // (từ đây là số của anh, hết nhãn ước tính).
+        if rep.filledFields.contains("subtotal") {
+            let newText = centsToDollarsText(out.result.subtotalCents)
+            if subtotalText == landingTexts["subtotal"] {
+                subtotalText = newText
+                landingTexts["subtotal"] = newText
+                fields.insert("subtotal")
+            }
+        }
+        if rep.filledFields.contains(where: { $0.hasPrefix("tax[") }) {
+            let newText = out.result.taxes.isEmpty
+                ? ""
+                : centsToDollarsText(out.result.taxTotalCents)
+            if taxText == landingTexts["taxes"] {
+                taxText = newText
+                landingTexts["taxes"] = newText
+                fields.insert("taxes")
+            }
+        }
+        if rep.filledFields.contains("total") {
+            let newText = centsToDollarsText(out.result.totalCents)
+            if totalText == landingTexts["total"] {
+                totalText = newText
+                landingTexts["total"] = newText
+                fields.insert("total")
+            }
+        }
+        landingFields = fields
+        landingTexts = landingTexts.filter { fields.contains($0.key) }
+        landingDetail = rep.detail
+        landingAppliedCategory = category
+        if let areaID = rep.areaID,
+           let area = ctx.table.portion(id: areaID),
+           let rate = rep.ratePct {
+            landingAreaText =
+                "\(area.displayName) · \(TaxLanding.formatPct(rate))%"
+        }
+        DiagLog.log(.read, "THUẾ: Kiểm Lại đổi loại → "
+            + "\(category.labelVI) — " + rep.detail)
+    }
+
     private func moneyField(_ binding: Binding<String>) -> some View {
         TextField("0.00", text: binding)
             .keyboardType(.decimalPad)
@@ -2261,7 +2478,11 @@ struct ReviewView: View {
             category: selectedCategory,
             purposeText: purposeText,
             reasonText: reasonText,
-            suggestionApplied: suggestionApplied)
+            suggestionApplied: suggestionApplied,
+            landingTexts: landingTexts,
+            landingAppliedCategoryRaw: landingAppliedCategory?.rawValue,
+            landingDetail: landingDetail,
+            landingAreaText: landingAreaText)
         PendingDraftStore.save(snapshot)
     }
 
@@ -2486,14 +2707,20 @@ struct ReviewView: View {
             enteredNames.append("vendor")
         }
         if dateValue != dateDefault { enteredNames.append("date") }
-        if receipt.subtotalCents != draft.result.subtotalCents {
+        // PHA 2: trường đang mang ước tính hạ cánh thì mốc đối
+        // chiếu là số hạ cánh gần nhất (landedBaselineCents).
+        if receipt.subtotalCents != landedBaselineCents(
+            field: "subtotal", readValue: draft.result.subtotalCents) {
             enteredNames.append("subtotal")
         }
-        if receipt.taxCents
-            != (draft.result.taxes.isEmpty ? nil : draft.result.taxTotalCents) {
+        if receipt.taxCents != landedBaselineCents(
+            field: "taxes",
+            readValue: draft.result.taxes.isEmpty
+                ? nil : draft.result.taxTotalCents) {
             enteredNames.append("tax")
         }
-        if receipt.totalCents != draft.result.totalCents {
+        if receipt.totalCents != landedBaselineCents(
+            field: "total", readValue: draft.result.totalCents) {
             enteredNames.append("total")
         }
         let kindSuggestion = suggestClassification(
@@ -2599,6 +2826,17 @@ struct ReviewView: View {
         // của một tờ đã lưu xong.
         finished = true
         editSaveTask?.cancel()
+        // PHA 2 (L-47): học hồ sơ tiệm từ tờ vừa duyệt — ZIP từ
+        // địa chỉ đã lưu; loại hàng = loại đang chốt ở Kiểm Lại
+        // (picker hạ cánh khi có hạ cánh, không thì phân loại từ
+        // món đọc được; không chắc thì để trống, không bịa).
+        StoreProfiles.learn(
+            key: TaxLanding.profileKey(
+                vendorKey: draft.result.vendorKey,
+                vendor: receipt.vendor),
+            zip: TaxLanding.extractZIP(from: receipt.vendorAddress),
+            category: landingAppliedCategory
+                ?? TaxLanding.classifyCategory(items: draft.result.items))
         onDone()
         // P2-1: gương thư mục Files chạy nền sau mỗi lần lưu
         // hoá đơn mới thành công (lớp phụ — không chặn luồng

@@ -767,7 +767,7 @@ enum ReadCoreVersion {
     /// thắng-tạm 0 món, không subtotal, không total, chưa khép
     /// E1) + census F8 trong hồ sơ chẩn đoán (fragmentCount/
     /// lineCount từng ứng viên). Cách đọc cũ không đổi.
-    static let parserVersion = "core-v4-3"
+    static let parserVersion = "core-v4-4"
 }
 
 /// Yêu cầu đọc (DESIGN-DETAIL §1.3, cụ thể hoá cho các đường
@@ -791,6 +791,10 @@ struct ReadRequest {
     /// Thư mục ghi file phụ chẩn đoán (app: ImageStore.directory;
     /// nil = không ghi — chỉ dùng cho kiểm ngoại tuyến).
     var diagnosticsDirectory: URL? = nil
+    /// PHA 2 (L-2026-11-21-47): ngữ cảnh hạ cánh bằng thuế do tầng
+    /// gọi gói sẵn (bảng thuế + hồ sơ tiệm + khu mặc định). nil =
+    /// không hạ cánh (bench/kiểm ngoại tuyến không truyền).
+    var taxLandingContext: TaxLandingContext? = nil
     /// Cổng chất lượng của RIÊNG tờ này (GÓI V4-4 / D-V4-2, sửa
     /// A2-05): tầng gọi tạo một QualityGate MỚI cho mỗi lần đọc
     /// một tờ — bộ đếm fail-safe không còn chảy qua các tờ khác
@@ -1763,7 +1767,7 @@ enum ReceiptReader {
                                  error: String? = nil,
                                  started: Date) -> ReadOutcome {
         stageBreadcrumb?("finalize")
-        let result = outcome.result
+        var result = outcome.result
 
         // Provenance mức snapshot (trạng thái cuối F4): chỉ các
         // sửa chữ của DomainCorrector — sửa F5/ROI nằm ở
@@ -1798,11 +1802,49 @@ enum ReceiptReader {
             if uiProvenance[key] == nil { uiProvenance[key] = value }
         }
 
+        // PHA 2 (L-2026-11-21-47): hạ cánh bằng thuế — chạy SAU khi
+        // bản đọc cuối đã chốt, CHỈ điền đỉnh tam giác còn thiếu;
+        // số đọc thật không đổi. Provenance của đỉnh suy ra mang
+        // kind "tax-landing" và chỉ nhận khi khoá chưa có provenance
+        // (provenance đọc-thật luôn thắng). diag.parse vẫn giữ bản
+        // TRƯỚC hạ cánh (parsedBeforeReconcile) để chẩn đoán phân
+        // biệt được số đọc thô với số đã hạ cánh.
+        var landingReport: TaxLandingReport? = nil
+        if let ctx = req.taxLandingContext,
+           let landed = TaxLanding.evaluate(result, context: ctx) {
+            landingReport = landed.report
+            if landed.report.attempted {
+                if !landed.report.filledFields.isEmpty {
+                    result = landed.result
+                    for field in landed.report.filledFields
+                    where uiProvenance[field] == nil {
+                        uiProvenance[field] =
+                            .taxLanding(landed.report.detail)
+                    }
+                    DiagLog.log(.read, "THUẾ: hạ cánh — "
+                        + landed.report.detail
+                        + " · điền: "
+                        + landed.report.filledFields.joined(separator: ", ")
+                        + " · sau hạ cánh: subtotal "
+                        + (result.subtotalCents.map(String.init) ?? "—")
+                        + " · thuế \(result.taxTotalCents)"
+                        + " · total "
+                        + (result.totalCents.map(String.init) ?? "—"))
+                } else if let blocked = landed.report.blockedReason {
+                    DiagLog.log(.read, "THUẾ: không hạ cánh được — " + blocked
+                        + (landed.report.zip.map { " · ZIP \($0)" } ?? ""))
+                }
+            }
+        }
+
         var flags = result.warnings
         if outcome.report.requiresReview {
             flags.append("reconcile-needs-review")
         }
         flags.append(contentsOf: extraFlags)
+        if let landingReport, !landingReport.filledFields.isEmpty {
+            flags.append("tax-landing")
+        }
 
         var diag = ReadDiagnostics(identity: identity, input: input,
                                    config: DiagConfig(

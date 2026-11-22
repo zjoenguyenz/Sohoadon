@@ -599,6 +599,7 @@ struct ScanView: View {
                             image: readPages[0],
                             pageImages: readPages,
                             diagnosticsDirectory: ImageStore.directory,
+                            taxLandingContext: TaxLandingContextBuilder.make(),
                             qualityGate: QualityGate()),
                         sourceType: .camera,
                         originalFileNames: names)
@@ -633,6 +634,7 @@ struct ScanView: View {
                     image: cg,
                     pdfRenderScale: pdfRenderScale,
                     diagnosticsDirectory: ImageStore.directory,
+                    taxLandingContext: TaxLandingContextBuilder.make(),
                     qualityGate: QualityGate()),
                 sourceType: source,
                 sourceFileName: sourceFileName,
@@ -932,6 +934,7 @@ struct ScanView: View {
                         byteSize: data.count,
                         textLines: lines,
                         diagnosticsDirectory: ImageStore.directory,
+                        taxLandingContext: TaxLandingContextBuilder.make(),
                         qualityGate: QualityGate()),
                     sourceType: .pdfImport,
                     sourceFileName: sourceFileName,

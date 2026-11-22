@@ -80,6 +80,13 @@ targets:
       - Reconcile.swift
       - RegionReReader.swift
       - ReadPipeline.swift
+      # PHA 2 (L-2026-11-21-47): hạ cánh bằng thuế — lõi thuần +
+      # bảng hạt giống (cả app lẫn harness biên dịch), cài đặt +
+      # hồ sơ tiệm (chỉ app).
+      - TaxLanding.swift
+      - TaxSeed.swift
+      - TaxSettings.swift
+      - StoreProfiles.swift
       # --- Dữ liệu bundle của M7 (tiệm) + DomainCorrection ---
       - vendors.json
       - lexicon.json
@@ -168,6 +175,10 @@ targets:
       - Reconcile.swift
       - RegionReReader.swift
       - ReadPipeline.swift
+      # PHA 2: lõi thuế thuần mà ReadPipeline tham chiếu (bench
+      # không gói TaxSettings/StoreProfiles — không truyền context).
+      - TaxLanding.swift
+      - TaxSeed.swift
       - vendors.json
       - lexicon.json
       - quality-thresholds.json
