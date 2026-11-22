@@ -75,6 +75,12 @@ targets:
       # alternates -> ReadPipeline.run + ROI), thay cho bản tái
       # lập runCandidate cũ gọi thẳng ReceiptParser.parse.
       - ../ReadPipeline.swift
+      # PHA 2 (L-2026-11-21-47): lõi hạ cánh bằng thuế THUẦN +
+      # bảng hạt giống — harness biên dịch để kiểm thử TL01–TL13
+      # bằng Swift thật và chạy hạ cánh trên đường images/roigate
+      # với ngữ cảnh hạt giống (không hồ sơ tiệm).
+      - ../TaxLanding.swift
+      - ../TaxSeed.swift
       # --- Driver + shim của harness (thư mục này):
       - HarnessApp
       # KHÔNG VÀO (và vì sao):
