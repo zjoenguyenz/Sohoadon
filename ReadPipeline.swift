@@ -767,7 +767,7 @@ enum ReadCoreVersion {
     /// thắng-tạm 0 món, không subtotal, không total, chưa khép
     /// E1) + census F8 trong hồ sơ chẩn đoán (fragmentCount/
     /// lineCount từng ứng viên). Cách đọc cũ không đổi.
-    static let parserVersion = "core-v4-2"
+    static let parserVersion = "core-v4-3"
 }
 
 /// Yêu cầu đọc (DESIGN-DETAIL §1.3, cụ thể hoá cho các đường
@@ -1198,8 +1198,23 @@ enum ReceiptReader {
         }
 
         stageBreadcrumb?("scoring")
-        let winnerIndex = CandidateScorer.pickWinner(
+        var winnerIndex = CandidateScorer.pickWinner(
             runs.map { $0.evaluation })
+        // PHA 1 (FL-317, hồ sơ PHASE1-DIFF.md) — HOÁN ĐỔI
+        // BẰNG CHỨNG: winner §3.6 mà RỖNG HOÀN TOÀN trong khi
+        // có ứng viên mang được total/subtotal thì nhường cho
+        // ứng viên mang số giàu nhất (hàm thuần ở CandidateScorer
+        // — ngoài chữ ký đó nó trả đúng winner cũ). Đặt TRƯỚC
+        // khối thả ảnh ứng viên thua để winner mới giữ ảnh thật.
+        let swappedIndex = CandidateScorer.evidenceSwapWinner(
+            evals: runs.map { $0.evaluation },
+            parses: runs.map { $0.parsed },
+            fragmentCounts: runs.map { $0.fragments.count },
+            currentWinner: winnerIndex)
+        if swappedIndex != winnerIndex {
+            flags.append("evidence-swap")
+            winnerIndex = swappedIndex
+        }
         let winner = runs[winnerIndex]
         if multiPage, let status = winner.stitchStatus {
             flags.append("stitch-\(status)")

@@ -884,6 +884,58 @@ enum CandidateScorer {
         return tied.min()!
     }
 
+    /// PHA 1 (FL-317, hồ sơ PHASE1-DIFF.md) — HOÁN ĐỔI BẰNG
+    /// CHỨNG: khi winner của §3.6 là tờ RỖNG HOÀN TOÀN (0 món ∧
+    /// không subtotal ∧ không total — đúng chữ ký cổng RESCUE)
+    /// mà có ứng viên khác MANG ĐƯỢC total hoặc subtotal, winner
+    /// nhường cho ứng viên mang số giàu bằng chứng nhất. Ngoài
+    /// chữ ký đó hàm trả ĐÚNG currentWinner — §3.6 không đổi.
+    /// Bệnh đã kết án (Pha 0, run #70): phạt −25/món-thiếu-tiền
+    /// không trần làm tờ rỗng nhất thắng mọi tờ giàu khi không
+    /// ai khép E1 (02-walmart-2: winner 2 mảnh thắng bản đọc
+    /// 163 mảnh có đủ subtotal/total/e2).
+    /// Khóa xếp hạng nhóm mang số (giảm dần): hasTotal →
+    /// hasSubtotal → e2Within2c → integrity → số mảnh → điểm
+    /// §3.6 → bản gốc → chỉ số nhỏ hơn.
+    static func evidenceSwapWinner(
+        evals: [CandidateEvaluation],
+        parses: [ParseResult],
+        fragmentCounts: [Int],
+        currentWinner: Int
+    ) -> Int {
+        guard parses.indices.contains(currentWinner) else {
+            return currentWinner
+        }
+        let w = parses[currentWinner]
+        guard w.items.isEmpty, w.totalCents == nil,
+              w.subtotalCents == nil else { return currentWinner }
+        var best: Int? = nil
+        var bestKey: [Double] = []
+        for i in evals.indices {
+            guard parses.indices.contains(i),
+                  parses[i].totalCents != nil
+                      || parses[i].subtotalCents != nil else {
+                continue
+            }
+            let ev = evals[i]
+            let key: [Double] = [
+                ev.hasTotal ? 1 : 0,
+                ev.hasSubtotal ? 1 : 0,
+                ev.e2Within2c ? 1 : 0,
+                ev.integrity,
+                fragmentCounts.indices.contains(i)
+                    ? Double(fragmentCounts[i]) : 0,
+                score(ev).total,
+                ev.isOriginal ? 1 : 0,
+                Double(-i),
+            ]
+            if best == nil || bestKey.lexicographicallyPrecedes(key) {
+                best = i; bestKey = key
+            }
+        }
+        return best ?? currentWinner
+    }
+
     /// Dải cột tiền: mode của mép phải các dòng có token tiền
     /// (bin 1%), dải [mode−12%, mode+2%] — cùng mô hình cột của
     /// F4 Pha 1.
