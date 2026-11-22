@@ -1190,5 +1190,86 @@ enum HarnessUnitTests {
                   && abs(mid.minY - 0.625) < 1e-9
                   && abs(mid.width - 0.25) < 1e-9
                   && abs(mid.height - 0.031) < 1e-9)
+
+        // ES01–ES04 — PHA 1: hoán đổi bằng chứng (PHASE1-DIFF.md).
+        func esEv(hasTotal: Bool, hasSubtotal: Bool, e2: Bool,
+                  integrity: Double, isOriginal: Bool = false)
+            -> CandidateEvaluation {
+            CandidateEvaluation(
+                e1Closed: false, e2Within2c: e2, e3Closed: false,
+                integrity: integrity, hasSubtotal: hasSubtotal,
+                hasTotal: hasTotal, hasTaxLine: false, hasDate: false,
+                vendorResolved: true, itemsMissingAmount: 0,
+                alnumChars: 0, isOriginal: isOriginal)
+        }
+        let esEmpty = ParseResult()
+        var esTotalOnly = ParseResult(); esTotalOnly.totalCents = 8907
+        var esFull = ParseResult()
+        esFull.subtotalCents = 8772; esFull.totalCents = 8907
+        // ES01 — winner rỗng + có ứng viên mang số: nhường ứng
+        // viên giàu nhất (total+subtotal+e2, integrity cao,
+        // nhiều mảnh nhất) — đúng hình ca 02-walmart-2 run #70.
+        check("ES01-hoan-doi-sang-ung-vien-giau-nhat",
+              CandidateScorer.evidenceSwapWinner(
+                  evals: [esEv(hasTotal: false, hasSubtotal: false,
+                               e2: false, integrity: 0,
+                               isOriginal: true),
+                          esEv(hasTotal: true, hasSubtotal: false,
+                               e2: false, integrity: 0.25),
+                          esEv(hasTotal: true, hasSubtotal: true,
+                               e2: true, integrity: 0.889)],
+                  parses: [esEmpty, esTotalOnly, esFull],
+                  fragmentCounts: [2, 119, 163],
+                  currentWinner: 0) == 2)
+        // ES02 — winner đã mang total: không hoán đổi dù có
+        // ứng viên giàu hơn.
+        check("ES02-winner-co-total-giu-nguyen",
+              CandidateScorer.evidenceSwapWinner(
+                  evals: [esEv(hasTotal: true, hasSubtotal: false,
+                               e2: false, integrity: 0.1,
+                               isOriginal: true),
+                          esEv(hasTotal: true, hasSubtotal: true,
+                               e2: true, integrity: 0.9)],
+                  parses: [esTotalOnly, esFull],
+                  fragmentCounts: [10, 200],
+                  currentWinner: 0) == 0)
+        // ES03 — winner rỗng nhưng KHÔNG ứng viên nào mang số:
+        // giữ nguyên (hình ca 22-taco-bell-1).
+        check("ES03-khong-ung-vien-mang-so-giu-nguyen",
+              CandidateScorer.evidenceSwapWinner(
+                  evals: [esEv(hasTotal: false, hasSubtotal: false,
+                               e2: false, integrity: 0,
+                               isOriginal: true),
+                          esEv(hasTotal: false, hasSubtotal: false,
+                               e2: false, integrity: 1)],
+                  parses: [esEmpty, esEmpty],
+                  fragmentCounts: [2, 60],
+                  currentWinner: 0) == 0)
+        // ES04 — phá hòa trong nhóm mang số: integrity trước,
+        // số mảnh sau.
+        check("ES04a-hoa-thi-integrity-thang",
+              CandidateScorer.evidenceSwapWinner(
+                  evals: [esEv(hasTotal: false, hasSubtotal: false,
+                               e2: false, integrity: 0,
+                               isOriginal: true),
+                          esEv(hasTotal: true, hasSubtotal: true,
+                               e2: true, integrity: 0.5),
+                          esEv(hasTotal: true, hasSubtotal: true,
+                               e2: true, integrity: 0.9)],
+                  parses: [esEmpty, esFull, esFull],
+                  fragmentCounts: [2, 200, 50],
+                  currentWinner: 0) == 2)
+        check("ES04b-hoa-integrity-thi-nhieu-manh-thang",
+              CandidateScorer.evidenceSwapWinner(
+                  evals: [esEv(hasTotal: false, hasSubtotal: false,
+                               e2: false, integrity: 0,
+                               isOriginal: true),
+                          esEv(hasTotal: true, hasSubtotal: true,
+                               e2: true, integrity: 0.5),
+                          esEv(hasTotal: true, hasSubtotal: true,
+                               e2: true, integrity: 0.5)],
+                  parses: [esEmpty, esFull, esFull],
+                  fragmentCounts: [2, 50, 200],
+                  currentWinner: 0) == 2)
     }
 }
