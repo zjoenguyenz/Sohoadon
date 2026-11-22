@@ -1753,6 +1753,20 @@ enum ReceiptReader {
 
     // MARK: - Chốt: dựng hồ sơ chẩn đoán + cổng ghi fail-closed
 
+    /// Cầu log của móc hạ cánh thuế (Pha 2): DiagLog chỉ tồn
+    /// tại ở target app (Diagnostics.swift — bench không liên
+    /// kết, harness macOS không có UIKit). Hai điểm gọi trần
+    /// trong finalize đã làm bench rớt biên dịch ở CI run #170
+    /// (L-2026-11-22-48) — từ nay mọi điểm gọi DiagLog trong
+    /// file dùng chung PHẢI đi qua cầu #if GLKEEPER_APP này
+    /// (dấu chỉ target app khai, xem project.yml); bench +
+    /// harness là no-op, bằng chứng bên đó đi kênh riêng.
+    private static func landingLog(_ message: String) {
+        #if GLKEEPER_APP
+        DiagLog.log(.read, message)
+        #endif
+    }
+
     private static func finalize(req: ReadRequest,
                                  outcome: ReadPipelineOutcome,
                                  identity: DiagIdentity,
@@ -1821,7 +1835,7 @@ enum ReceiptReader {
                         uiProvenance[field] =
                             .taxLanding(landed.report.detail)
                     }
-                    DiagLog.log(.read, "THUẾ: hạ cánh — "
+                    landingLog("THUẾ: hạ cánh — "
                         + landed.report.detail
                         + " · điền: "
                         + landed.report.filledFields.joined(separator: ", ")
@@ -1831,7 +1845,7 @@ enum ReceiptReader {
                         + " · total "
                         + (result.totalCents.map(String.init) ?? "—"))
                 } else if let blocked = landed.report.blockedReason {
-                    DiagLog.log(.read, "THUẾ: không hạ cánh được — " + blocked
+                    landingLog("THUẾ: không hạ cánh được — " + blocked
                         + (landed.report.zip.map { " · ZIP \($0)" } ?? ""))
                 }
             }

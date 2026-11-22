@@ -107,7 +107,12 @@ targets:
         # harness KHÔNG khai nên vẫn biên dịch đủ đường v3
         # làm làn đối chứng đo. Kiểm chứng ở bản giao: soi
         # symbol trong IPA (kế hoạch ở v4-4/BINARY-CHECK.md).
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: GLKEEPER_V4_ONLY
+        # GLKEEPER_APP (Pha 2, L-2026-11-22-48): dấu target app
+        # cho các tiện ích CHỈ có ở target app (DiagLog trong
+        # Diagnostics.swift) khi file dùng chung (vd ReadPipeline)
+        # cần gọi qua cầu #if — bench + harness KHÔNG khai cả
+        # hai dấu này.
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: GLKEEPER_V4_ONLY GLKEEPER_APP
     info:
       path: Info.plist
       properties:
