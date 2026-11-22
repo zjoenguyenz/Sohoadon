@@ -217,8 +217,31 @@ jobs:
       - name: GATE100 — corpus 40 ảnh x 2 set (đúng đường app)
         if: inputs.job == 'gate100'
         run: |
-          "$BIN" images --dir Gate100Images --sets 2 --dump streams 2>&1 | tee gate100-images.log
+          # Pha 0: luồng topk 1 dump vào thư mục RIÊNG (trước đây
+          # streams/) để không trộn với làn topk 3 bên dưới.
+          "$BIN" images --dir Gate100Images --sets 2 --dump streams-gate100-topk1 2>&1 | tee gate100-images.log
           grep -q "SURVIVED images x2" gate100-images.log
+      - name: GATE100 — corpus 40 ảnh x 2 set ở --topk 3 (cấu hình app thật, Pha 0)
+        if: inputs.job == 'gate100'
+        run: |
+          # CORE-OPTIMIZATION-PLAN Pha 0 mục 1: cùng corpus, cùng
+          # --lang old, chỉ đổi --topk 3 (số ứng viên của app thật).
+          # Cùng luật sống như làn topk 1: crash = job đỏ.
+          "$BIN" images --dir Gate100Images --sets 2 --topk 3 --dump streams-gate100-topk3 2>&1 | tee gate100-images-topk3.log
+          grep -q "SURVIVED images x2" gate100-images-topk3.log
+      - name: GATE100 — đối chiếu luồng topk1 ↔ topk3 (Pha 0, chỉ báo cáo)
+        if: inputs.job == 'gate100'
+        run: |
+          # Chỉ ĐO: không phải cổng — bước chỉ đỏ khi công cụ không
+          # chạy được (thiếu STREAM-COMPARE-DONE) hoặc thiếu dump
+          # (COVERAGE complete=no).
+          python3 harness/tools/stream_compare.py \
+            streams-gate100-topk1 streams-gate100-topk3 \
+            --label-a topk1 --label-b topk3 \
+            --focus 02-walmart-2 --focus 01-walmart-1 --expect 40 2>&1 | tee gate100-stream-compare.txt || true
+          grep -q "STREAM-COMPARE-DONE" gate100-stream-compare.txt
+          # Đủ 40 dump ở CẢ hai làn, không thì số Pha 0 không dùng được.
+          grep -q "complete=yes" gate100-stream-compare.txt
       - name: GATE100 — roigate corpus (đáp án gate100-gt.json)
         if: inputs.job == 'gate100'
         run: |
@@ -284,6 +307,22 @@ jobs:
             streams.log
             fuzz-*.log
             gate100-images.log
+            gate100-images-topk3.log
+            gate100-stream-compare.txt
             gate100-roigate.log
             gate100-bench-roigate.log
             ocrprobe.log
+      - name: Lưu luồng GATE100 topk 1 (Pha 0)
+        if: always() && inputs.job == 'gate100'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate100-streams-topk1-${{ github.run_number }}
+          path: streams-gate100-topk1/
+          if-no-files-found: warn
+      - name: Lưu luồng GATE100 topk 3 (Pha 0)
+        if: always() && inputs.job == 'gate100'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate100-streams-topk3-${{ github.run_number }}
+          path: streams-gate100-topk3/
+          if-no-files-found: warn
