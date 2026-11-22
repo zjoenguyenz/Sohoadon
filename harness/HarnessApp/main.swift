@@ -286,7 +286,14 @@ func runImage(_ cg: CGImage) -> ImageRun {
         source: .photoLibrary,
         imageFileName: "harness-image.jpg",
         image: cg,
-        diagnosticsDirectory: nil))
+        diagnosticsDirectory: nil,
+        // PHA 2: harness chạy hạ cánh bằng bảng hạt giống + khu
+        // mặc định Tulsa, không hồ sơ tiệm (dữ liệu máy anh không
+        // có trên CI) — khớp hành vi app trừ tầng học.
+        taxLandingContext: TaxLandingContext(
+            table: .seed,
+            defaultAreaID: TaxTable.defaultSeedAreaID,
+            profileHints: [:])))
     // AssemblyResult dựng lại từ ngăn assembly của hồ sơ chẩn
     // đoán (dòng của ỨNG VIÊN THẮNG — cùng dòng outcome mang)
     // để evaluate() của driver chấm như cũ.

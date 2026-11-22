@@ -41,6 +41,7 @@ enum HarnessUnitTests {
         runVariantRescueTests(check)
         runQualityGateTests(check)
         runIntegrityPlannerTests(check)
+        runTaxLandingTests(check)
         return lines
     }
 
@@ -1271,5 +1272,250 @@ enum HarnessUnitTests {
                   parses: [esEmpty, esFull, esFull],
                   fragmentCounts: [2, 50, 200],
                   currentWinner: 0) == 2)
+    }
+
+    // MARK: - Pha 2 (L-2026-11-21-47): hạ cánh bằng thuế
+    //
+    // TaxLanding.evaluate là hàm THUẦN — các ca dưới đây dựng
+    // ParseResult tay và kiểm đúng số học tam giác + luật chọn
+    // khu/loại + luật không-ghi-đè của PHASE2-DIFF.md §3.
+
+    private static func tlResult(
+        subtotal: Int? = nil, taxAmounts: [Int] = [], total: Int? = nil,
+        address: String? = nil, vendor: String? = nil,
+        vendorKey: String = "generic",
+        items: [ParsedLineItem] = []
+    ) -> ParseResult {
+        var r = ParseResult()
+        r.subtotalCents = subtotal
+        r.taxes = taxAmounts.map {
+            ParsedTaxLine(label: "TAX", amountCents: $0)
+        }
+        r.totalCents = total
+        r.vendorAddress = address
+        r.vendor = vendor
+        r.vendorKey = vendorKey
+        r.items = items
+        return r
+    }
+
+    private static func tlContext(
+        hints: [String: TaxProfileHint] = [:]
+    ) -> TaxLandingContext {
+        TaxLandingContext(table: .seed,
+                          defaultAreaID: TaxTable.defaultSeedAreaID,
+                          profileHints: hints)
+    }
+
+    private static func runTaxLandingTests(
+        _ check: (String, Bool) -> Void
+    ) {
+        let tulsaAddr = "1100 S Lewis Ave, Tulsa, OK 74133"
+
+        // TL01: subtotal + suất đầy đủ Tulsa → thuế + total.
+        let tl01 = TaxLanding.evaluate(
+            tlResult(subtotal: 10000, address: tulsaAddr),
+            context: tlContext())
+        check("TL01-subtotal-ra-thue-va-total",
+              tl01?.result.taxes.first?.amountCents == 852
+              && tl01?.result.totalCents == 10852
+              && tl01?.report.filledFields.contains("tax[0]") == true
+              && tl01?.report.filledFields.contains("total") == true
+              && tl01?.report.areaSource == "zip")
+
+        // TL02: total + suất → subtotal + thuế (tam giác ngược).
+        let tl02 = TaxLanding.evaluate(
+            tlResult(total: 10852, address: tulsaAddr),
+            context: tlContext())
+        check("TL02-total-ra-subtotal-va-thue",
+              tl02?.result.subtotalCents == 10000
+              && tl02?.result.taxes.first?.amountCents == 852
+              && tl02?.report.areaSource == "zip")
+
+        // TL03: ba phép không cần suất (chỉ số đã đọc).
+        let tl03a = TaxLanding.evaluate(
+            tlResult(subtotal: 5000, taxAmounts: [400]),
+            context: tlContext())
+        let tl03b = TaxLanding.evaluate(
+            tlResult(taxAmounts: [400], total: 5400),
+            context: tlContext())
+        let tl03c = TaxLanding.evaluate(
+            tlResult(subtotal: 5000, total: 5400),
+            context: tlContext())
+        check("TL03-tam-giac-khong-can-suat",
+              tl03a?.result.totalCents == 5400
+              && tl03a?.report.ratePct == nil
+              && tl03b?.result.subtotalCents == 5000
+              && tl03c?.result.taxes.first?.amountCents == 400
+              && tl03c?.result.taxes.first?.rateText == nil)
+
+        // TL04: đủ cả ba đỉnh → không kích hoạt, result nguyên vẹn.
+        let tl04 = TaxLanding.evaluate(
+            tlResult(subtotal: 5000, taxAmounts: [400], total: 5400,
+                     address: tulsaAddr),
+            context: tlContext())
+        check("TL04-du-ba-dinh-khong-dung",
+              tl04?.report.attempted == false
+              && tl04?.report.filledFields.isEmpty == true
+              && tl04?.result.totalCents == 5400)
+
+        // TL05: không neo nào → không kích hoạt.
+        let tl05 = TaxLanding.evaluate(
+            tlResult(address: tulsaAddr), context: tlContext())
+        check("TL05-khong-neo-khong-dung",
+              tl05?.report.attempted == false
+              && tl05?.result.totalCents == nil)
+
+        // TL06: trích ZIP từ địa chỉ.
+        check("TL06-trich-zip",
+              TaxLanding.extractZIP(from: tulsaAddr) == "74133"
+              && TaxLanding.extractZIP(from: "không có mã vùng") == nil
+              && TaxLanding.extractZIP(from: nil) == nil
+              && TaxLanding.extractZIP(
+                  from: "ĐT 9185551234, Tulsa, OK 74133") == "74133")
+
+        // TL07: ZIP trong bảng → đúng khu; ZIP ngoài bảng → chặn
+        // phép cần suất.
+        let tl07a = TaxLanding.evaluate(
+            tlResult(subtotal: 10000, address: tulsaAddr),
+            context: tlContext())
+        let tl07b = TaxLanding.evaluate(
+            tlResult(subtotal: 10000,
+                     address: "100 Rodeo Dr, Beverly Hills, CA 90210"),
+            context: tlContext())
+        // TL07c: cùng ZIP ngoài bảng nhưng có subtotal + thuế —
+        // phép KHÔNG cần % (Pha A) vẫn chạy và điền total, không
+        // bị chặn bởi ZIP (Pha A đứng trước khâu chọn khu).
+        let tl07c = TaxLanding.evaluate(
+            tlResult(subtotal: 5000, taxAmounts: [400],
+                     address: "100 Rodeo Dr, Beverly Hills, CA 90210"),
+            context: tlContext())
+        check("TL07-zip-trong-bang-va-ngoai-bang",
+              tl07a?.report.areaID == "tulsa-tulsa"
+              && tl07b?.report.attempted == true
+              && tl07b?.report.blockedReason == "zip-ngoai-bang"
+              && tl07b?.report.filledFields.isEmpty == true
+              && tl07b?.result.totalCents == nil
+              && tl07c?.result.totalCents == 5400
+              && tl07c?.report.filledFields == ["total"]
+              && tl07c?.report.blockedReason == nil)
+
+        // TL08: món thực phẩm → suất thực phẩm (4.017%).
+        let tl08 = TaxLanding.evaluate(
+            tlResult(subtotal: 10000, address: tulsaAddr,
+                     items: [ParsedLineItem(name: "Whole Milk 1gal"),
+                             ParsedLineItem(name: "Eggs 12ct")]),
+            context: tlContext())
+        check("TL08-thuc-pham-suat-thuc-pham",
+              tl08?.result.taxes.first?.amountCents == 402
+              && tl08?.report.category == .grocery
+              && tl08?.report.categorySource == "items")
+
+        // TL09: thuế đọc sẵn không bị ghi đè — chỉ điền subtotal.
+        let tl09 = TaxLanding.evaluate(
+            tlResult(taxAmounts: [400], total: 5400, address: tulsaAddr),
+            context: tlContext())
+        check("TL09-khong-ghi-de-thue-doc",
+              tl09?.result.subtotalCents == 5000
+              && tl09?.result.taxes.count == 1
+              && tl09?.result.taxes.first?.amountCents == 400
+              && tl09?.report.filledFields == ["subtotal"])
+
+        // TL10: ZIP từ hồ sơ tiệm (cờ profile).
+        let tl10 = TaxLanding.evaluate(
+            tlResult(subtotal: 10000, vendor: "Sam's Club",
+                     vendorKey: "sams"),
+            context: tlContext(hints: [
+                "sams": TaxProfileHint(zip: "74133", category: nil),
+            ]))
+        check("TL10-zip-tu-ho-so-tiem",
+              tl10?.result.taxes.first?.amountCents == 852
+              && tl10?.report.areaSource == "profile"
+              && tl10?.report.detail.contains("theo tiệm") == true)
+
+        // TL11: làm tròn nửa lên — 9999 × 8.417% (Broken Arrow
+        // 74012) = 841.62… → 842.
+        let tl11 = TaxLanding.evaluate(
+            tlResult(subtotal: 9999,
+                     address: "701 W Kenosha St, Broken Arrow, OK 74012"),
+            context: tlContext())
+        check("TL11-lam-tron",
+              tl11?.result.taxes.first?.amountCents == 842
+              && tl11?.report.areaID == "broken-arrow-tulsa")
+
+        // TL12: mất ZIP khắp nơi → khu mặc định Tulsa.
+        let tl12 = TaxLanding.evaluate(
+            tlResult(subtotal: 10000), context: tlContext())
+        check("TL12-khu-mac-dinh-tulsa",
+              tl12?.result.taxes.first?.amountCents == 852
+              && tl12?.report.areaSource == "default"
+              && tl12?.report.areaID == "tulsa-tulsa"
+              && tl12?.report.detail.contains("mặc định") == true)
+
+        // TL13: arbiter báo unclosed nhưng tam giác đủ → không điền.
+        var tl13in = tlResult(subtotal: 5000, taxAmounts: [400],
+                              total: 5400, address: tulsaAddr)
+        tl13in.arbiterStatus = "unclosed"
+        let tl13 = TaxLanding.evaluate(tl13in, context: tlContext())
+        check("TL13-unclosed-nhung-du-dinh-khong-dien",
+              tl13?.report.attempted == false
+              && tl13?.report.filledFields.isEmpty == true)
+
+        // TL14: tờ trọng tài đã KHÉP + taxes rỗng (tờ miễn thuế,
+        // subtotal == total) → KHÔNG kích hoạt, không bịa thuế.
+        var tl14in = tlResult(subtotal: 5000, total: 5000,
+                              address: tulsaAddr)
+        tl14in.arbiterStatus = "closed"
+        let tl14 = TaxLanding.evaluate(tl14in, context: tlContext())
+        check("TL14-closed-khong-dung",
+              tl14?.report.attempted == false
+              && tl14?.report.filledFields.isEmpty == true
+              && tl14?.result.taxes.isEmpty == true)
+
+        // TL15: subtotal + total đều có, thuế thiếu, total ≤
+        // subtotal (số đọc mâu thuẫn) → Pha B KHÔNG bịa thuế theo
+        // suất. Hai biến thể: total < sub và total == sub.
+        let tl15a = TaxLanding.evaluate(
+            tlResult(subtotal: 5000, total: 4800, address: tulsaAddr),
+            context: tlContext())
+        let tl15b = TaxLanding.evaluate(
+            tlResult(subtotal: 5000, total: 5000, address: tulsaAddr),
+            context: tlContext())
+        check("TL15-sub-total-mau-thuan-khong-bia-thue",
+              tl15a?.report.filledFields.isEmpty == true
+              && tl15a?.result.taxes.isEmpty == true
+              && tl15a?.result.totalCents == 4800
+              && tl15b?.report.filledFields.isEmpty == true
+              && tl15b?.result.taxes.isEmpty == true)
+
+        // TL16: thuế đọc (500) lớn hơn total (400) → rule 2 không
+        // sinh subtotal âm; đỉnh để trống cho Kiểm Lại.
+        let tl16 = TaxLanding.evaluate(
+            tlResult(taxAmounts: [500], total: 400),
+            context: tlContext())
+        check("TL16-khong-subtotal-am",
+              tl16?.result.subtotalCents == nil
+              && tl16?.report.filledFields.isEmpty == true)
+
+        // TL17: detail mang NGUỒN chọn (khu theo ZIP tờ, loại
+        // theo món đọc được) — provenance/log giữ được phân biệt.
+        let tl17 = TaxLanding.evaluate(
+            tlResult(subtotal: 10000, address: tulsaAddr,
+                     items: [ParsedLineItem(name: "Whole Milk 1gal")]),
+            context: tlContext())
+        check("TL17-detail-ghi-nguon",
+              tl17?.report.detail.contains("theo ZIP trên tờ") == true
+              && tl17?.report.detail.contains("theo món đọc được")
+                  == true)
+
+        // TL18: neo duy nhất là dòng thuế → kích hoạt nhưng không
+        // đỉnh nào suy được; blockedReason nói rõ, không im lặng.
+        let tl18 = TaxLanding.evaluate(
+            tlResult(taxAmounts: [400]), context: tlContext())
+        check("TL18-neo-thue-don-doc",
+              tl18?.report.attempted == true
+              && tl18?.report.filledFields.isEmpty == true
+              && tl18?.report.blockedReason
+                  == "khong-dien-duoc-dinh-nao")
     }
 }
