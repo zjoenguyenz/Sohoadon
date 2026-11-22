@@ -177,7 +177,11 @@ func boxCensus(_ boxes: [CGRect]) -> String {
 // LUẬT của harness là SỐNG + khép E1/E2, không phải khớp điểm
 // tuyệt đối với BenchShell.
 
-func evaluate(parsed: ParseResult, assembly: AssemblyResult) -> (e1: Bool, e2: Bool, score: Double) {
+// Phase 0: the tuple also carries the evaluation and the full
+// CandidateScorer.score result (read-only, for the stream dump's
+// scoreComponents); the computed values are unchanged.
+func evaluate(parsed: ParseResult, assembly: AssemblyResult)
+    -> (e1: Bool, e2: Bool, score: Double, evaluation: CandidateEvaluation, breakdown: Any) {
     var e1 = false
     if let subtotal = parsed.subtotalCents,
        let sum = SafeMoney.sumCents(parsed.items.map { $0.amountCents ?? 0 }) {
@@ -222,7 +226,12 @@ func evaluate(parsed: ParseResult, assembly: AssemblyResult) -> (e1: Bool, e2: B
             $0 + $1.text.filter { $0.isLetter || $0.isNumber }.count
         },
         isOriginal: true)
-    return (e1, e2, CandidateScorer.score(ev).total)
+    let scored = CandidateScorer.score(ev)
+    // Phase 0 fix (review2-R1-A F1): the breakdown carried forward is the
+    // components DICTIONARY, not the whole (total, components) tuple —
+    // phase0Components can only flatten dict/struct shapes, so the tuple
+    // degraded the top-level winner "scoreComponents" to {"total": …}.
+    return (e1, e2, scored.total, ev, scored.components)
 }
 
 func parseSummary(_ p: ParseResult) -> String {
@@ -260,6 +269,9 @@ struct ImageRun {
     var e1: Bool
     var e2: Bool
     var score: Double
+    // Phase 0 (dump only): driver evaluation + score breakdown.
+    var evaluation: CandidateEvaluation? = nil
+    var breakdown: Any? = nil
     var parsed: ParseResult { outcome.result }
     var fragBoxes: [CGRect] {
         outcome.diagnostics.fragments.map { $0.box.cgRect }
@@ -292,7 +304,8 @@ func runImage(_ cg: CGImage) -> ImageRun {
         invariantViolations: d.assembly.invariantViolations)
     let ev = evaluate(parsed: outcome.result, assembly: assembly)
     return ImageRun(outcome: outcome, assembly: assembly,
-                    e1: ev.e1, e2: ev.e2, score: ev.score)
+                    e1: ev.e1, e2: ev.e2, score: ev.score,
+                    evaluation: ev.evaluation, breakdown: ev.breakdown)
 }
 
 func boxDict(_ b: CGRect) -> [String: Double] {
@@ -312,6 +325,10 @@ func boxDict(_ b: CGRect) -> [String: Double] {
 
 func dumpImageRun(name: String, run: ImageRun, dir: URL) {
     let d = run.outcome.diagnostics
+    // Phase 0: winner-side context for the additive per-candidate keys.
+    let winnerCtx = Phase0WinnerContext(parsed: run.parsed, e1: run.e1, e2: run.e2,
+                                        driverEvaluation: run.evaluation,
+                                        driverBreakdown: run.breakdown)
     let obj: [String: Any] = [
         "image": name,
         // F8 (FL-317): census MỌI ứng viên của lượt đọc —
@@ -319,12 +336,20 @@ func dumpImageRun(name: String, run: ImageRun, dir: URL) {
         // để kết án tầng sụp (OCR vs chọn ứng viên) trên đường
         // thật thay vì chỉ nhìn ứng viên thắng.
         "candidates": d.candidates.map { c -> [String: Any] in
+            var entry: [String: Any] =
             ["kind": c.kind, "transform": c.transformDesc,
              "gate": c.gateVerdict ?? "",
              "score": c.scoreTotal ?? -999999,
              "winner": c.winner ? 1 : 0,
              "fragments": c.fragmentCount ?? -1,
              "lines": c.lineCount ?? -1]
+            // Phase 0 (additive): scoreComponents + parseSummary
+            // (+ scoreInputs on the winner, recordFields on all).
+            for (k, v) in phase0CandidateFields(record: c, isWinner: c.winner,
+                                                winner: winnerCtx) {
+                entry[k] = v
+            }
+            return entry
         },
         "fragmentCensus": boxCensus(run.fragBoxes),
         "fragments": d.fragments.map {
@@ -340,12 +365,28 @@ func dumpImageRun(name: String, run: ImageRun, dir: URL) {
         "roiRounds": d.roiRounds.count,
         "roiAccepted": d.roiRounds.filter { $0.accepted }.count,
         "arbiter": run.parsed.arbiterStatus ?? "nil",
+        // Phase 0 (additive): schema tag, engine config of this run,
+        // structured winner summary + driver score breakdown.
+        "dumpSchema": phase0DumpSchema,
+        "config": ["lang": argValue("--lang") ?? "old",
+                   "topk": ClassicTextEngine.topCandidates] as [String: Any],
+        "parseSummary": phase0ParseSummary(run.parsed, e1: run.e1, e2: run.e2,
+                                           source: "readOutcome"),
+        "scoreComponents": run.breakdown.map { phase0Components($0) } ?? [String: Any](),
+        "scoreInputs": run.evaluation.map { phase0Flatten($0, includeStrings: false) }
+            ?? [String: Any](),
     ]
     if let data = try? JSONSerialization.data(withJSONObject: obj,
                                               options: [.prettyPrinted, .sortedKeys]) {
         let out = dir.appendingPathComponent(
             name.replacingOccurrences(of: ".jpg", with: "") + ".stream.json")
-        try? data.write(to: out)
+        // Phase 0: a dump that is not written is logged (it used to be
+        // dropped silently); stream_compare --expect also catches it.
+        do { try data.write(to: out) } catch {
+            print("DUMP-FAILED \(name): write \(error)")
+        }
+    } else {
+        print("DUMP-FAILED \(name): JSON serialization")
     }
 }
 
